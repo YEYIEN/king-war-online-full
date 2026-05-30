@@ -1,11 +1,9 @@
-
 import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
 import "./style.css";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV ? "http://localhost:3001" : window.location.origin);
-
 const ASSET_BASE = "/king-war-assets";
 
 function cardImage(card) {
@@ -30,28 +28,146 @@ function KingArt({ king }) {
   return <img className="kingArt" src={src} alt={king.name} onError={(e) => { e.currentTarget.style.display = "none"; }} />;
 }
 
-
-
 function unitEffectText(card) {
   if (!card || card.kind !== "unit") return "";
-
-  if (card.type === "\u6b65\u5175") {
-    return "\u5b88\u885b\uff1a\u53ea\u8981\u9632\u5b88\u65b9\u5834\u4e0a\u4ecd\u6709\u6b65\u5175\uff0c\u6575\u4eba\u4e0d\u80fd\u76f4\u63a5\u653b\u64ca\u570b\u738b\u3002";
-  }
-
-  if (card.type === "\u5f13\u5175") {
-    return "\u9060\u5c04\uff1a\u653b\u64ca\u4f4e\u968e\u6575\u4eba\u6642\uff0c\u7b2c\u4e00\u6b21\u53ef\u518d\u653b\u64ca\u4e00\u6b21\uff1b\u653b\u64ca\u540c\u968e\u6216\u9ad8\u968e\u6575\u4eba\u6642\u4e0d\u6703\u6b7b\u4ea1\uff0c\u653b\u64ca\u9ad8\u968e\u6575\u4eba\u5247\u968e\u7d1a-1\u5230\u4e0b\u56de\u5408\u3002";
-  }
-
-  if (card.type === "\u6cd5\u5e2b") {
-    return "\u65bd\u6cd5\uff1a\u56de\u5408\u958b\u59cb\u6642\u4f9d\u5834\u4e0a\u6cd5\u5e2b\u6578\u62bd\u9b54\u6cd5\u5361\u3002\u4f7f\u7528\u9b54\u6cd5\u8996\u70ba\u4e00\u6b21\u653b\u64ca\u3002\u525b\u90e8\u7f72\u6642\u4e0d\u80fd\u4f7f\u7528\u540c\u7d1a\u9b54\u6cd5\u3002";
-  }
-
-  if (card.type === "\u9a0e\u5175") {
-    return "\u7a81\u64ca\uff1a\u525b\u90e8\u7f72\u7684\u56de\u5408\u5373\u53ef\u653b\u64ca\uff1b\u4f46\u9ad8\u7d1a\u9a0e\u5175\u4ecd\u9808\u6574\u5099\u4e00\u56de\u5408\u3002";
-  }
-
+  if (card.type === "步兵") return "守衛：防守方場上仍有步兵時，敵人不能直接攻擊國王。";
+  if (card.type === "弓兵") return "遠射：攻擊低階敵人時，第一次可再攻擊一次；攻擊同階或高階敵人時不死亡，攻擊高階敵人則階級-1到下回合。";
+  if (card.type === "法師") return "施法：回合開始時依場上法師數抽魔法卡。使用魔法視為一次攻擊。剛部署時不能使用同級魔法。";
+  if (card.type === "騎兵") return "突擊：剛部署的回合即可攻擊；但高級騎兵仍須整備一回合。";
   return "";
+}
+
+function unitStatusText(card) {
+  if (!card) return "";
+  if (card.status?.includes("整備")) return "整備中";
+  if (card.status?.includes("不能攻擊")) return "不能攻擊";
+  if (card.tapped) return "已行動";
+  if (card.justDeployed && card.type !== "騎兵") return "剛部署";
+  return "可行動";
+}
+
+function actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan }) {
+  if (!room) return null;
+
+  if (room.status === "lobby") {
+    return { tone: "neutral", title: "等待開始遊戲", steps: ["房主可以按「開始遊戲」。", "其他玩家等待房主開始。"] };
+  }
+
+  if (!isMyTurn) {
+    const current = room.players.find((p) => p.id === room.currentPlayerId);
+    return { tone: "waiting", title: `等待 ${current?.name || "其他玩家"} 行動`, steps: ["現在不是你的回合。", "你可以觀察場上兵種、HP 與遊戲紀錄。"] };
+  }
+
+  if (magicPlan) {
+    const caster = me?.field.find((u) => u.id === magicPlan.casterId);
+
+    if (!caster) {
+      return { tone: "magic", title: `正在使用魔法：${magicPlan.magic.name}`, steps: ["第 1 步：請點選我方場上一名可施法的法師。", "法師使用魔法後，本回合不能再攻擊。"] };
+    }
+
+    if (magicPlan.magic.name === "天殞術") {
+      return { tone: "magic", title: `施法者：${caster.name}`, steps: [`第 2 步：確認目標玩家是 ${targetPlayer?.name || "敵方"}。`, "第 3 步：按「確認施放」。"] };
+    }
+
+    return {
+      tone: "magic",
+      title: `施法者：${caster.name}`,
+      steps: [
+        `第 2 步：請選擇 ${magicPlan.magic.target === "我方" ? "我方" : "敵方"}兵種作為目標。`,
+        `已選擇 ${magicPlan.targetUnitIds.length}/${magicPlan.magic.maxTargets || 1} 個目標。`,
+        "第 3 步：按「確認施放」。",
+      ],
+    };
+  }
+
+  if (attacker) {
+    return {
+      tone: "attack",
+      title: `已選擇攻擊者：${attacker.name}`,
+      steps: [
+        "下一步：點選敵方兵種進行攻擊。",
+        targetPlayer?.field?.some((u) => u.type === "步兵")
+          ? "敵方場上有步兵，必須先消滅步兵，不能直接攻擊國王。"
+          : "敵方沒有步兵，可以直接攻擊國王。",
+      ],
+    };
+  }
+
+  return {
+    tone: "active",
+    title: "輪到你行動",
+    steps: ["你可以部署任意數量兵種，直到場上滿 5 張。", "你可以點選可行動兵種作為攻擊者。", "你可以點選魔法卡，依提示選法師與目標。", "完成後按「結束回合」。"],
+  };
+}
+
+function GuidePanel({ hint }) {
+  if (!hint) return null;
+  return (
+    <section className={`guidePanel ${hint.tone || "neutral"}`}>
+      <div>
+        <div className="guideLabel">操作提示</div>
+        <h2>{hint.title}</h2>
+      </div>
+      <ol>{hint.steps.map((step, idx) => <li key={idx}>{step}</li>)}</ol>
+    </section>
+  );
+}
+
+function PlayerSummary({ player, isMe, isCurrent }) {
+  return (
+    <article className={`playerSummary ${isCurrent ? "current" : ""} ${player.eliminated ? "dead" : ""}`}>
+      <div className="playerSummaryTop">
+        <strong>{player.name}{isMe ? "（你）" : ""}</strong>
+        <span>HP {player.hp}</span>
+      </div>
+
+      {player.king && (
+        <div className="kingMini">
+          <KingArt king={player.king} />
+          <div>
+            <strong>{player.king.name}</strong>
+            <small>{player.king.effectName}：{player.king.effect}</small>
+          </div>
+        </div>
+      )}
+
+      <div className="playerStats">
+        <span>手牌 {player.handCount}</span>
+        <span>魔法 {player.magicCount}</span>
+        <span>場上 {player.field.length}/5</span>
+      </div>
+    </article>
+  );
+}
+
+function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "" }) {
+  return (
+    <button className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`} disabled={disabled} onClick={onClick}>
+      <CardArt card={card} small={compact} />
+      <strong>{card.name}</strong>
+      <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
+      <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
+      <span className="effectText">{unitEffectText(card)}</span>
+      {card.status?.length > 0 && <span className="status">{card.status.join("、")}</span>}
+      {actionLabel && <span className="actionLabel">{actionLabel}</span>}
+    </button>
+  );
+}
+
+function MagicCard({ card, onClick, disabled, selected }) {
+  return (
+    <button className={`gameCard magic ${selected ? "selected" : ""}`} disabled={disabled} onClick={onClick}>
+      <CardArt card={card} />
+      <strong>{card.name}</strong>
+      <span>{card.level}｜目標：{card.target}</span>
+      <span className="effectText">{card.text}</span>
+      <span className="actionLabel">使用魔法</span>
+    </button>
+  );
+}
+
+function EmptyState({ children }) {
+  return <div className="emptyState">{children}</div>;
 }
 
 function App() {
@@ -65,11 +181,12 @@ function App() {
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
+  const [showHelp, setShowHelp] = useState(true);
 
   React.useEffect(() => {
     socket.on("room:update", (next) => {
       setRoom(next);
-      const firstEnemy = next.players.find(p => p.id !== playerId && !p.eliminated);
+      const firstEnemy = next.players.find((p) => p.id !== playerId && !p.eliminated);
       if (!targetPlayerId && firstEnemy) setTargetPlayerId(firstEnemy.id);
     });
     return () => socket.off("room:update");
@@ -81,66 +198,338 @@ function App() {
   function createRoom() {
     socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "建立失敗");
-      setPlayerId(res.playerId); setRoom(res.room); setMessage("");
+      setPlayerId(res.playerId);
+      setRoom(res.room);
+      setMessage("");
     });
   }
+
   function joinRoom() {
     socket.emit("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "加入失敗");
-      setPlayerId(res.playerId); setRoom(res.room); setMessage("");
+      setPlayerId(res.playerId);
+      setRoom(res.room);
+      setMessage("");
     });
   }
 
-  if (!room) return <main className="page centered"><section className="card hero"><h1>國王戰爭 Online Full v1</h1><p>完整規則線上測試版。</p><label>暱稱 / 遊戲 ID</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="例如 Wayne" /><div className="twoCols"><section><h2>創建房間</h2><label>遊玩人數</label><select value={maxPlayers} onChange={e=>setMaxPlayers(Number(e.target.value))}>{[2,3,4,5].map(n=><option key={n} value={n}>{n} 人</option>)}</select><button onClick={createRoom}>創建房間</button></section><section><h2>加入房間</h2><label>房間代碼</label><input value={roomCodeInput} onChange={e=>setRoomCodeInput(e.target.value.toUpperCase())} placeholder="例如 KW1234" /><button onClick={joinRoom}>加入房間</button></section></div>{message && <p className="error">{message}</p>}</section></main>;
+  if (!room) {
+    return (
+      <main className="page centered">
+        <section className="card hero newHero">
+          <div className="titleBadge">Online Multiplayer</div>
+          <h1>國王戰爭</h1>
+          <p>新手引導版 UI：進入遊戲後會提示你每一步可以做什麼。</p>
 
-  const me = room.players.find(p => p.id === playerId);
+          <label>暱稱 / 遊戲 ID</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如 Wayne" />
+
+          <div className="twoCols">
+            <section className="startBox">
+              <h2>創建房間</h2>
+              <label>遊玩人數</label>
+              <select value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
+                {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} 人</option>)}
+              </select>
+              <button className="primaryBtn" onClick={createRoom}>創建房間</button>
+            </section>
+
+            <section className="startBox">
+              <h2>加入房間</h2>
+              <label>房間代碼</label>
+              <input value={roomCodeInput} onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())} placeholder="例如 KW1234" />
+              <button className="primaryBtn" onClick={joinRoom}>加入房間</button>
+            </section>
+          </div>
+
+          <div className="quickRules">
+            <strong>遊戲目標：</strong>把其他玩家國王 HP 打到 0。<br />
+            <strong>每回合：</strong>部署兵種、攻擊、使用魔法，最後結束回合。
+          </div>
+
+          {message && <p className="error">{message}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  const me = room.players.find((p) => p.id === playerId);
   const isHost = room.hostId === playerId;
   const isMyTurn = room.currentPlayerId === playerId;
-  const enemies = room.players.filter(p => p.id !== playerId && !p.eliminated);
-  const targetPlayer = room.players.find(p => p.id === targetPlayerId) || enemies[0];
+  const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
+  const targetPlayer = room.players.find((p) => p.id === targetPlayerId) || enemies[0];
+  const attacker = me?.field.find((u) => u.id === attackerId);
+  const magicTargetPlayer = room.players.find((p) => p.id === magicPlan?.targetPlayerId);
+  const hint = actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan });
 
-  if (room.status === "lobby") return <main className="page centered"><section className="card hero"><h1>房間 {room.roomCode}</h1><p>把房間代碼傳給朋友。</p><p>人數：{room.players.length} / {room.maxPlayers}</p><div className="playerList">{room.players.map(p=><div key={p.id} className="playerRow"><strong>{p.name}</strong><span>{p.isHost ? "房主" : "玩家"}｜{p.connected ? "在線" : "斷線"}</span></div>)}</div>{isHost ? <button onClick={()=>emit("game:start")}>開始遊戲</button> : <p>等待房主開始遊戲...</p>}{message && <p className="error">{message}</p>}</section></main>;
+  if (room.status === "lobby") {
+    return (
+      <main className="page centered">
+        <section className="card hero lobbyCard">
+          <div className="titleBadge">Room Code</div>
+          <h1>{room.roomCode}</h1>
+          <p>把房間代碼傳給朋友，等人到齊後由房主開始遊戲。</p>
+
+          <div className="playerList">
+            {room.players.map((p) => (
+              <div key={p.id} className="playerRow">
+                <strong>{p.name}</strong>
+                <span>{p.isHost ? "房主" : "玩家"}｜{p.connected ? "在線" : "斷線"}</span>
+              </div>
+            ))}
+          </div>
+
+          <p>人數：{room.players.length} / {room.maxPlayers}</p>
+
+          {isHost ? <button className="primaryBtn" onClick={() => emit("game:start")}>開始遊戲</button> : <p className="waitingText">等待房主開始遊戲...</p>}
+          {message && <p className="error">{message}</p>}
+        </section>
+      </main>
+    );
+  }
 
   function attackUnit(defenderId) {
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
     emit("game:attackUnit", { attackerId, targetPlayerId: targetPlayer.id, defenderId });
     setAttackerId(null);
   }
+
   function attackKing() {
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
     emit("game:attackKing", { attackerId, targetPlayerId: targetPlayer.id });
     setAttackerId(null);
   }
-  function beginMagic(magic) { setMagicPlan({ magic, casterId: "", targetPlayerId: magic.target === "我方" ? playerId : (targetPlayer?.id || ""), targetUnitIds: [] }); }
+
+  function beginMagic(magic) {
+    setMagicPlan({ magic, casterId: "", targetPlayerId: magic.target === "我方" ? playerId : targetPlayer?.id || "", targetUnitIds: [] });
+    setAttackerId(null);
+  }
+
   function chooseMagicTarget(unitId) {
     if (!magicPlan) return;
     const max = magicPlan.magic.maxTargets || 1;
     const has = magicPlan.targetUnitIds.includes(unitId);
     let ids = [...magicPlan.targetUnitIds];
-    if (has) ids = ids.filter(id => id !== unitId);
+
+    if (has) ids = ids.filter((id) => id !== unitId);
     else if (max === 1) ids = [unitId];
     else if (ids.length < max) ids.push(unitId);
+
     setMagicPlan({ ...magicPlan, targetUnitIds: ids });
   }
+
   function castMagic() {
     if (!magicPlan.casterId) return setMessage("請先點選一名我方法師作為施法者。");
     emit("game:castMagic", { magicId: magicPlan.magic.id, casterId: magicPlan.casterId, targetPlayerId: magicPlan.targetPlayerId, targetUnitIds: magicPlan.targetUnitIds });
     setMagicPlan(null);
   }
 
-  const magicTargetPlayer = room.players.find(p => p.id === magicPlan?.targetPlayerId);
+  function selectOwnUnit(card) {
+    if (!isMyTurn) return;
 
-  return <main className="page"><header className="topbar"><div><h1>國王戰爭 Online Full</h1><p>房間 {room.roomCode}｜{isMyTurn ? "輪到你" : "等待其他玩家"}</p></div><button disabled={!isMyTurn} onClick={()=>emit("game:endTurn")}>結束回合</button></header>{message && <p className="error">{message}</p>}
-    <section className="players">{room.players.map(p=><article key={p.id} className={`playerCard ${p.id===room.currentPlayerId ? "active" : ""} ${p.eliminated ? "dead" : ""}`}><h2>{p.name}{p.id===playerId?"（你）":""}</h2><p>HP {p.hp}｜{p.eliminated?"出局":"存活"}</p>{p.king && <KingArt king={p.king} />}{p.king && <p><strong>{p.king.name}</strong>：{p.king.effectName}</p>}<p>手牌 {p.handCount}｜魔法 {p.magicCount}</p><h3>場上兵種</h3><div className="miniGrid">{p.field.map(c=><div key={c.id} className="miniCard"><CardArt card={c} small /><strong>{c.name}</strong><small>傷害{c.damage}｜{c.tapped?"已行動":"可行動"}</small><small className="effectText">{unitEffectText(c)}</small>{c.status?.length>0 && <small className="status">{c.status.join("、")}</small>}</div>)}</div></article>)}</section>
+    if (magicPlan && !magicPlan.casterId && card.type === "法師") {
+      setMagicPlan({ ...magicPlan, casterId: card.id });
+      return;
+    }
 
-    <section className="controlRow"><div className="card"><h2>目標玩家</h2><select value={targetPlayer?.id || ""} onChange={e=>setTargetPlayerId(e.target.value)}>{enemies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="card"><h2>目前操作</h2><p>攻擊者：{me?.field.find(u=>u.id===attackerId)?.name || "未選擇"}</p><button disabled={!isMyTurn || !attackerId} onClick={attackKing}>攻擊目標國王</button></div></section>
+    if (magicPlan && magicPlan.magic.target === "我方") {
+      chooseMagicTarget(card.id);
+      return;
+    }
 
-    <section className="board"><div className="card"><h2>{targetPlayer?.name || "敵方"} 場上</h2><div className="hand">{targetPlayer?.field.map(c=><button key={c.id} className={`gameCard ${magicPlan?.targetUnitIds.includes(c.id)?"selected":""}`} disabled={!isMyTurn} onClick={()=>magicPlan ? chooseMagicTarget(c.id) : attackUnit(c.id)}><CardArt card={c} /><strong>{c.name}</strong><span>傷害 {c.damage}｜剋 {c.counterTarget}</span><span className="effectText">{unitEffectText(c)}</span>{c.status?.length>0 && <span className="status">{c.status.join("、")}</span>}</button>)}</div></div><div className="card"><h2>我方場上</h2><div className="hand">{me?.field.map(c=><div key={c.id} className="unitWrap"><button className={`gameCard ${attackerId===c.id || magicPlan?.casterId===c.id || magicPlan?.targetUnitIds.includes(c.id)?"selected":""}`} disabled={!isMyTurn} onClick={()=>{ if(magicPlan && !magicPlan.casterId && c.type==="法師") setMagicPlan({...magicPlan,casterId:c.id}); else if(magicPlan && magicPlan.magic.target==="我方") chooseMagicTarget(c.id); else setAttackerId(c.id); }}><CardArt card={c} /><strong>{c.name}</strong><span>傷害 {c.damage}｜剋 {c.counterTarget}</span><span className="effectText">{unitEffectText(c)}</span>{c.status?.length>0 && <span className="status">{c.status.join("、")}</span>}</button>{me?.king?.name==="成吉思汗" && isMyTurn && <button className="smallBtn" onClick={()=>emit("game:recall",{unitId:c.id})}>撤回</button>}</div>)}</div></div></section>
+    setAttackerId(card.id);
+  }
 
-    {magicPlan && <section className="card magicPanel"><h2>施放魔法：{magicPlan.magic.name}</h2><p>{magicPlan.magic.text}</p><p>施法者：{me?.field.find(u=>u.id===magicPlan.casterId)?.name || "請點選我方場上的法師"}</p><label>目標玩家</label><select value={magicPlan.targetPlayerId} onChange={e=>setMagicPlan({...magicPlan,targetPlayerId:e.target.value,targetUnitIds:[]})}>{(magicPlan.magic.target==="我方" ? [me] : enemies).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><p>{magicPlan.magic.name==="天殞術" ? "全場效果，不用選單一兵種。" : `已選目標：${magicPlan.targetUnitIds.length}/${magicPlan.magic.maxTargets}`}</p>{magicTargetPlayer?.field?.length>0 && magicPlan.magic.name!=="天殞術" && <div className="hand">{magicTargetPlayer.field.map(c=><button key={c.id} className={`gameCard ${magicPlan.targetUnitIds.includes(c.id)?"selected":""}`} onClick={()=>chooseMagicTarget(c.id)}><CardArt card={c} /><strong>{c.name}</strong></button>)}</div>}<button onClick={castMagic}>確認施放</button><button className="secondary" onClick={()=>setMagicPlan(null)}>取消</button></section>}
+  function enemyCardActionLabel(card) {
+    if (!isMyTurn) return "";
+    if (magicPlan) {
+      if (magicPlan.magic.name === "天殞術") return "";
+      return magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選為魔法目標";
+    }
+    if (attackerId) return "攻擊此兵種";
+    return "先選我方攻擊者";
+  }
 
-    <section className="myArea"><div className="card"><h2>你的兵種手牌</h2><div className="hand">{me?.hand.map(c=><button key={c.id} className="gameCard" disabled={!isMyTurn || !!magicPlan} onClick={()=>emit("game:deploy",{cardId:c.id})}><CardArt card={c} /><strong>{c.name}</strong><span>傷害 {c.damage}｜剋 {c.counterTarget}</span><span className="effectText">{unitEffectText(c)}</span></button>)}</div></div><div className="card"><h2>你的魔法卡</h2><div className="hand">{me?.magic.map(c=><button key={c.id} className="gameCard magic" disabled={!isMyTurn} onClick={()=>beginMagic(c)}><CardArt card={c} /><strong>{c.name}</strong><span>{c.level}｜目標：{c.target}</span><span className="effectText">{c.text}</span></button>)}</div></div><div className="card"><h2>遊戲紀錄</h2><div className="log">{room.log.slice().reverse().map((line,i)=><div key={i}>{line}</div>)}</div></div></section>
-  </main>;
+  function ownCardActionLabel(card) {
+    if (!isMyTurn) return "";
+    if (magicPlan && !magicPlan.casterId && card.type === "法師") return "選為施法者";
+    if (magicPlan && magicPlan.magic.target === "我方") return magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選為魔法目標";
+    return "選為攻擊者";
+  }
+
+  const targetHasInfantry = targetPlayer?.field?.some((u) => u.type === "步兵");
+
+  return (
+    <main className="page guidedPage">
+      <header className="topbar guidedTopbar">
+        <div>
+          <div className="titleBadge">Room {room.roomCode}</div>
+          <h1>國王戰爭</h1>
+          <p>{isMyTurn ? "輪到你行動" : "等待其他玩家行動"}</p>
+        </div>
+
+        <div className="topActions">
+          <button className="secondary" onClick={() => setShowHelp((v) => !v)}>{showHelp ? "隱藏提示" : "顯示提示"}</button>
+          <button className="endTurnBtn" disabled={!isMyTurn} onClick={() => emit("game:endTurn")}>結束回合</button>
+        </div>
+      </header>
+
+      {message && <p className="error floatingError">{message}</p>}
+      {showHelp && <GuidePanel hint={hint} />}
+
+      <section className="playerStrip">
+        {room.players.map((p) => <PlayerSummary key={p.id} player={p} isMe={p.id === playerId} isCurrent={p.id === room.currentPlayerId} />)}
+      </section>
+
+      <section className="targetBar card">
+        <div>
+          <h2>目標玩家</h2>
+          <p>選擇你要攻擊或施法的對象。</p>
+        </div>
+        <select value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
+          {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </section>
+
+      <section className="battleGrid">
+        <section className="zoneCard enemyZone">
+          <div className="zoneHeader">
+            <div>
+              <h2>{targetPlayer?.name || "敵方"} 場上</h2>
+              <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
+            </div>
+            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>攻擊國王</button>
+          </div>
+
+          <div className="cardGrid">
+            {targetPlayer?.field?.length ? (
+              targetPlayer.field.map((card) => (
+                <UnitCard
+                  key={card.id}
+                  card={card}
+                  selected={magicPlan?.targetUnitIds.includes(card.id)}
+                  disabled={!isMyTurn || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
+                  onClick={() => (magicPlan ? chooseMagicTarget(card.id) : attackUnit(card.id))}
+                  actionLabel={enemyCardActionLabel(card)}
+                  highlight={attackerId && !magicPlan ? "attackable" : ""}
+                />
+              ))
+            ) : <EmptyState>敵方場上沒有兵種。</EmptyState>}
+          </div>
+        </section>
+
+        <section className="zoneCard myZone">
+          <div className="zoneHeader">
+            <div>
+              <h2>我方場上</h2>
+              <p>先選擇攻擊者，或在施法時選擇法師。</p>
+            </div>
+          </div>
+
+          <div className="cardGrid">
+            {me?.field?.length ? (
+              me.field.map((card) => (
+                <div key={card.id} className="unitWrap">
+                  <UnitCard
+                    card={card}
+                    selected={attackerId === card.id || magicPlan?.casterId === card.id || magicPlan?.targetUnitIds.includes(card.id)}
+                    disabled={!isMyTurn || (magicPlan && magicPlan.casterId && magicPlan.magic.target !== "我方")}
+                    onClick={() => selectOwnUnit(card)}
+                    actionLabel={ownCardActionLabel(card)}
+                    highlight={!card.tapped && !magicPlan ? "ready" : ""}
+                  />
+                  {me?.king?.name === "成吉思汗" && isMyTurn && !magicPlan && <button className="smallBtn" onClick={() => emit("game:recall", { unitId: card.id })}>撤回</button>}
+                </div>
+              ))
+            ) : <EmptyState>你目前沒有場上兵種。可以先從手牌部署。</EmptyState>}
+          </div>
+        </section>
+      </section>
+
+      {magicPlan && (
+        <section className="magicPanel guidedMagicPanel">
+          <div>
+            <div className="titleBadge">Magic Step</div>
+            <h2>施放魔法：{magicPlan.magic.name}</h2>
+            <p>{magicPlan.magic.text}</p>
+            <p>施法者：{me?.field.find((u) => u.id === magicPlan.casterId)?.name || "請點選我方場上的法師"}</p>
+          </div>
+
+          <div className="magicControls">
+            <label>目標玩家</label>
+            <select value={magicPlan.targetPlayerId} onChange={(e) => setMagicPlan({ ...magicPlan, targetPlayerId: e.target.value, targetUnitIds: [] })}>
+              {(magicPlan.magic.target === "我方" ? [me] : enemies).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+
+            <p>{magicPlan.magic.name === "天殞術" ? "全場效果，不用選單一兵種。" : `已選目標：${magicPlan.targetUnitIds.length}/${magicPlan.magic.maxTargets}`}</p>
+
+            {magicTargetPlayer?.field?.length > 0 && magicPlan.magic.name !== "天殞術" && (
+              <div className="cardGrid compactGrid">
+                {magicTargetPlayer.field.map((card) => (
+                  <UnitCard key={card.id} card={card} compact selected={magicPlan.targetUnitIds.includes(card.id)} onClick={() => chooseMagicTarget(card.id)} actionLabel={magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選擇目標"} />
+                ))}
+              </div>
+            )}
+
+            <div className="panelActions">
+              <button className="primaryBtn" onClick={castMagic}>確認施放</button>
+              <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="handAndLog">
+        <section className="zoneCard">
+          <div className="zoneHeader">
+            <div>
+              <h2>兵種手牌</h2>
+              <p>點選卡牌即可部署。可部署多張，直到場上滿 5 張。</p>
+            </div>
+          </div>
+
+          <div className="cardGrid">
+            {me?.hand?.length ? (
+              me.hand.map((card) => (
+                <button key={card.id} className="gameCard unit handCard" disabled={!isMyTurn || !!magicPlan} onClick={() => emit("game:deploy", { cardId: card.id })}>
+                  <CardArt card={card} />
+                  <strong>{card.name}</strong>
+                  <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
+                  <span className="effectText">{unitEffectText(card)}</span>
+                  <span className="actionLabel">部署</span>
+                </button>
+              ))
+            ) : <EmptyState>沒有兵種手牌。</EmptyState>}
+          </div>
+        </section>
+
+        <aside className="sideColumn">
+          <section className="zoneCard">
+            <h2>魔法卡</h2>
+            <p>先點魔法卡，再依提示選法師與目標。</p>
+            <div className="magicList">
+              {me?.magic?.length ? me.magic.map((card) => <MagicCard key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => beginMagic(card)} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+            </div>
+          </section>
+
+          <section className="zoneCard">
+            <h2>兵種相剋</h2>
+            <div className="counterList">
+              <span>步兵 → 弓兵</span>
+              <span>弓兵 → 法師</span>
+              <span>法師 → 騎兵</span>
+              <span>騎兵 → 步兵</span>
+            </div>
+          </section>
+
+          <section className="zoneCard">
+            <h2>遊戲紀錄</h2>
+            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
+          </section>
+        </aside>
+      </section>
+    </main>
+  );
 }
 
 createRoot(document.getElementById("root")).render(<App />);
