@@ -4,3 +4,13 @@
 .kingArt{width:100%;height:auto;max-height:260px;object-fit:contain;border-radius:12px;background:#020617;border:1px solid #334155;margin:8px 0}
 .miniCard .cardArt{max-height:110px}
 .gameCard .cardArt{max-height:220px}
+
+
+.effectText {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #334155;
+  color: #fde68a !important;
+  font-size: 12px !important;
+  line-height: 1.45;
+}
