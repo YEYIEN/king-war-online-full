@@ -13,6 +13,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const rooms = new Map();
+let matchmakingRoomCode = null;
 
 const TYPES = ["步兵", "弓兵", "法師", "騎兵"];
 const RANKS = ["初級", "中級", "高級"];
@@ -147,6 +148,86 @@ function startGame(room) {
 }
 
 io.on("connection", socket => {
+
+  socket.on("matchmaking:join", ({ name }, reply) => {
+    const playerName = String(name || "玩家").slice(0, 16);
+
+    // 沒有等待中的隨機房：建立 2 人等待房
+    if (!matchmakingRoomCode || !rooms.has(matchmakingRoomCode)) {
+      const roomCode = code();
+      const pid = nanoid(10);
+
+      const p = {
+        id: pid,
+        socketId: socket.id,
+        name: playerName,
+        isHost: true,
+        connected: true,
+        hp: 30,
+        king: null,
+        hand: [],
+        magic: [],
+        field: [],
+        eliminated: false
+      };
+
+      const room = {
+        code: roomCode,
+        hostId: pid,
+        maxPlayers: 2,
+        status: "lobby",
+        matchmaking: true,
+        players: [p],
+        unitDeck: [],
+        magicDeck: [],
+        currentPlayerId: null,
+        log: [`${p.name} 進入隨機匹配，等待另一位玩家。`]
+      };
+
+      rooms.set(roomCode, room);
+      matchmakingRoomCode = roomCode;
+      socket.join(roomCode);
+
+      reply?.({ ok: true, playerId: pid, room: viewFor(room, pid), waiting: true });
+      broadcast(room);
+      return;
+    }
+
+    // 已有等待房：第二位玩家加入後自動開始
+    const room = rooms.get(matchmakingRoomCode);
+
+    if (!room || room.status !== "lobby" || room.players.length >= 2) {
+      matchmakingRoomCode = null;
+      return reply?.({ ok: false, error: "配對房間狀態異常，請再按一次隨機匹配。" });
+    }
+
+    const pid = nanoid(10);
+    const p = {
+      id: pid,
+      socketId: socket.id,
+      name: playerName,
+      isHost: false,
+      connected: true,
+      hp: 30,
+      king: null,
+      hand: [],
+      magic: [],
+      field: [],
+      eliminated: false
+    };
+
+    room.players.push(p);
+    room.log.push(`${p.name} 加入隨機匹配，配對成功。`);
+    socket.join(room.code);
+
+    matchmakingRoomCode = null;
+    startGame(room);
+
+    reply?.({ ok: true, playerId: pid, room: viewFor(room, pid), waiting: false });
+    broadcast(room);
+  });
+
+
   socket.on("room:create", ({name,maxPlayers}, reply) => {
     const roomCode=code(), pid=nanoid(10);
     const p={id:pid,socketId:socket.id,name:String(name||"玩家").slice(0,16),isHost:true,connected:true,hp:30,king:null,hand:[],magic:[],field:[],eliminated:false};
@@ -272,7 +353,21 @@ reply?.({ok:true}); broadcast(room);
     const n=nextAlive(room,p.id); room.currentPlayerId=n.id; room.log.push(`${p.name} 結束回合。`); startTurn(room,n); reply?.({ok:true}); broadcast(room);
   });
 
-  socket.on("disconnect", () => { const f=findBySocket(socket.id); if(!f)return; f.player.connected=false; f.room.log.push(`${f.player.name} 連線中斷。`); broadcast(f.room); });
+  socket.on("disconnect", () => {
+    const f = findBySocket(socket.id);
+    if (!f) return;
+
+    f.player.connected = false;
+    f.room.log.push(`${f.player.name} 連線中斷。`);
+
+    if (f.room.matchmaking && f.room.status === "lobby" && matchmakingRoomCode === f.room.code) {
+      matchmakingRoomCode = null;
+      rooms.delete(f.room.code);
+      return;
+    }
+
+    broadcast(f.room);
+  });
 });
 
 if (process.env.NODE_ENV === "production") {

@@ -213,6 +213,16 @@ function App() {
     });
   }
 
+  function randomMatch() {
+    setMessage("正在尋找玩家...");
+    socket.emit("matchmaking:join", { name: safeName() }, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "隨機匹配失敗");
+      setPlayerId(res.playerId);
+      setRoom(res.room);
+      setMessage(res.waiting ? "正在等待另一位玩家加入..." : "");
+    });
+  }
+
   if (!room) {
     return (
       <main className="page centered">
@@ -239,6 +249,12 @@ function App() {
               <label>房間代碼</label>
               <input value={roomCodeInput} onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())} placeholder="例如 KW1234" />
               <button className="primaryBtn" onClick={joinRoom}>加入房間</button>
+            </section>
+
+            <section className="startBox matchBox">
+              <h2>隨機匹配</h2>
+              <p>不用房間代碼。系統會幫你配對另一位正在等待的玩家。</p>
+              <button className="matchBtn" onClick={randomMatch}>開始隨機匹配</button>
             </section>
           </div>
 
