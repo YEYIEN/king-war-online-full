@@ -90,6 +90,21 @@ function trimHand(room, p) {
 function drawUnits(room, p, n) { for (let i=0;i<n && room.unitDeck.length;i++) p.hand.push(room.unitDeck.shift()); trimHand(room, p); }
 function drawMagic(room, p, n) { let d=0; for (let i=0;i<n && room.magicDeck.length && p.magic.length<3;i++,d++) p.magic.push(room.magicDeck.shift()); return d; }
 function alive(room) { return room.players.filter(p => !p.eliminated && p.hp > 0); }
+
+function finishIfGameOver(room) {
+  if (!room || room.status === "ended") return true;
+
+  const living = alive(room);
+
+  if (living.length <= 1) {
+    room.status = "ended";
+    room.currentPlayerId = null;
+    room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
+    return true;
+  }
+
+  return false;
+}
 function nextAlive(room, id) { const a=alive(room); const i=a.findIndex(p=>p.id===id); return a[(i+1)%a.length] || a[0]; }
 function clearOct(p) { p.field.forEach(u => u.status = u.status.filter(s => s !== "屋大維+1")); }
 function applyOct(room, p) {
@@ -144,7 +159,7 @@ function fireball(owner, id) { const i=owner.field.findIndex(u=>u.id===id); if(i
 
 function publicPlayer(p, viewer) {
   const isMe = p.id === viewer;
-  return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated };
+  return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI };
 }
 function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, status:room.status, currentPlayerId:room.currentPlayerId, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer)) }; }
 function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
@@ -351,6 +366,7 @@ function aiResolveAttackKing(room, ai, enemy, attackerId) {
   if (enemy.hp <= 0) {
     enemy.eliminated = true;
     room.log.push(`${enemy.name} 出局。`);
+    finishIfGameOver(room);
   }
 
   return true;
@@ -565,6 +581,11 @@ async function performAITurn(roomCode) {
   await sleep(1400);
 
   await aiAttackPhase(room, ai, enemy);
+
+  if (room.status === "ended") {
+    broadcast(room);
+    return;
+  }
 
   room.log.push(`${ai.name} 準備結束回合。`);
   broadcast(room);
@@ -781,7 +802,7 @@ io.on("connection", socket => {
     if(target.field.some(u=>u.type==="步兵")) return reply?.({ok:false,error:"目標場上仍有步兵，不能攻擊國王。"});
     const a=p.field.find(u=>u.id===attackerId); if(!canAttack(a)) return reply?.({ok:false,error:"這名兵種不能攻擊。"});
     target.hp-=a.damage; a.tapped=true; if(target.hp<=0){target.eliminated=true; room.log.push(`${target.name} 出局。`);}
-    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 國王，造成${a.damage}傷害。`); reply?.({ok:true}); broadcast(room);
+    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 國王，造成${a.damage}傷害。`); if (finishIfGameOver(room)) { reply?.({ok:true}); broadcast(room); return; } reply?.({ok:true}); broadcast(room);
   });
 
   socket.on("game:castMagic", ({magicId,casterId,targetPlayerId,targetUnitIds}, reply) => {
