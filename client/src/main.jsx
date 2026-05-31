@@ -319,11 +319,9 @@ function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = fa
       onClick={handleClick}
       onDoubleClick={(e) => {
         e.preventDefault();
-        onDetail?.(card, "兵種卡");
       }}
       onContextMenu={(e) => {
         e.preventDefault();
-        onDetail?.(card, "兵種卡");
       }}
       onMouseDown={startPress}
       onMouseUp={cancelPress}
@@ -943,7 +941,7 @@ function App() {
   React.useEffect(() => {
     // kw_session_resume
     function resumeSession() {
-      const raw = sessionStorage.getItem("kw_session");
+      const raw = localStorage.getItem("kw_session");
       if (!raw) return;
 
       try {
@@ -957,7 +955,7 @@ function App() {
           setMessage("");
         });
       } catch {
-        sessionStorage.removeItem("kw_session");
+        localStorage.removeItem("kw_session");
       }
     }
 
@@ -1006,14 +1004,14 @@ function App() {
 
   function rememberSession(pid, nextRoom) {
     if (!pid || !nextRoom?.roomCode) return;
-    sessionStorage.setItem("kw_session", JSON.stringify({
+    localStorage.setItem("kw_session", JSON.stringify({
       playerId: pid,
       roomCode: nextRoom.roomCode
     }));
   }
 
   function clearSavedSession() {
-    sessionStorage.removeItem("kw_session");
+    localStorage.removeItem("kw_session");
   }
 
   function createRoom() {
@@ -1076,7 +1074,7 @@ function App() {
 
     socket.emit("room:leave", {}, () => {});
 
-    sessionStorage.removeItem("kw_session");
+    localStorage.removeItem("kw_session");
     setRoom(null);
     setPlayerId(null);
     setTargetPlayerId("");
@@ -1475,14 +1473,22 @@ function App() {
       return setMessage("請至少選擇一個魔法目標。");
     }
 
-    emit("game:castMagic", {
+    setMessage("施法確認中...");
+
+    socket.emit("game:castMagic", {
       magicId: magicPlan.magic.id,
       casterId: magicPlan.casterId,
       targetPlayerId: magicPlan.targetPlayerId,
       targetUnitIds: magicPlan.targetUnitIds
-    });
+    }, (res) => {
+      if (!res?.ok) {
+        setMessage(res?.error || "施法失敗，請重新確認施法者與目標。");
+        return;
+      }
 
-    setMagicPlan(null);
+      setMessage("");
+      setMagicPlan(null);
+    });
   }
 
   function selectOwnUnit(card) {

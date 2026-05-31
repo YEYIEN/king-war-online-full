@@ -14,6 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const rooms = new Map();
 const turnTimers = new Map();
+const disconnectGraceTimers = new Map();
 let matchmakingRoomCode = null;
 
 function cleanDisplayName(name) {
@@ -142,6 +143,12 @@ function startTurn(room, p) {
   const md = drawMagic(room, p, mages);
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
   scheduleTurnTimer(room, p);
+
+  // DISCONNECT_GRACE_STARTTURN_V1
+  if (!p.connected && !p.isAI && room.status === "playing") {
+    room.log.push(`${p.name} 目前斷線，開始 60 秒重連倒數。`);
+    scheduleDisconnectGrace(room, p, 60);
+  }
 }
 function rankValue(rank) {
   if (rank === "高級") return 3;
@@ -227,6 +234,48 @@ function clearTurnTimer(room) {
     clearTimeout(timer);
     turnTimers.delete(room.code);
   }
+}
+
+function disconnectKey(room, player) {
+  return `${room?.code || "NO_ROOM"}:${player?.id || "NO_PLAYER"}`;
+}
+
+function clearDisconnectGrace(room, player) {
+  const key = disconnectKey(room, player);
+  const timer = disconnectGraceTimers.get(key);
+
+  if (timer) {
+    clearTimeout(timer);
+    disconnectGraceTimers.delete(key);
+  }
+}
+
+function scheduleDisconnectGrace(room, player, seconds = 60) {
+  if (!room || !player) return;
+  if (room.status !== "playing") return;
+  if (player.isAI || player.eliminated || player.connected) return;
+
+  clearDisconnectGrace(room, player);
+
+  const key = disconnectKey(room, player);
+
+  const timer = setTimeout(() => {
+    const liveRoom = rooms.get(room.code);
+    if (!liveRoom || liveRoom.status !== "playing") return;
+
+    const livePlayer = liveRoom.players.find((p) => p.id === player.id);
+    if (!livePlayer || livePlayer.connected || livePlayer.eliminated || livePlayer.isAI) return;
+
+    liveRoom.log.push(`${livePlayer.name} 斷線超過 ${seconds} 秒，視同投降。`);
+
+    forcePlayerDefeat(liveRoom, livePlayer, "斷線逾時，視同投降。");
+    disconnectGraceTimers.delete(key);
+
+    broadcast(liveRoom);
+    scheduleAITurn(liveRoom);
+  }, seconds * 1000);
+
+  disconnectGraceTimers.set(key, timer);
 }
 
 function finishTimedOutTurn(room, player) {
@@ -789,12 +838,21 @@ function aiEndTurn(room, ai) {
   scheduleAITurn(room);
 }
 
+function isStillAITurn(room, ai) {
+  return !!room &&
+    !!ai &&
+    room.status === "playing" &&
+    room.currentPlayerId === ai.id &&
+    !ai.eliminated &&
+    isAIPlayer(ai);
+}
+
 async function performAITurn(roomCode) {
   const room = rooms.get(roomCode);
   if (!room || room.status !== "playing") return;
 
   const ai = room.players.find((p) => p.id === room.currentPlayerId);
-  if (!isAIPlayer(ai) || ai.eliminated) return;
+  if (!isStillAITurn(room, ai)) return;
 
   const enemies = room.players.filter((p) => p.id !== ai.id && !p.eliminated);
   const enemy = enemies[0];
@@ -809,27 +867,36 @@ async function performAITurn(roomCode) {
   room.log.push(`${ai.name} 開始思考...`);
   broadcast(room);
   await sleep(1600);
+  if (!isStillAITurn(room, ai)) return;
 
   room.log.push(`${ai.name} 正在檢查手牌與場面。`);
   broadcast(room);
   await sleep(1400);
+  if (!isStillAITurn(room, ai)) return;
 
   const beforeDeployCount = ai.field.length;
   aiDeployUnits(room, ai, enemy);
   if (ai.field.length !== beforeDeployCount) {
     broadcast(room);
     await sleep(2100);
+    if (!isStillAITurn(room, ai)) return;
   }
+
+  if (!isStillAITurn(room, ai)) return;
 
   const usedMagic = aiChooseMagic(room, ai, enemy);
   if (usedMagic) {
     broadcast(room);
     await sleep(2100);
+    if (!isStillAITurn(room, ai)) return;
   }
+
+  if (!isStillAITurn(room, ai)) return;
 
   room.log.push(`${ai.name} 進入攻擊階段。`);
   broadcast(room);
   await sleep(1400);
+  if (!isStillAITurn(room, ai)) return;
 
   await aiAttackPhase(room, ai, enemy);
 
@@ -838,9 +905,12 @@ async function performAITurn(roomCode) {
     return;
   }
 
+  if (!isStillAITurn(room, ai)) return;
+
   room.log.push(`${ai.name} 準備結束回合。`);
   broadcast(room);
   await sleep(1600);
+  if (!isStillAITurn(room, ai)) return;
 
   aiEndTurn(room, ai);
 }
@@ -863,6 +933,9 @@ io.on("connection", socket => {
     player.connected = true;
     socket.join(room.code);
 
+    // DISCONNECT_GRACE_RESUME_V1
+    clearDisconnectGrace(room, player);
+
     room.log.push(`${player.name} 已重新連線。`);
 
     reply?.({ ok: true, playerId: player.id, room: viewFor(room, player.id) });
@@ -876,8 +949,11 @@ io.on("connection", socket => {
 
     const { room, player } = f;
 
+    // DISCONNECT_GRACE_LEAVE_V1
+    clearDisconnectGrace(room, player);
+
     if (room.status === "playing") {
-      forcePlayerDefeat(room, player, "回到主選單，視同投降。");
+      forcePlayerDefeat(room, player, "回到主選單，視同投降.");
     } else {
       player.connected = false;
       player.socketId = null;
@@ -1518,6 +1594,19 @@ io.on("connection", socket => {
       if(magic.target==="我方" && target.id!==p.id) return reply?.({ok:false,error:"此魔法只能指定我方。"});
       if(magic.target==="敵方" && target.id===p.id) return reply?.({ok:false,error:"此魔法只能指定敵方。"});
     } else if(target.id===p.id) return reply?.({ok:false,error:"天殞術只能指定敵方玩家。"});
+    // MAGIC_TARGET_EXISTENCE_CHECK_V2
+    // 消耗魔法卡前，先確認指定目標仍存在，避免「卡被吃掉但沒有生效」。
+    if (magic.name !== "天殞術") {
+      const missingIds = ids.filter((id) => !target.field.some((u) => u.id === id));
+
+      if (missingIds.length > 0) {
+        return reply?.({
+          ok: false,
+          error: "指定的魔法目標已不存在，請重新選擇目標。"
+        });
+      }
+    }
+
     p.magic.splice(mi,1); caster.tapped=true; room.magicDeck.push(magic);
     if(magic.name==="天殞術"){
       const before=target.field.length; target.field=target.field.filter(u=>{ if(u.rank!=="高級") return false; freeze(u); return true; });
@@ -1575,6 +1664,12 @@ reply?.({ok:true}); broadcast(room);
 
     f.player.connected = false;
     f.room.log.push(`${f.player.name} 連線中斷。`);
+
+    // DISCONNECT_GRACE_DISCONNECT_V1
+    if (f.room.status === "playing" && !f.player.isAI && !f.player.eliminated) {
+      f.room.log.push(`${f.player.name} 有 60 秒可以重新連線。`);
+      scheduleDisconnectGrace(f.room, f.player, 60);
+    }
 
     if (f.room.matchmaking && f.room.status === "lobby" && matchmakingRoomCode === f.room.code) {
       matchmakingRoomCode = null;
