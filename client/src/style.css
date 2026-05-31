@@ -1217,3 +1217,178 @@
     color: #bfdbfe !important;
   }
 }
+
+
+/* RULES_LOG_MODAL_V1 */
+/* 規則與遊戲紀錄改成彈窗，主戰鬥畫面保持乾淨 */
+.rulesLogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.rulesLogPanel {
+  width: min(760px, 94vw);
+  max-height: 88dvh;
+  overflow: auto;
+  border-radius: 26px;
+  padding: 22px;
+  border: 1px solid #38bdf8;
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.16), transparent 44%),
+    linear-gradient(135deg, #0f172a, #111827);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.rulesLogTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.rulesLogTop span {
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.rulesLogPanel h2 {
+  margin: 14px 0 16px;
+  font-size: clamp(28px, 5vw, 46px);
+}
+
+.rulesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ruleBlock {
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(2, 6, 23, 0.58);
+  border: 1px solid #334155;
+}
+
+.ruleBlock h3 {
+  margin: 0 0 8px;
+  color: #fde68a;
+}
+
+.ruleBlock p {
+  margin: 6px 0;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.logPanelLarge {
+  width: min(860px, 94vw);
+}
+
+.modalLogList {
+  display: grid;
+  gap: 8px;
+  max-height: 62dvh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.modalLogList div {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(2, 6, 23, 0.56);
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+/* 舊的常駐兵種相剋 / 遊戲紀錄先收掉，避免干擾主畫面 */
+@media (min-width: 760px), (orientation: landscape) {
+  .sideColumn .zoneCard:nth-child(2),
+  .sideColumn .zoneCard:nth-child(3) {
+    display: none !important;
+  }
+}
+
+
+/* CARD_DETAIL_NON_BLOCKING_V1 */
+/* 長按詳情改成非阻擋式資訊窗，不再蓋住整個戰鬥畫面 */
+.cardDetailOverlay {
+  position: fixed !important;
+  inset: auto auto 18px 18px !important;
+  z-index: 880 !important;
+  display: block !important;
+  width: min(380px, calc(100vw - 36px)) !important;
+  height: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+.cardDetailPanel {
+  width: 100% !important;
+  max-height: min(420px, 70dvh) !important;
+  overflow: auto !important;
+  border-radius: 20px !important;
+  padding: 16px !important;
+  border: 1px solid #facc15 !important;
+  background:
+    radial-gradient(circle at top, rgba(250, 204, 21, 0.16), transparent 42%),
+    rgba(15, 23, 42, 0.96) !important;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5) !important;
+  pointer-events: auto !important;
+}
+
+.cardDetailPanel h2 {
+  font-size: 26px !important;
+  margin: 10px 0 8px !important;
+}
+
+.cardDetailPanel p {
+  font-size: 14px !important;
+  line-height: 1.65 !important;
+}
+
+.cardDetailMeta b,
+.cardDetailStatus span {
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+
+/* 其他真正需要阻擋操作的視窗一定要在卡片詳情上方 */
+.rulesLogOverlay,
+.actionCardOverlay,
+.resultOverlay,
+.turnOrderOverlay,
+.tutorialOverlay {
+  z-index: 2100 !important;
+}
+
+/* 手機橫版時把詳情窗再縮小，避免擋戰場 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .cardDetailOverlay {
+    inset: auto auto 10px 10px !important;
+    width: min(300px, calc(100vw - 20px)) !important;
+  }
+
+  .cardDetailPanel {
+    max-height: 64dvh !important;
+    padding: 12px !important;
+  }
+
+  .cardDetailPanel h2 {
+    font-size: 22px !important;
+  }
+
+  .cardDetailPanel p {
+    font-size: 12px !important;
+  }
+}

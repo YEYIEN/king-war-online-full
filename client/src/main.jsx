@@ -773,6 +773,8 @@ function App() {
   const [magicPlan, setMagicPlan] = useState(null);
   const [showHelp, setShowHelp] = useState(true);
   const [cardDetailModal, setCardDetailModal] = useState(null);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
   const [actionCardModal, setActionCardModal] = useState(null);
   const [tutorialMode, setTutorialMode] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -844,6 +846,13 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [room?.status, room?.roomCode, playerId]);
+
+  React.useEffect(() => {
+    // kw_close_detail_when_magic_changes
+    if (magicPlan) {
+      setCardDetailModal(null);
+    }
+  }, [magicPlan?.step, magicPlan?.casterId, magicPlan?.targetPlayerId, magicPlan?.targetUnitIds?.join(",")]);
 
   React.useEffect(() => {
     // kw_turn_timer_tick
@@ -1045,14 +1054,8 @@ function App() {
   }
 
   function playAgainFromResult() {
-    setAttackerId(null);
-    setMagicPlan(null);
-    setMessage("正在重新開始原房間...");
-
-    socket.emit("game:rematch", {}, (res) => {
-      if (!res?.ok) return setMessage(res?.error || "無法再來一局");
-      setMessage("");
-    });
+    // 已停用：結果畫面不再提供「再來一局」。
+    setMessage("請使用隨機匹配或回到主選單。");
   }
 
   function startTutorialRoom() {
@@ -1276,19 +1279,26 @@ function App() {
     );
   }
 
+  function closeCardDetailForAction() {
+    setCardDetailModal(null);
+  }
+
   function attackUnit(defenderId) {
+    closeCardDetailForAction();
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
     emit("game:attackUnit", { attackerId, targetPlayerId: targetPlayer.id, defenderId });
     setAttackerId(null);
   }
 
   function attackKing() {
+    closeCardDetailForAction();
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
     emit("game:attackKing", { attackerId, targetPlayerId: targetPlayer.id });
     setAttackerId(null);
   }
 
   function handleEndTurn() {
+    closeCardDetailForAction();
     if (!isMyTurn) return;
 
     const readyUnits = me?.field?.filter(canUnitStillAct) || [];
@@ -1308,6 +1318,7 @@ function App() {
   }
 
   function beginMagic(magic) {
+    closeCardDetailForAction();
     setMagicPlan({
       magic,
       step: "caster",
@@ -1319,6 +1330,7 @@ function App() {
   }
 
   function confirmMagicCaster() {
+    closeCardDetailForAction();
     if (!magicPlan?.casterId) {
       return setMessage("請先選擇一名我方法師作為施法者。");
     }
@@ -1332,6 +1344,7 @@ function App() {
   }
 
   function confirmMagicTarget() {
+    closeCardDetailForAction();
     if (!magicPlan?.targetPlayerId) {
       return setMessage("請先選擇目標玩家。");
     }
@@ -1348,6 +1361,7 @@ function App() {
   }
 
   function backMagicStep() {
+    closeCardDetailForAction();
     if (!magicPlan) return;
 
     if (magicPlan.step === "target") {
@@ -1368,6 +1382,7 @@ function App() {
   }
 
   function chooseMagicTarget(unitId) {
+    closeCardDetailForAction();
     if (!magicPlan) return;
     const max = magicPlan.magic.maxTargets || 1;
     const has = magicPlan.targetUnitIds.includes(unitId);
@@ -1381,6 +1396,7 @@ function App() {
   }
 
   function castMagic() {
+    closeCardDetailForAction();
     if (!magicPlan) return;
 
     if (!magicPlan.casterId) {
@@ -1406,6 +1422,7 @@ function App() {
   }
 
   function selectOwnUnit(card) {
+    closeCardDetailForAction();
     if (!isMyTurn) return;
 
     if (magicPlan) {
@@ -1485,12 +1502,72 @@ function App() {
 
         <div className="topActions">
           <button className="secondary" onClick={() => setShowHelp((v) => !v)}>{showHelp ? "隱藏提示" : "顯示提示"}</button>
+          <button className="secondary" onClick={() => setShowRulesModal(true)}>規則</button>
+          <button className="secondary" onClick={() => setShowLogModal(true)}>紀錄</button>
           <button className="secondary" onClick={returnToMainMenu}>回到主選單</button>
           <button className="endTurnBtn" disabled={!isMyTurn} onClick={handleEndTurn}>結束回合</button>
         </div>
       </header>
 
       {message && <p className="error floatingError">{message}</p>}
+
+      {showRulesModal && (
+        <section className="rulesLogOverlay" onClick={() => setShowRulesModal(false)}>
+          <div className="rulesLogPanel" onClick={(e) => e.stopPropagation()}>
+            <div className="rulesLogTop">
+              <span>RULES</span>
+              <button className="secondary" onClick={() => setShowRulesModal(false)}>關閉</button>
+            </div>
+
+            <h2>兵種相剋與基本規則</h2>
+
+            <div className="rulesGrid">
+              <div className="ruleBlock">
+                <h3>兵種相剋</h3>
+                <p>步兵 → 弓兵</p>
+                <p>弓兵 → 法師</p>
+                <p>法師 → 騎兵</p>
+                <p>騎兵 → 步兵</p>
+              </div>
+
+              <div className="ruleBlock">
+                <h3>戰鬥目標</h3>
+                <p>把其他玩家的國王 HP 降到 0。</p>
+                <p>敵方場上有步兵時，通常必須先處理步兵，不能直接攻擊國王。</p>
+              </div>
+
+              <div className="ruleBlock">
+                <h3>回合流程</h3>
+                <p>部署兵種 → 選擇攻擊者 → 攻擊兵種或國王 → 使用魔法 → 結束回合。</p>
+              </div>
+
+              <div className="ruleBlock">
+                <h3>卡片說明</h3>
+                <p>手機長按卡片、電腦右鍵或雙擊卡片，可以查看完整描述。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {showLogModal && (
+        <section className="rulesLogOverlay" onClick={() => setShowLogModal(false)}>
+          <div className="rulesLogPanel logPanelLarge" onClick={(e) => e.stopPropagation()}>
+            <div className="rulesLogTop">
+              <span>BATTLE LOG</span>
+              <button className="secondary" onClick={() => setShowLogModal(false)}>關閉</button>
+            </div>
+
+            <h2>遊戲紀錄</h2>
+
+            <div className="modalLogList">
+              {[...(room?.log || [])].reverse().map((item, index) => (
+                <div key={index}>{item}</div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {actionCardModal && (
         <section className="actionCardOverlay" onClick={() => setActionCardModal(null)}>
@@ -1615,7 +1692,6 @@ function App() {
             </p>
 
             <div className="resultActions">
-              <button className="primaryBtn" onClick={playAgainFromResult}>再來一局</button>
               <button className="matchBtn" onClick={randomMatch}>隨機匹配</button>
               <button className="secondary" onClick={returnHomeFromResult}>回到主選單</button>
             </div>
@@ -1754,7 +1830,10 @@ function App() {
 
                 <div className="panelActions">
                   <button className="primaryBtn" disabled={!magicPlan.casterId} onClick={confirmMagicCaster}>確認施法者</button>
-                  <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+                  <button className="secondary" onClick={() => {
+                    closeCardDetailForAction();
+                    setMagicPlan(null);
+                  }}>取消</button>
                 </div>
               </>
             )}
@@ -1807,7 +1886,10 @@ function App() {
                 <div className="panelActions">
                   <button className="primaryBtn" onClick={confirmMagicTarget}>確認目標</button>
                   <button className="secondary" onClick={backMagicStep}>上一步</button>
-                  <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+                  <button className="secondary" onClick={() => {
+                    closeCardDetailForAction();
+                    setMagicPlan(null);
+                  }}>取消</button>
                 </div>
               </>
             )}
@@ -1834,7 +1916,10 @@ function App() {
                 <div className="panelActions">
                   <button className="primaryBtn" onClick={castMagic}>確認施放</button>
                   <button className="secondary" onClick={backMagicStep}>上一步</button>
-                  <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+                  <button className="secondary" onClick={() => {
+                    closeCardDetailForAction();
+                    setMagicPlan(null);
+                  }}>取消</button>
                 </div>
               </>
             )}
