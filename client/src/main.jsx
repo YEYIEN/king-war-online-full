@@ -100,6 +100,26 @@ function cardDetailText(card) {
   return unitEffectText(card) || unitStatusText(card);
 }
 
+function shouldBlockUnitCardDetail(card, source = "卡片") {
+  const sourceText = String(source || "");
+
+  // 兵種手牌 / 兵種卡 / 我方兵種 / 敵方兵種，都禁止長按資訊。
+  if (sourceText.includes("兵種")) return true;
+
+  // 兵種卡通常會有 damage / counterTarget / rank / type。
+  if (card?.damage !== undefined) return true;
+  if (card?.counterTarget !== undefined) return true;
+
+  // 明確標記為 unit 也禁止。
+  if (card?.kind === "unit") return true;
+
+  // 沒有 kind，但有兵種類型時，也視為兵種卡。
+  const unitTypes = ["步兵", "弓兵", "法師", "騎兵"];
+  if (!card?.kind && unitTypes.includes(card?.type)) return true;
+
+  return false;
+}
+
 function buildCardDetail(card, source = "卡片") {
   if (!card) return null;
 
@@ -270,10 +290,8 @@ function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = fa
   let pressTimer = null;
 
   function startPress() {
-    if (!onDetail) return;
-    pressTimer = window.setTimeout(() => {
-      onDetail(card, "兵種卡");
-    }, 450);
+    // UNIT_CARD_LONG_PRESS_DISABLED_V2
+    return;
   }
 
   function cancelPress() {
@@ -788,6 +806,21 @@ function App() {
   const cardDetailPressTimerRef = useRef(null);
 
   function openCardDetail(card, source = "卡片") {
+    // BLOCK_UNIT_CARD_DETAIL_V2
+    if (shouldBlockUnitCardDetail(card, source)) {
+      setCardDetailModal?.(null);
+      return;
+    }
+    // UNIT_DETAIL_DISABLED_V1
+    // 兵種牌種類不多，避免手機誤觸長按一直跳說明；兵種效果改放規則頁。
+    const isUnitCard =
+      (!card?.kind || card?.kind === "unit") &&
+      source !== "國王" &&
+      source !== "魔法卡";
+
+    if (isUnitCard || String(source).includes("兵種")) {
+      return;
+    }
     const detail = buildCardDetail(card, source);
     if (!detail) return;
     setCardDetailModal(detail);
@@ -805,10 +838,18 @@ function App() {
   }
 
   function startCardDetailPress(card, source = "卡片") {
+    // BLOCK_UNIT_CARD_DETAIL_PRESS_V2
+    if (shouldBlockUnitCardDetail(card, source)) {
+      window.clearTimeout(cardDetailPressTimerRef.current);
+      cardDetailPressTimerRef.current = null;
+      setCardDetailModal?.(null);
+      return;
+    }
+
     window.clearTimeout(cardDetailPressTimerRef.current);
     cardDetailPressTimerRef.current = window.setTimeout(() => {
       openCardDetail(card, source);
-    }, 450);
+    }, 700);
   }
 
   function cancelCardDetailPress() {
@@ -1592,6 +1633,13 @@ function App() {
             <h2>兵種相剋與基本規則</h2>
 
             <div className="rulesGrid">
+              <div className="ruleBlock">
+                <h3>兵種效果速查</h3>
+                <p><strong>步兵：</strong>守衛。敵方有步兵時，通常必須先處理步兵，不能直接攻擊國王。</p>
+                <p><strong>弓兵：</strong>遠射。依戰力差與攻擊對象，可能獲得額外攻擊或保命效果。</p>
+                <p><strong>法師：</strong>施法。使用魔法卡需要選擇法師作為施法者。</p>
+                <p><strong>騎兵：</strong>突擊。部署後可更快投入攻擊，是主動進攻型兵種。</p>
+              </div>
               <div className="ruleBlock">
                 <h3>兵種相剋</h3>
                 <p>步兵 → 弓兵</p>
