@@ -140,3 +140,1080 @@
   font-size: 12px !important;
   font-weight: 900;
 }
+
+
+.idHint {
+  margin-top: 6px;
+  margin-bottom: 0;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+
+.turnOrderOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(8px);
+  animation: fadeInNotice 0.18s ease-out;
+}
+
+.turnOrderModal {
+  width: min(520px, 92vw);
+  border-radius: 28px;
+  padding: 26px;
+  text-align: center;
+  border: 1px solid #facc15;
+  background:
+    radial-gradient(circle at top, rgba(250, 204, 21, 0.22), transparent 45%),
+    linear-gradient(135deg, #0f172a, #111827);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.turnOrderBadge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  background: #020617;
+  border: 1px solid #475569;
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.turnOrderModal h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(28px, 7vw, 52px);
+}
+
+.turnOrderModal p {
+  margin: 0 0 14px;
+  color: #e2e8f0;
+  font-weight: 800;
+}
+
+.turnOrderPath {
+  border-radius: 18px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  background: #020617;
+  border: 1px solid #334155;
+  color: #bfdbfe;
+  font-weight: 900;
+  line-height: 1.6;
+}
+
+.turnOrderModal small {
+  color: #94a3b8;
+}
+
+@keyframes fadeInNotice {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+.reinforcementNotice {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #facc15;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(15, 23, 42, 0.95));
+  color: #fde68a;
+  font-weight: 900;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+}
+
+
+.attackFeedbackToast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1300;
+  width: min(560px, calc(100vw - 28px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 12px 16px;
+  border: 1px solid #f97316;
+  background:
+    radial-gradient(circle at top, rgba(249, 115, 22, 0.28), transparent 45%),
+    rgba(15, 23, 42, 0.96);
+  color: #fed7aa;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  animation: attackFeedbackPop 1.4s ease forwards;
+  pointer-events: none;
+  text-align: center;
+}
+
+.attackFeedbackToast span {
+  font-size: 20px;
+}
+
+.attackFeedbackToast strong {
+  color: #fff7ed;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+@keyframes attackFeedbackPop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.96);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.98);
+  }
+}
+
+
+.readyBadge {
+  display: inline-flex;
+  margin-left: 8px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.readyBadge.waiting,
+.readyToggle.waiting {
+  background: #dc2626;
+}
+
+.readyBadge.ready,
+.readyToggle.ready {
+  background: #16a34a;
+}
+
+.readyToggle {
+  color: white;
+  font-weight: 900;
+}
+
+
+.hostSettingsPanel {
+  margin: 16px 0;
+  border: 1px solid #475569;
+  border-radius: 18px;
+  padding: 16px;
+  background: #111827;
+}
+
+.hostSettingsPanel h2 {
+  margin-bottom: 12px;
+}
+
+.hostSettingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.aiControlRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settingHint {
+  margin: 10px 0 0;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.hostSettingsPanel select {
+  margin-top: 6px;
+}
+
+
+.turnTimer {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 7px 12px;
+  border: 1px solid #38bdf8;
+  background: rgba(14, 116, 144, 0.25);
+  color: #bae6fd;
+  font-weight: 900;
+}
+
+.turnTimer.danger {
+  border-color: #f97316;
+  background: rgba(154, 52, 18, 0.35);
+  color: #fed7aa;
+  animation: timerPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+
+/* FINAL_BATTLE_TABLE_UI_V1 */
+/* 重新設計版：固定戰鬥桌面，不再上下滑；中央戰場、底部手牌、右側操作 */
+@media (min-width: 760px), (orientation: landscape) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden !important;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at center, rgba(22, 101, 52, 0.16), transparent 50%),
+      linear-gradient(135deg, #020617, #0f172a 54%, #020617);
+  }
+
+  .page.guidedPage,
+  .guidedPage {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    overflow: hidden !important;
+
+    display: grid !important;
+    grid-template-columns: 245px minmax(0, 1fr) 300px !important;
+    grid-template-rows: 50px minmax(0, 1fr) 178px !important;
+    grid-template-areas:
+      "top top top"
+      "left battle right"
+      "hand hand right" !important;
+    gap: 8px !important;
+  }
+
+  /* 頂部：房間 / 回合 / 結束回合 */
+  .guidedTopbar,
+  .topbar {
+    grid-area: top !important;
+    margin: 0 !important;
+    padding: 7px 12px !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    border-radius: 14px !important;
+    background: rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .guidedTopbar h1,
+  .topbar h1 {
+    font-size: 21px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+  }
+
+  .guidedTopbar p,
+  .topbar p {
+    display: none !important;
+  }
+
+  .topActions {
+    gap: 6px !important;
+  }
+
+  .topActions button,
+  .secondary,
+  .endTurnBtn,
+  .primaryBtn,
+  .dangerBtn {
+    padding: 6px 9px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  .turnTimer {
+    margin-top: 4px !important;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+  }
+
+  /* 左側：玩家資訊 + 遊戲紀錄 */
+  .playerStrip {
+    grid-area: left !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: auto !important;
+    min-height: 0 !important;
+  }
+
+  .playerSummary {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 8px !important;
+    border-radius: 14px !important;
+    background: rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .playerSummary.current {
+    border-color: #22c55e !important;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.16) !important;
+  }
+
+  .playerSummaryTop strong {
+    font-size: 13px !important;
+  }
+
+  .playerSummaryTop span {
+    font-size: 12px !important;
+  }
+
+  .kingMini {
+    grid-template-columns: 54px 1fr !important;
+    gap: 7px !important;
+    margin-top: 6px !important;
+  }
+
+  .kingMini .kingArt {
+    max-height: 62px !important;
+  }
+
+  .kingMini small {
+    display: none !important;
+  }
+
+  .playerStats {
+    margin-top: 6px !important;
+    gap: 4px !important;
+  }
+
+  .playerStats span {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+  }
+
+  /* 中央：戰場，敵上我下 */
+  .battleGrid {
+    grid-area: battle !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .enemyZone {
+    border-color: #7f1d1d !important;
+  }
+
+  .myZone {
+    border-color: #16a34a !important;
+  }
+
+  .zoneCard {
+    min-height: 0 !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+    gap: 7px !important;
+    overflow: hidden !important;
+    background: rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .zoneHeader {
+    min-height: 30px !important;
+    align-items: center !important;
+  }
+
+  .zoneHeader h2 {
+    font-size: 16px !important;
+    margin: 0 !important;
+  }
+
+  .zoneHeader p {
+    font-size: 11px !important;
+    margin: 0 !important;
+  }
+
+  .zoneCard .cardGrid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 4px 4px 10px !important;
+  }
+
+  /* 卡片：平常只承載快速資訊 */
+  .unitWrap,
+  .battleGrid .gameCard {
+    flex: 0 0 142px !important;
+    min-width: 142px !important;
+    max-width: 142px !important;
+  }
+
+  .gameCard {
+    min-height: 0 !important;
+    padding: 8px !important;
+    gap: 5px !important;
+    border-radius: 14px !important;
+  }
+
+  .gameCard strong {
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .gameCard span {
+    font-size: 10px !important;
+  }
+
+  .battleGrid .cardArt {
+    max-height: 106px !important;
+    border-radius: 9px !important;
+    object-fit: contain !important;
+  }
+
+  .battleGrid .cardArt.small,
+  .battleGrid .gameCard.compact .cardArt {
+    max-height: 96px !important;
+  }
+
+  .gameCard .miniLine,
+  .gameCard > span:not(.powerText):not(.statusPill):not(.actionLabel):not(.status) {
+    display: none !important;
+  }
+
+  .effectText {
+    display: none !important;
+  }
+
+  .powerText {
+    font-size: 11px !important;
+    padding: 3px 7px !important;
+  }
+
+  .statusPill,
+  .actionLabel {
+    font-size: 10px !important;
+    padding: 3px 7px !important;
+  }
+
+  .status {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  .smallBtn {
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+  }
+
+  /* 右側：目標 + 操作提示 + 魔法 + 相剋 */
+  .targetBar {
+    grid-area: right !important;
+    align-self: start !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    border-radius: 14px !important;
+    max-height: 120px !important;
+    overflow: hidden !important;
+    background: rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .targetBar h2 {
+    font-size: 15px !important;
+    margin: 0 0 6px !important;
+  }
+
+  .targetBar p {
+    display: none !important;
+  }
+
+  .targetBar label {
+    margin: 0 !important;
+    font-size: 11px !important;
+  }
+
+  .targetBar select {
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+  }
+
+  .guidePanel {
+    grid-area: right !important;
+    align-self: center !important;
+    margin: 0 !important;
+    margin-top: 130px !important;
+    margin-bottom: 200px !important;
+    padding: 10px !important;
+    border-radius: 14px !important;
+    overflow: auto !important;
+    min-height: 0 !important;
+    background: rgba(15, 23, 42, 0.90) !important;
+  }
+
+  .guidePanel h2 {
+    font-size: 16px !important;
+    margin: 0 0 6px !important;
+  }
+
+  .guidePanel ol {
+    padding-left: 18px !important;
+  }
+
+  .guidePanel li,
+  .guidePanel p {
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+  }
+
+  .guideLabel {
+    font-size: 11px !important;
+  }
+
+  /* 底部：手牌區 */
+  .handAndLog {
+    grid-area: hand !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 245px !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .handAndLog > .zoneCard:first-child {
+    min-height: 0 !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    border-color: #facc15 !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .cardGrid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 4px 4px 10px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .gameCard {
+    flex: 0 0 130px !important;
+    min-width: 130px !important;
+    max-width: 130px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .cardArt {
+    max-height: 88px !important;
+  }
+
+  .sideColumn {
+    display: grid !important;
+    grid-template-rows: 1fr 0px 1fr !important;
+    gap: 8px !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .sideColumn .zoneCard {
+    min-height: 0 !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  /* 魔法卡跟兵種手牌同區域右側 */
+  .sideColumn .zoneCard:nth-child(1) {
+    border-color: #a855f7 !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(1) h2 {
+    font-size: 16px !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(1) p {
+    display: none !important;
+  }
+
+  .magicList {
+    display: flex !important;
+    gap: 10px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 2px 2px 8px !important;
+  }
+
+  .magicList .gameCard {
+    flex: 0 0 112px !important;
+    min-width: 112px !important;
+    max-width: 112px !important;
+  }
+
+  .magicList .cardArt {
+    max-height: 72px !important;
+  }
+
+  /* 相剋先收小，避免干擾 */
+  .sideColumn .zoneCard:nth-child(2) {
+    display: none !important;
+  }
+
+  /* 遊戲紀錄放左下側欄 */
+  .sideColumn .zoneCard:nth-child(3) {
+    border-color: #334155 !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(3) h2 {
+    font-size: 16px !important;
+  }
+
+  .log {
+    max-height: calc(100% - 34px) !important;
+    overflow-y: auto !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
+  .log div {
+    padding-bottom: 4px !important;
+  }
+
+  .emptyState {
+    padding: 14px !important;
+    font-size: 12px !important;
+  }
+
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    position: fixed !important;
+    left: 50% !important;
+    bottom: 188px !important;
+    transform: translateX(-50%) !important;
+    z-index: 900 !important;
+    width: min(720px, calc(100vw - 560px)) !important;
+    margin: 0 !important;
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+
+  .floatingError,
+  .attackFeedbackToast {
+    font-size: 12px !important;
+  }
+}
+
+/* 手機橫版壓縮版 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .page.guidedPage,
+  .guidedPage {
+    grid-template-columns: 190px minmax(0, 1fr) 230px !important;
+    grid-template-rows: 42px minmax(0, 1fr) 136px !important;
+    gap: 6px !important;
+    padding: 6px !important;
+  }
+
+  .guidedTopbar h1,
+  .topbar h1 {
+    font-size: 18px !important;
+  }
+
+  .topActions button,
+  .secondary,
+  .endTurnBtn {
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+  }
+
+  .battleGrid .gameCard,
+  .unitWrap {
+    flex-basis: 98px !important;
+    min-width: 98px !important;
+    max-width: 98px !important;
+  }
+
+  .battleGrid .cardArt {
+    max-height: 58px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .gameCard,
+  .magicList .gameCard {
+    flex-basis: 88px !important;
+    min-width: 88px !important;
+    max-width: 88px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .cardArt,
+  .magicList .cardArt {
+    max-height: 52px !important;
+  }
+
+  .kingMini small,
+  .zoneHeader p {
+    display: none !important;
+  }
+
+  .guidePanel li,
+  .guidePanel p,
+  .log {
+    font-size: 10px !important;
+  }
+
+  .targetBar {
+    max-height: 92px !important;
+  }
+
+  .guidePanel {
+    margin-top: 98px !important;
+    margin-bottom: 145px !important;
+  }
+}
+
+
+/* FINAL_BATTLE_TABLE_UI_V2 */
+/* 針對 V1 微調：右側不爆版、手牌更大、魔法區更像手牌 */
+@media (min-width: 760px), (orientation: landscape) {
+  .page.guidedPage,
+  .guidedPage {
+    grid-template-columns: 235px minmax(0, 1fr) 270px !important;
+    grid-template-rows: 48px minmax(0, 1fr) 205px !important;
+    gap: 8px !important;
+  }
+
+  /* 右側目標區縮小 */
+  .targetBar {
+    max-height: 96px !important;
+    padding: 8px !important;
+  }
+
+  .targetBar h2 {
+    display: none !important;
+  }
+
+  .targetBar p {
+    display: none !important;
+  }
+
+  .targetBar label {
+    font-size: 11px !important;
+    margin: 0 0 4px !important;
+    writing-mode: horizontal-tb !important;
+  }
+
+  .targetBar select {
+    height: 34px !important;
+    font-size: 12px !important;
+  }
+
+  /* 右側操作提示：避免文字被擠成直排 */
+  .guidePanel {
+    margin-top: 104px !important;
+    margin-bottom: 214px !important;
+    padding: 10px !important;
+    writing-mode: horizontal-tb !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .guidePanel * {
+    writing-mode: horizontal-tb !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+
+  .guidePanel h2 {
+    font-size: 15px !important;
+    line-height: 1.25 !important;
+  }
+
+  .guidePanel ol {
+    padding-left: 18px !important;
+    margin: 0 !important;
+  }
+
+  .guidePanel li {
+    font-size: 11px !important;
+    line-height: 1.45 !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* 中央戰場卡片再清楚一點 */
+  .battleGrid .gameCard,
+  .battleGrid .unitWrap {
+    flex-basis: 150px !important;
+    min-width: 150px !important;
+    max-width: 150px !important;
+  }
+
+  .battleGrid .cardArt {
+    max-height: 116px !important;
+  }
+
+  .battleGrid .gameCard strong {
+    font-size: 13px !important;
+  }
+
+  /* 下方手牌區高度增加，卡片更好點 */
+  .handAndLog {
+    grid-template-columns: minmax(0, 1fr) 270px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child {
+    padding: 10px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .gameCard {
+    flex-basis: 142px !important;
+    min-width: 142px !important;
+    max-width: 142px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .cardArt {
+    max-height: 98px !important;
+  }
+
+  /* 魔法區調整成底部右側手牌區 */
+  .sideColumn {
+    grid-template-rows: 1fr !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(1) {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(1) h2 {
+    font-size: 16px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(1) p {
+    display: none !important;
+  }
+
+  .magicList {
+    display: flex !important;
+    gap: 10px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding-bottom: 8px !important;
+  }
+
+  .magicList .gameCard {
+    flex-basis: 118px !important;
+    min-width: 118px !important;
+    max-width: 118px !important;
+  }
+
+  .magicList .cardArt {
+    max-height: 82px !important;
+  }
+
+  /* 相剋區先隱藏，之後改成規則彈窗 */
+  .sideColumn .zoneCard:nth-child(2) {
+    display: none !important;
+  }
+
+  /* 遊戲紀錄不要卡在底部右側，避免干擾手牌 */
+  .sideColumn .zoneCard:nth-child(3) {
+    display: none !important;
+  }
+
+  /* 左側玩家資訊更緊湊 */
+  .playerSummary {
+    padding: 7px !important;
+  }
+
+  .kingMini {
+    grid-template-columns: 50px 1fr !important;
+    gap: 6px !important;
+  }
+
+  .kingMini .kingArt {
+    max-height: 56px !important;
+  }
+
+  .playerStats span {
+    font-size: 10px !important;
+    padding: 2px 5px !important;
+  }
+
+  /* 急援提示不要擋住手牌 */
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    bottom: 214px !important;
+    width: min(680px, calc(100vw - 540px)) !important;
+  }
+}
+
+/* 手機橫版專用比例 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .page.guidedPage,
+  .guidedPage {
+    grid-template-columns: 180px minmax(0, 1fr) 210px !important;
+    grid-template-rows: 40px minmax(0, 1fr) 132px !important;
+    gap: 6px !important;
+    padding: 6px !important;
+  }
+
+  .battleGrid .gameCard,
+  .battleGrid .unitWrap {
+    flex-basis: 104px !important;
+    min-width: 104px !important;
+    max-width: 104px !important;
+  }
+
+  .battleGrid .cardArt {
+    max-height: 64px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .gameCard {
+    flex-basis: 94px !important;
+    min-width: 94px !important;
+    max-width: 94px !important;
+  }
+
+  .handAndLog > .zoneCard:first-child .cardArt,
+  .magicList .cardArt {
+    max-height: 56px !important;
+  }
+
+  .guidePanel {
+    margin-top: 86px !important;
+    margin-bottom: 140px !important;
+  }
+
+  .guidePanel li {
+    font-size: 10px !important;
+  }
+}
+
+
+/* ACTION_PANEL_CLEAN_V1 */
+/* 右側操作提示改成玩家真正看得懂的簡潔提示，不再顯示長清單 */
+@media (min-width: 760px), (orientation: landscape) {
+  .guidePanel {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    padding: 14px !important;
+    overflow: hidden !important;
+    background:
+      radial-gradient(circle at top, rgba(34, 197, 94, 0.12), transparent 48%),
+      rgba(15, 23, 42, 0.94) !important;
+    border-color: #16a34a !important;
+  }
+
+  .guideLabel {
+    display: inline-flex !important;
+    width: fit-content !important;
+    border-radius: 999px !important;
+    padding: 4px 9px !important;
+    background: #064e3b !important;
+    color: #bbf7d0 !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+  }
+
+  .guidePanel h2 {
+    font-size: 22px !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+    color: #f8fafc !important;
+  }
+
+  .guidePanel ol {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+  }
+
+  .guidePanel li {
+    display: none !important;
+  }
+
+  .guidePanel li:first-child {
+    display: block !important;
+    font-size: 14px !important;
+    line-height: 1.55 !important;
+    color: #cbd5e1 !important;
+    padding: 10px 12px !important;
+    border-radius: 14px !important;
+    background: rgba(2, 6, 23, 0.55) !important;
+    border: 1px solid #334155 !important;
+  }
+
+  .guidePanel.attack {
+    border-color: #f97316 !important;
+    background:
+      radial-gradient(circle at top, rgba(249, 115, 22, 0.16), transparent 48%),
+      rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .guidePanel.attack .guideLabel {
+    background: #7c2d12 !important;
+    color: #fed7aa !important;
+  }
+
+  .guidePanel.magic {
+    border-color: #a855f7 !important;
+    background:
+      radial-gradient(circle at top, rgba(168, 85, 247, 0.16), transparent 48%),
+      rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .guidePanel.magic .guideLabel {
+    background: #581c87 !important;
+    color: #e9d5ff !important;
+  }
+
+  .guidePanel.waiting {
+    border-color: #60a5fa !important;
+    background:
+      radial-gradient(circle at top, rgba(96, 165, 250, 0.14), transparent 48%),
+      rgba(15, 23, 42, 0.94) !important;
+  }
+
+  .guidePanel.waiting .guideLabel {
+    background: #1e3a8a !important;
+    color: #bfdbfe !important;
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
 import "./style.css";
@@ -50,8 +50,8 @@ function effectivePower(card) {
   let value = rankMap[card.rank] || 1;
 
   if (statuses.includes("整備")) value -= 1;
-  if (statuses.includes("階級-1") || statuses.includes("戰力-1")) value -= 1;
-  if (statuses.includes("階級+1") || statuses.includes("戰力+1")) value += 1;
+  if (statuses.includes("階級-1") || statuses.includes("戰力-1") || statuses.includes("階級-1") || statuses.includes("戰力-1")) value -= 1;
+  if (statuses.includes("階級+1") || statuses.includes("戰力+1") || statuses.includes("階級+1") || statuses.includes("戰力+1")) value += 1;
   if (statuses.includes("力量術+1")) value += 1;
   if (statuses.includes("屋大維+1")) value += 1;
 
@@ -68,9 +68,53 @@ function displayStatusLabel(status) {
   if (s === "傷害+1") return "攻擊國王傷害+1";
   if (s === "燃血+1傷害") return "燃血：攻擊國王傷害+1";
   if (s === "整備") return "整備：不能攻擊，戰力-1";
+  if (s === "急援") return "急援：本回合可以攻擊";
   if (s === "疲乏" || s === "疲乏待解") return "疲乏：下回合不能攻擊";
 
   return s.replaceAll("階級", "戰力");
+}
+
+function canUnitStillAct(card) {
+  if (!card) return false;
+
+  const statuses = card.status || [];
+
+  return !card.tapped &&
+    !statuses.includes("整備") &&
+    !statuses.includes("不能攻擊") &&
+    !statuses.includes("疲乏") &&
+    !statuses.includes("疲乏待解");
+}
+
+function cardDetailText(card) {
+  if (!card) return "";
+
+  if (card.kind === "magic") {
+    return card.text || "這張魔法卡沒有額外描述。";
+  }
+
+  if (card.kind === "king") {
+    return card.effect || "這張國王卡沒有額外描述。";
+  }
+
+  return unitEffectText(card) || unitStatusText(card);
+}
+
+function buildCardDetail(card, source = "卡片") {
+  if (!card) return null;
+
+  const isUnit = !card.kind || card.kind === "unit";
+
+  return {
+    source,
+    name: card.name,
+    kind: card.kind || "unit",
+    rank: card.rank || card.level || "",
+    type: card.type || "",
+    text: cardDetailText(card),
+    status: card.status || [],
+    power: isUnit ? effectivePower(card) : null
+  };
 }
 
 function unitStatusText(card) {
@@ -165,16 +209,44 @@ function GuidePanel({ hint }) {
   );
 }
 
-function PlayerSummary({ player, isMe, isCurrent }) {
+function PlayerSummary({ player, isMe, isCurrent, onDetail }) {
+  let pressTimer = null;
+
+  function startPress() {
+    if (!onDetail || !player.king) return;
+    pressTimer = window.setTimeout(() => {
+      onDetail({ ...player.king, kind: "king" }, "國王");
+    }, 450);
+  }
+
+  function cancelPress() {
+    if (pressTimer) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  }
+
   return (
-    <article className={`playerSummary ${isCurrent ? "current" : ""} ${player.eliminated ? "dead" : ""}`}>
+    <article className={`playerSummary ${isMe ? "me" : "opponent"} ${isCurrent ? "current" : ""} ${player.eliminated ? "dead" : ""}`}>
       <div className="playerSummaryTop">
         <strong>{player.name}{isMe ? "（你）" : ""}</strong>
         <span>HP {player.hp}</span>
       </div>
 
       {player.king && (
-        <div className="kingMini">
+        <div
+          className="kingMini"
+          onDoubleClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onDetail?.({ ...player.king, kind: "king" }, "國王");
+          }}
+          onMouseDown={startPress}
+          onMouseUp={cancelPress}
+          onMouseLeave={cancelPress}
+          onTouchStart={startPress}
+          onTouchEnd={cancelPress}
+        >
           <KingArt king={player.king} />
           <div>
             <strong>{player.king.name}</strong>
@@ -192,13 +264,59 @@ function PlayerSummary({ player, isMe, isCurrent }) {
   );
 }
 
-function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "" }) {
+
+
+function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "", onDetail, onAction }) {
+  let pressTimer = null;
+
+  function startPress() {
+    if (!onDetail) return;
+    pressTimer = window.setTimeout(() => {
+      onDetail(card, "兵種卡");
+    }, 450);
+  }
+
+  function cancelPress() {
+    if (pressTimer) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  }
+
+  function handleClick() {
+    if (disabled) return;
+
+    if (onAction) {
+      onAction(card, actionLabel || "執行這張卡的操作", onClick, "兵種卡");
+      return;
+    }
+
+    onClick?.();
+  }
+
   return (
-    <button className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`} disabled={disabled} onClick={onClick}>
+    <button
+      className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`}
+      disabled={disabled}
+      onClick={handleClick}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        onDetail?.(card, "兵種卡");
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onDetail?.(card, "兵種卡");
+      }}
+      onMouseDown={startPress}
+      onMouseUp={cancelPress}
+      onMouseLeave={cancelPress}
+      onTouchStart={startPress}
+      onTouchEnd={cancelPress}
+    >
       <CardArt card={card} small={compact} />
       <strong>{card.name}</strong>
-      <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
-      <span className="powerText">目前戰力：{effectivePower(card)}</span>
+      <span className="miniLine">傷害 {card.damage}｜剋 {card.counterTarget}</span>
+      <span className="powerText">戰力 {effectivePower(card)}</span>
       <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
       <span className="effectText">{unitEffectText(card)}</span>
       {card.status?.length > 0 && <span className="status">{card.status.map(displayStatusLabel).join("、")}</span>}
@@ -207,20 +325,439 @@ function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = fa
   );
 }
 
-function MagicCard({ card, onClick, disabled, selected }) {
+
+
+function MagicCard({ card, onClick, disabled, selected, onDetail, onAction }) {
+  let pressTimer = null;
+
+  function startPress() {
+    if (!onDetail) return;
+    pressTimer = window.setTimeout(() => {
+      onDetail(card, "魔法卡");
+    }, 450);
+  }
+
+  function cancelPress() {
+    if (pressTimer) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  }
+
+  function handleClick() {
+    if (disabled) return;
+
+    if (onAction) {
+      onAction(card, "使用這張魔法卡", onClick, "魔法卡");
+      return;
+    }
+
+    onClick?.();
+  }
+
   return (
-    <button className={`gameCard magic ${selected ? "selected" : ""}`} disabled={disabled} onClick={onClick}>
+    <button
+      className={`gameCard magic ${selected ? "selected" : ""}`}
+      disabled={disabled}
+      onClick={handleClick}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        onDetail?.(card, "魔法卡");
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onDetail?.(card, "魔法卡");
+      }}
+      onMouseDown={startPress}
+      onMouseUp={cancelPress}
+      onMouseLeave={cancelPress}
+      onTouchStart={startPress}
+      onTouchEnd={cancelPress}
+    >
       <CardArt card={card} />
       <strong>{card.name}</strong>
-      <span>{card.level}｜目標：{card.target}</span>
+      <span className="miniLine">{card.level}｜{card.target}</span>
       <span className="effectText">{card.text}</span>
       <span className="actionLabel">使用魔法</span>
     </button>
   );
 }
 
+
+
 function EmptyState({ children }) {
   return <div className="emptyState">{children}</div>;
+}
+
+function TutorialModal({ step, setStep, onClose }) {
+  const item = tutorialSteps[step];
+  const isFirst = step === 0;
+  const isLast = step === tutorialSteps.length - 1;
+
+  return (
+    <section className="tutorialOverlay">
+      <div className="tutorialModal">
+        <div className="tutorialTop">
+          <span className="tutorialBadge">新手操作教學</span>
+          <button className="secondary tutorialClose" onClick={onClose}>關閉</button>
+        </div>
+
+        <div className="tutorialProgress">
+          {tutorialSteps.map((_, index) => (
+            <span key={index} className={index === step ? "active" : ""}>
+              {index + 1}
+            </span>
+          ))}
+        </div>
+
+        <div className="tutorialCard">
+          <div className="tutorialTag">{item.tag}</div>
+          <h2>{item.title}</h2>
+          <p>{item.text}</p>
+          <div className="tutorialTip">提示：{item.tip}</div>
+        </div>
+
+        <div className="tutorialPreview">
+          <div className="tutorialBoard enemy">敵方場地</div>
+          <div className="tutorialBoard center">選擇攻擊者 → 選擇目標 → 確認行動</div>
+          <div className="tutorialBoard mine">我方場地 / 手牌</div>
+        </div>
+
+        <div className="tutorialActions">
+          <button className="secondary" disabled={isFirst} onClick={() => setStep(step - 1)}>上一步</button>
+          <button
+            className="primaryBtn"
+            onClick={() => {
+              if (isLast) onClose();
+              else setStep(step + 1);
+            }}
+          >
+            {isLast ? "完成教學" : "下一步"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const tutorialSteps = [
+  {
+    title: "第 1 步：部署兵種",
+    tag: "出牌",
+    text: "從手牌選一張兵種卡放到自己的場上。場上最多可以有 5 張兵種。",
+    tip: "剛部署的兵種通常不能立刻攻擊，但騎兵可以。"
+  },
+  {
+    title: "第 2 步：選擇攻擊者",
+    tag: "攻擊",
+    text: "點選我方場上可以行動的兵種，讓它成為攻擊者。",
+    tip: "已行動、整備、疲乏或不能攻擊的兵種，這回合不能攻擊。"
+  },
+  {
+    title: "第 3 步：攻擊敵人",
+    tag: "戰鬥",
+    text: "選好攻擊者後，可以攻擊敵方兵種。如果敵方場上沒有步兵，也可以直接攻擊國王。",
+    tip: "步兵有守衛效果，敵方有步兵時不能直接打國王。"
+  },
+  {
+    title: "第 4 步：使用魔法",
+    tag: "魔法",
+    text: "點選魔法卡後，依序選擇施法者、目標玩家、目標兵種，最後確認施放。",
+    tip: "使用魔法需要法師，而且使用魔法也算一次行動。"
+  },
+  {
+    title: "第 5 步：結束回合",
+    tag: "回合",
+    text: "部署、攻擊、使用魔法都完成後，按下結束回合。系統會提醒你是否還有兵種尚未行動。",
+    tip: "目標是把其他玩家的國王 HP 打到 0。"
+  }
+];
+
+function InteractiveTutorial({ onExit }) {
+  const [step, setStep] = React.useState(0);
+  const [deployed, setDeployed] = React.useState(false);
+  const [attackerSelected, setAttackerSelected] = React.useState(false);
+  const [enemyDefeated, setEnemyDefeated] = React.useState(false);
+  const [magicOpened, setMagicOpened] = React.useState(false);
+  const [casterSelected, setCasterSelected] = React.useState(false);
+  const [magicTargetSelected, setMagicTargetSelected] = React.useState(false);
+  const [magicCast, setMagicCast] = React.useState(false);
+  const [turnEnded, setTurnEnded] = React.useState(false);
+
+  const steps = [
+    {
+      title: "第 1 步：部署兵種",
+      text: "請點選下方手牌中的「初級步兵」，把它放到自己的場上。",
+    },
+    {
+      title: "第 2 步：選擇攻擊者",
+      text: "請點選我方場上的「初級步兵」，讓它成為攻擊者。",
+    },
+    {
+      title: "第 3 步：攻擊敵方兵種",
+      text: "請點選敵方場上的「初級弓兵」，完成一次攻擊。",
+    },
+    {
+      title: "第 4 步：使用魔法卡",
+      text: "請點選下方的「力量術」，進入魔法施放流程。",
+    },
+    {
+      title: "第 5 步：選施法者與目標",
+      text: "請依序選擇法師、選擇我方步兵作為目標，最後確認施放。",
+    },
+    {
+      title: "第 6 步：結束回合",
+      text: "完成部署、攻擊與魔法後，請按「結束回合」。",
+    },
+    {
+      title: "教學完成",
+      text: "你已經完成基本操作。接下來可以創建房間、加入房間，或用隨機匹配開始遊戲。",
+    },
+  ];
+
+  const current = steps[step];
+
+  function deployUnit() {
+    if (step !== 0) return;
+    setDeployed(true);
+    setStep(1);
+  }
+
+  function selectAttacker() {
+    if (step !== 1 || !deployed) return;
+    setAttackerSelected(true);
+    setStep(2);
+  }
+
+  function attackEnemy() {
+    if (step !== 2 || !attackerSelected) return;
+    setEnemyDefeated(true);
+    setStep(3);
+  }
+
+  function openMagic() {
+    if (step !== 3) return;
+    setMagicOpened(true);
+    setStep(4);
+  }
+
+  function selectCaster() {
+    if (step !== 4 || !magicOpened) return;
+    setCasterSelected(true);
+  }
+
+  function selectMagicTarget() {
+    if (step !== 4 || !casterSelected) return;
+    setMagicTargetSelected(true);
+  }
+
+  function confirmMagic() {
+    if (step !== 4 || !casterSelected || !magicTargetSelected) return;
+    setMagicCast(true);
+    setStep(5);
+  }
+
+  function endTutorialTurn() {
+    if (step !== 5) return;
+    setTurnEnded(true);
+    setStep(6);
+  }
+
+  function resetTutorial() {
+    setStep(0);
+    setDeployed(false);
+    setAttackerSelected(false);
+    setEnemyDefeated(false);
+    setMagicOpened(false);
+    setCasterSelected(false);
+    setMagicTargetSelected(false);
+    setMagicCast(false);
+    setTurnEnded(false);
+  }
+
+  return (
+    <main className="page tutorialPlayPage">
+      <header className="tutorialPlayTopbar">
+        <div>
+          <div className="titleBadge">Tutorial</div>
+          <h1>國王戰爭操作教學</h1>
+          <p>照著提示點擊，完成一回合的基本操作。</p>
+        </div>
+
+        <div className="topActions">
+          <button className="secondary" onClick={resetTutorial}>重新教學</button>
+          <button className="secondary" onClick={onExit}>回到主選單</button>
+        </div>
+      </header>
+
+      <section className="tutorialMission">
+        <div className="tutorialMissionText">
+          <span>目前步驟 {Math.min(step + 1, steps.length)} / {steps.length}</span>
+          <h2>{current.title}</h2>
+          <p>{current.text}</p>
+        </div>
+
+        <div className="tutorialStepDots">
+          {steps.map((_, index) => (
+            <b key={index} className={index === step ? "active" : index < step ? "done" : ""}>
+              {index + 1}
+            </b>
+          ))}
+        </div>
+      </section>
+
+      <section className="tutorialBattleTable">
+        <div className="tutorialZone enemy">
+          <div className="zoneHeader">
+            <h2>敵方場地</h2>
+            <p>訓練對手 HP 30</p>
+          </div>
+
+          <div className="tutorialCardRow">
+            {!enemyDefeated ? (
+              <button
+                className={step === 2 ? "tutorialGameCard focus" : "tutorialGameCard"}
+                disabled={step !== 2}
+                onClick={attackEnemy}
+              >
+                <strong>初級弓兵</strong>
+                <span>目前戰力：1</span>
+                <small>{step === 2 ? "點我進行攻擊" : "敵方兵種"}</small>
+              </button>
+            ) : (
+              <div className="tutorialEmpty">敵方兵種已被擊敗</div>
+            )}
+          </div>
+        </div>
+
+        <div className="tutorialCenter">
+          <div className="tutorialInfoCard">
+            <strong>操作提示</strong>
+            <p>
+              {step === 0 && "先從手牌部署兵種。"}
+              {step === 1 && "部署後，選擇我方場上的兵種。"}
+              {step === 2 && "選好攻擊者後，點擊敵方兵種。"}
+              {step === 3 && "接著試著使用一張魔法卡。"}
+              {step === 4 && "魔法需要施法者與目標。"}
+              {step === 5 && "最後按結束回合。"}
+              {step === 6 && "教學完成，可以開始正式遊戲。"}
+            </p>
+          </div>
+        </div>
+
+        <div className="tutorialZone mine">
+          <div className="zoneHeader">
+            <h2>我方場地</h2>
+            <p>你的國王 HP 30</p>
+          </div>
+
+          <div className="tutorialCardRow">
+            <button
+              className={
+                deployed
+                  ? step === 1
+                    ? "tutorialGameCard focus"
+                    : attackerSelected
+                      ? "tutorialGameCard selected"
+                      : "tutorialGameCard"
+                  : "tutorialGameCard placeholder"
+              }
+              disabled={!deployed || step !== 1}
+              onClick={selectAttacker}
+            >
+              <strong>{deployed ? "初級步兵" : "尚未部署"}</strong>
+              <span>{deployed ? "目前戰力：1" : "請先從手牌部署"}</span>
+              <small>
+                {deployed
+                  ? attackerSelected
+                    ? "已選為攻擊者"
+                    : step === 1
+                      ? "點我選為攻擊者"
+                      : "我方兵種"
+                  : "空位"}
+              </small>
+            </button>
+
+            <button
+              className={casterSelected ? "tutorialGameCard selected" : step === 4 ? "tutorialGameCard focusSoft" : "tutorialGameCard"}
+              disabled={step !== 4 || !magicOpened || casterSelected}
+              onClick={selectCaster}
+            >
+              <strong>初級法師</strong>
+              <span>目前戰力：1</span>
+              <small>{casterSelected ? "已選施法者" : "魔法施法者"}</small>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {step === 4 && magicOpened && (
+        <section className="tutorialMagicPanel">
+          <h2>魔法施放流程：力量術</h2>
+
+          <div className="magicStepBar">
+            <span className={casterSelected ? "active" : ""}>1 選施法者</span>
+            <span className={magicTargetSelected ? "active" : ""}>2 選目標</span>
+            <span className={magicCast ? "active" : ""}>3 確認施放</span>
+          </div>
+
+          <div className="panelActions">
+            <button disabled={casterSelected} onClick={selectCaster}>選擇初級法師</button>
+            <button disabled={!casterSelected || magicTargetSelected} onClick={selectMagicTarget}>選擇初級步兵</button>
+            <button disabled={!casterSelected || !magicTargetSelected} onClick={confirmMagic}>確認施放</button>
+          </div>
+        </section>
+      )}
+
+      <section className="tutorialHandBar">
+        <div className="tutorialHandSection">
+          <h2>你的兵種手牌</h2>
+          <div className="tutorialCardRow">
+            <button
+              className={step === 0 ? "tutorialGameCard focus" : "tutorialGameCard"}
+              disabled={step !== 0 || deployed}
+              onClick={deployUnit}
+            >
+              <strong>初級步兵</strong>
+              <span>守衛</span>
+              <small>{step === 0 ? "點我部署" : deployed ? "已部署" : "兵種卡"}</small>
+            </button>
+
+            <button className="tutorialGameCard locked" disabled>
+              <strong>中級騎兵</strong>
+              <span>突擊</span>
+              <small>教學中暫時鎖定</small>
+            </button>
+          </div>
+        </div>
+
+        <div className="tutorialHandSection">
+          <h2>你的魔法卡</h2>
+          <div className="tutorialCardRow">
+            <button
+              className={step === 3 ? "tutorialGameCard magic focus" : "tutorialGameCard magic"}
+              disabled={step !== 3 || magicOpened}
+              onClick={openMagic}
+            >
+              <strong>力量術</strong>
+              <span>戰力 +1</span>
+              <small>{step === 3 ? "點我使用魔法" : magicOpened ? "施放中" : "魔法卡"}</small>
+            </button>
+          </div>
+        </div>
+
+        <div className="tutorialEndBox">
+          <button
+            className="endTurnBtn"
+            disabled={step !== 5 || turnEnded}
+            onClick={endTutorialTurn}
+          >
+            結束回合
+          </button>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 function App() {
@@ -235,15 +772,149 @@ function App() {
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
   const [showHelp, setShowHelp] = useState(true);
+  const [cardDetailModal, setCardDetailModal] = useState(null);
+  const [actionCardModal, setActionCardModal] = useState(null);
+  const [tutorialMode, setTutorialMode] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [attackFeedback, setAttackFeedback] = useState(null);
+  const lastLogRef = useRef("");
+  const [turnOrderNotice, setTurnOrderNotice] = useState(null);
+  const previousRoomStatusRef = useRef(null);
+  const cardDetailPressTimerRef = useRef(null);
+
+  function openCardDetail(card, source = "卡片") {
+    const detail = buildCardDetail(card, source);
+    if (!detail) return;
+    setCardDetailModal(detail);
+  }
+
+  function openActionCardModal(card, actionText, runAction, source = "卡片") {
+    const detail = buildCardDetail(card, source);
+    if (!detail) return;
+
+    setActionCardModal({
+      detail,
+      actionText,
+      runAction
+    });
+  }
+
+  function startCardDetailPress(card, source = "卡片") {
+    window.clearTimeout(cardDetailPressTimerRef.current);
+    cardDetailPressTimerRef.current = window.setTimeout(() => {
+      openCardDetail(card, source);
+    }, 450);
+  }
+
+  function cancelCardDetailPress() {
+    window.clearTimeout(cardDetailPressTimerRef.current);
+    cardDetailPressTimerRef.current = null;
+  }
+  React.useEffect(() => {
+    // kw_display_name_init
+    const savedName = localStorage.getItem("kw_display_name");
+    if (savedName && !name) setName(savedName);
+  }, []);
+
+  React.useEffect(() => {
+    // turn_order_notice_effect
+    const previousStatus = previousRoomStatusRef.current;
+    previousRoomStatusRef.current = room?.status || null;
+
+    if (!room || room.status !== "playing") return;
+    if (previousStatus === "playing") return;
+
+    const playerIndex = room.players.findIndex((p) => p.id === playerId);
+    const firstPlayer = room.players.find((p) => p.id === room.currentPlayerId);
+    const orderText = room.players.map((p) => p.name).join(" → ");
+
+    if (playerIndex >= 0) {
+      setTurnOrderNotice({
+        orderText,
+        myOrder: playerIndex + 1,
+        firstPlayerName: firstPlayer?.name || room.players[0]?.name || "玩家"
+      });
+
+      const timer = setTimeout(() => {
+        setTurnOrderNotice(null);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [room?.status, room?.roomCode, playerId]);
+
+  React.useEffect(() => {
+    // kw_turn_timer_tick
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   React.useEffect(() => {
     socket.on("room:update", (next) => {
+      // kw_attack_feedback
+      const latestLog = next?.log?.[next.log.length - 1] || "";
+
+      if (latestLog && latestLog !== lastLogRef.current) {
+        lastLogRef.current = latestLog;
+
+        const isAttackEvent =
+          latestLog.includes("攻擊") ||
+          latestLog.includes("造成") ||
+          latestLog.includes("消滅") ||
+          latestLog.includes("出局");
+
+        if (isAttackEvent) {
+          setAttackFeedback(latestLog);
+
+          if (navigator.vibrate) {
+            navigator.vibrate(55);
+          }
+
+          window.clearTimeout(window.__kwAttackFeedbackTimer);
+          window.__kwAttackFeedbackTimer = window.setTimeout(() => {
+            setAttackFeedback(null);
+          }, 1400);
+        }
+      }
+
       setRoom(next);
       const firstEnemy = next.players.find((p) => p.id !== playerId && !p.eliminated);
       if (!targetPlayerId && firstEnemy) setTargetPlayerId(firstEnemy.id);
     });
     return () => socket.off("room:update");
   }, [socket, playerId, targetPlayerId]);
+
+  React.useEffect(() => {
+    // kw_session_resume
+    function resumeSession() {
+      const raw = sessionStorage.getItem("kw_session");
+      if (!raw) return;
+
+      try {
+        const saved = JSON.parse(raw);
+        if (!saved?.roomCode || !saved?.playerId) return;
+
+        socket.emit("room:resume", saved, (res) => {
+          if (!res?.ok) return;
+          setPlayerId(res.playerId);
+          setRoom(res.room);
+          setMessage("");
+        });
+      } catch {
+        sessionStorage.removeItem("kw_session");
+      }
+    }
+
+    socket.on("connect", resumeSession);
+    if (socket.connected) resumeSession();
+
+    return () => socket.off("connect", resumeSession);
+  }, [socket]);
 
   // AI visibility fix: keep target player as enemy.
   // 單人模式或房間更新時，避免目標玩家被錯設成自己，導致 AI 場地看起來消失。
@@ -261,13 +932,45 @@ function App() {
   }, [room, playerId, targetPlayerId]);
 
   const emit = (event, data = {}) => socket.emit(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
-  const safeName = () => Array.from((name || "").normalize("NFKC").trim() || "玩家").slice(0, 16).join("");
+  function makeGuestName() {
+    return `玩家${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+
+  function safeName() {
+    const typed = Array.from((name || "").normalize("NFKC").trim()).slice(0, 16).join("");
+
+    if (typed) {
+      localStorage.setItem("kw_display_name", typed);
+      return typed;
+    }
+
+    const saved = localStorage.getItem("kw_display_name");
+    if (saved) return saved;
+
+    const guest = makeGuestName();
+    localStorage.setItem("kw_display_name", guest);
+    setName(guest);
+    return guest;
+  }
+
+  function rememberSession(pid, nextRoom) {
+    if (!pid || !nextRoom?.roomCode) return;
+    sessionStorage.setItem("kw_session", JSON.stringify({
+      playerId: pid,
+      roomCode: nextRoom.roomCode
+    }));
+  }
+
+  function clearSavedSession() {
+    sessionStorage.removeItem("kw_session");
+  }
 
   function createRoom() {
     socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
+      rememberSession(res.playerId, res.room);
       setMessage("");
     });
   }
@@ -277,8 +980,28 @@ function App() {
       if (!res?.ok) return setMessage(res?.error || "加入失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
+      rememberSession(res.playerId, res.room);
       setMessage("");
     });
+  }
+
+  function toggleReady() {
+    emit("room:toggleReady");
+  }
+
+  function updateRoomSettings(nextSettings) {
+    socket.emit("room:updateSettings", nextSettings, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "房間設定更新失敗");
+      setMessage("");
+    });
+  }
+
+  function addAIPlayer() {
+    emit("room:addAI");
+  }
+
+  function removeAIPlayer() {
+    emit("room:removeAI");
   }
 
   function startSinglePlayer() {
@@ -287,11 +1010,32 @@ function App() {
       if (!res?.ok) return setMessage(res?.error || "單人模式建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
+      rememberSession(res.playerId, res.room);
       setMessage("");
     });
   }
 
+  function returnToMainMenu() {
+    const isPlayingNow = room?.status === "playing";
+
+    if (isPlayingNow) {
+      const ok = window.confirm("現在回到主選單會視同投降並判定失敗，確定要離開嗎？");
+      if (!ok) return;
+    }
+
+    socket.emit("room:leave", {}, () => {});
+
+    sessionStorage.removeItem("kw_session");
+    setRoom(null);
+    setPlayerId(null);
+    setTargetPlayerId("");
+    setAttackerId(null);
+    setMagicPlan(null);
+    setMessage("");
+  }
+
   function returnHomeFromResult() {
+    clearSavedSession();
     setRoom(null);
     setPlayerId(null);
     setTargetPlayerId("");
@@ -303,24 +1047,44 @@ function App() {
   function playAgainFromResult() {
     setAttackerId(null);
     setMagicPlan(null);
-    setMessage("");
+    setMessage("正在重新開始原房間...");
 
-    if (isSingleplayerRoom) {
-      startSinglePlayer();
-      return;
-    }
+    socket.emit("game:rematch", {}, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "無法再來一局");
+      setMessage("");
+    });
+  }
 
-    createRoom();
+  function startTutorialRoom() {
+    setMessage("正在建立操作教學房...");
+
+    socket.emit("tutorial:start", { name: safeName() }, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "無法開始操作教學");
+
+      setPlayerId(res.playerId);
+      setRoom(res.room);
+
+      if (typeof rememberSession === "function") {
+        rememberSession(res.playerId, res.room);
+      }
+
+      setMessage("操作教學：請依照畫面提示完成部署、攻擊、施法與結束回合。");
+    });
   }
 
   function randomMatch() {
-    setMessage("正在尋找玩家...");
+    setMessage("正在尋找公開房間...");
     socket.emit("matchmaking:join", { name: safeName() }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "隨機匹配失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
-      setMessage(res.waiting ? "正在等待另一位玩家加入..." : "");
+      rememberSession(res.playerId, res.room);
+      setMessage(res.waiting ? "已建立公開房間，正在等待其他玩家加入..." : "已加入公開房間。");
     });
+  }
+
+  if (tutorialMode) {
+    return <InteractiveTutorial onExit={() => setTutorialMode(false)} />;
   }
 
   if (!room) {
@@ -329,19 +1093,17 @@ function App() {
         <section className="card hero newHero">
           <div className="titleBadge">Online Multiplayer</div>
           <h1>國王戰爭</h1>
-          <p>新手引導版 UI：進入遊戲後會提示你每一步可以做什麼。</p>
+          <p>選擇私人房間、輸入房間代碼，或進入公開隨機匹配房間。</p>
 
           <label>暱稱 / 遊戲 ID</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如 Wayne" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如 Wayne；不填會自動產生 ID" />
+          <p className="idHint">不輸入也可以，系統會自動給你一個玩家 ID。</p>
 
           <div className="twoCols">
             <section className="startBox">
               <h2>創建房間</h2>
-              <label>遊玩人數</label>
-              <select value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
-                {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} 人</option>)}
-              </select>
-              <button className="primaryBtn" onClick={createRoom}>創建房間</button>
+              <p>建立私人房間。只有知道房間代碼的玩家可以加入。</p>
+              <button className="primaryBtn" onClick={createRoom}>創建私人房間</button>
             </section>
 
             <section className="startBox">
@@ -353,23 +1115,35 @@ function App() {
 
             <section className="startBox matchBox">
               <h2>隨機匹配</h2>
-              <p>不用房間代碼。系統會幫你配對另一位正在等待的玩家。</p>
-              <button className="matchBtn" onClick={randomMatch}>開始隨機匹配</button>
-            </section>
-
-            <section className="startBox soloBox">
-              <h2>單人模式</h2>
-              <p>和 AI「訓練騎士」對戰，適合第一次熟悉規則與操作。</p>
-              <button className="soloBtn" onClick={startSinglePlayer}>開始單人模式</button>
+              <p>系統會先尋找公開房間；如果沒有，就建立一個新的公開房間。公開房間也會有房間代碼。</p>
+              <button className="matchBtn" onClick={randomMatch}>尋找公開房間</button>
             </section>
           </div>
 
           <div className="quickRules">
             <strong>遊戲目標：</strong>把其他玩家國王 HP 打到 0。<br />
-            <strong>每回合：</strong>部署兵種、攻擊、使用魔法，最後結束回合。
+            <strong>每回合：</strong>部署兵種、攻擊、使用魔法，最後結束回合。<br />
+            <strong>急援：</strong>若回合開始時場上沒有兵種，第一張部署的初級或中級兵種可以立刻攻擊。
           </div>
 
+          <button
+            className="secondary openTutorialBtn"
+            onClick={() => {
+              startTutorialRoom();
+            }}
+          >
+            開始操作教學
+          </button>
+
           {message && <p className="error">{message}</p>}
+
+          {showTutorial && (
+            <TutorialModal
+              step={tutorialStep}
+              setStep={setTutorialStep}
+              onClose={() => setShowTutorial(false)}
+            />
+          )}
         </section>
       </main>
     );
@@ -377,6 +1151,13 @@ function App() {
 
   const me = room.players.find((p) => p.id === playerId);
   const isHost = room.hostId === playerId;
+  const turnTimeLimit = Number(room.settings?.turnTimeLimit || 0);
+  const turnRemaining = turnTimeLimit && room.turnStartedAt
+    ? Math.max(0, turnTimeLimit - Math.floor((now - room.turnStartedAt) / 1000))
+    : null;
+  const allGuestsReady = room.players
+    .filter((p) => p.id !== room.hostId && !p.isAI)
+    .every((p) => p.ready);
   const isMyTurn = room.currentPlayerId === playerId;
   const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
   const targetPlayer = enemies.find((p) => p.id === targetPlayerId) || enemies[0];
@@ -393,22 +1174,102 @@ function App() {
     return (
       <main className="page centered">
         <section className="card hero lobbyCard">
-          <div className="titleBadge">Room Code</div>
+          <div className="titleBadge">{room.roomType || "房間"} Code</div>
           <h1>{room.roomCode}</h1>
-          <p>把房間代碼傳給朋友，等人到齊後由房主開始遊戲。</p>
+          <p>{room.isPublic ? "這是公開房間。其他玩家可以透過隨機匹配或輸入房間代碼加入。" : "這是私人房間。只有知道房間代碼的玩家可以加入。"}</p>
 
           <div className="playerList">
             {room.players.map((p) => (
               <div key={p.id} className="playerRow">
                 <strong>{p.name}</strong>
-                <span>{p.isHost ? "房主" : "玩家"}｜{p.connected ? "在線" : "斷線"}</span>
+                <span>
+                    {p.isAI ? "機器人" : p.isHost ? "房主" : "房客"}｜{p.isAI ? "AI" : p.connected ? "在線" : "斷線"}
+                    {!p.isHost && (
+                      <b className={p.ready ? "readyBadge ready" : "readyBadge waiting"}>
+                        {p.ready ? "準備完成" : "準備中"}
+                      </b>
+                    )}
+                  </span>
               </div>
             ))}
           </div>
 
           <p>人數：{room.players.length} / {room.maxPlayers}</p>
 
-          {isHost ? <button className="primaryBtn" onClick={() => emit("game:start")}>開始遊戲</button> : <p className="waitingText">等待房主開始遊戲...</p>}
+          {isHost && (
+            <section className="hostSettingsPanel">
+              <h2>房主設定</h2>
+
+              <div className="hostSettingGrid">
+                <label>
+                  遊玩人數
+                  <select
+                    value={room.maxPlayers}
+                    onChange={(e) => updateRoomSettings({ maxPlayers: Number(e.target.value) })}
+                  >
+                    {[2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>{n} 人</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  每回合時間限制
+                  <select
+                    value={room.settings?.turnTimeLimit ?? 0}
+                    onChange={(e) => updateRoomSettings({ turnTimeLimit: Number(e.target.value) })}
+                  >
+                    <option value={0}>無限制</option>
+                    <option value={30}>30 秒</option>
+                    <option value={60}>60 秒</option>
+                    <option value={120}>120 秒</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="aiControlRow">
+                <button
+                  className="secondary"
+                  onClick={addAIPlayer}
+                  disabled={room.players.length >= room.maxPlayers}
+                >
+                  添加機器人
+                </button>
+
+                <button
+                  className="dangerBtn"
+                  onClick={removeAIPlayer}
+                  disabled={!room.players.some((p) => p.isAI)}
+                >
+                  刪除機器人
+                </button>
+              </div>
+
+              <p className="settingHint">
+                機器人會算入遊玩人數。時間限制會在下一階段加入倒數與自動結束回合。
+              </p>
+            </section>
+          )}
+
+          <div className="panelActions">
+            {isHost ? (
+              <button
+                className="primaryBtn"
+                disabled={!allGuestsReady || room.players.length < 2}
+                onClick={() => emit("game:start")}
+              >
+                {allGuestsReady ? "開始遊戲" : "等待房客準備"}
+              </button>
+            ) : (
+              <button
+                className={me?.ready ? "readyToggle ready" : "readyToggle waiting"}
+                onClick={toggleReady}
+              >
+                {me?.ready ? "取消準備" : "我準備好了"}
+              </button>
+            )}
+            <button className="secondary" onClick={returnToMainMenu}>回到主選單</button>
+          </div>
           {message && <p className="error">{message}</p>}
         </section>
       </main>
@@ -425,6 +1286,25 @@ function App() {
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
     emit("game:attackKing", { attackerId, targetPlayerId: targetPlayer.id });
     setAttackerId(null);
+  }
+
+  function handleEndTurn() {
+    if (!isMyTurn) return;
+
+    const readyUnits = me?.field?.filter(canUnitStillAct) || [];
+
+    if (readyUnits.length > 0) {
+      const names = readyUnits.map((u) => u.name).join("、");
+      const ok = window.confirm(
+        `你還有 ${readyUnits.length} 名兵種尚未行動：${names}\n\n確定要結束回合嗎？`
+      );
+
+      if (!ok) return;
+    }
+
+    setAttackerId(null);
+    setMagicPlan(null);
+    emit("game:endTurn");
   }
 
   function beginMagic(magic) {
@@ -596,15 +1476,127 @@ function App() {
           <div className="titleBadge">Room {room.roomCode}</div>
           <h1>國王戰爭</h1>
           <p>{isMyTurn ? "輪到你行動" : "等待其他玩家行動"}</p>
+          {turnRemaining !== null && (
+            <div className={turnRemaining <= 10 ? "turnTimer danger" : "turnTimer"}>
+              回合倒數：{turnRemaining} 秒
+            </div>
+          )}
         </div>
 
         <div className="topActions">
           <button className="secondary" onClick={() => setShowHelp((v) => !v)}>{showHelp ? "隱藏提示" : "顯示提示"}</button>
-          <button className="endTurnBtn" disabled={!isMyTurn} onClick={() => emit("game:endTurn")}>結束回合</button>
+          <button className="secondary" onClick={returnToMainMenu}>回到主選單</button>
+          <button className="endTurnBtn" disabled={!isMyTurn} onClick={handleEndTurn}>結束回合</button>
         </div>
       </header>
 
       {message && <p className="error floatingError">{message}</p>}
+
+      {actionCardModal && (
+        <section className="actionCardOverlay" onClick={() => setActionCardModal(null)}>
+          <div className="actionCardPanel" onClick={(e) => e.stopPropagation()}>
+            <div className="cardDetailTop">
+              <span>{actionCardModal.detail.source}</span>
+              <button className="secondary" onClick={() => setActionCardModal(null)}>關閉</button>
+            </div>
+
+            <h2>{actionCardModal.detail.name}</h2>
+
+            <div className="cardDetailMeta">
+              {actionCardModal.detail.rank && <b>{actionCardModal.detail.rank}</b>}
+              {actionCardModal.detail.type && <b>{actionCardModal.detail.type}</b>}
+              {actionCardModal.detail.power !== null && <b>目前戰力 {actionCardModal.detail.power}</b>}
+            </div>
+
+            <p>{actionCardModal.detail.text}</p>
+
+            <div className="actionCardButtons">
+              <button
+                className="primaryBtn"
+                onClick={() => {
+                  actionCardModal.runAction?.();
+                  setActionCardModal(null);
+                }}
+              >
+                {actionCardModal.actionText}
+              </button>
+
+              <button
+                className="secondary"
+                onClick={() => {
+                  setCardDetailModal(actionCardModal.detail);
+                  setActionCardModal(null);
+                }}
+              >
+                查看完整說明
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {cardDetailModal && (
+        <section className="cardDetailOverlay" onClick={() => setCardDetailModal(null)}>
+          <div className="cardDetailPanel" onClick={(e) => e.stopPropagation()}>
+            <div className="cardDetailTop">
+              <span>{cardDetailModal.source}</span>
+              <button className="secondary" onClick={() => setCardDetailModal(null)}>關閉</button>
+            </div>
+
+            <h2>{cardDetailModal.name}</h2>
+
+            <div className="cardDetailMeta">
+              {cardDetailModal.rank && <b>{cardDetailModal.rank}</b>}
+              {cardDetailModal.type && <b>{cardDetailModal.type}</b>}
+              {cardDetailModal.power !== null && <b>目前戰力 {cardDetailModal.power}</b>}
+            </div>
+
+            {cardDetailModal.status?.length > 0 && (
+              <div className="cardDetailStatus">
+                {cardDetailModal.status.map((s, index) => (
+                  <span key={index}>{displayStatusLabel ? displayStatusLabel(s) : s}</span>
+                ))}
+              </div>
+            )}
+
+            <p>{cardDetailModal.text}</p>
+
+            <small>提示：手機長按卡片、電腦右鍵或雙擊卡片，可以再次查看完整說明。</small>
+          </div>
+        </section>
+      )}
+
+      {room?.tutorial && (
+        <div className="formalTutorialNotice">
+          <strong>操作教學：</strong>
+          依序完成：部署中級騎兵 → 選擇中級騎兵 → 攻擊敵方初級弓兵 → 使用力量術 → 選初級法師 → 選我方中級騎兵 → 確認施放 → 結束回合。
+        </div>
+      )}
+
+      {attackFeedback && (
+        <div className="attackFeedbackToast">
+          <span>⚔️</span>
+          <strong>{attackFeedback}</strong>
+        </div>
+      )}
+
+      {isMyTurn && me?.reinforcementAvailable && !me?.reinforcementUsed && (
+        <div className="reinforcementNotice">
+          急援可用：本回合第一張部署的初級或中級兵種可以立刻攻擊。
+        </div>
+      )}
+
+      {turnOrderNotice && (
+        <section className="turnOrderOverlay">
+          <div className="turnOrderModal">
+            <div className="turnOrderBadge">本局出手順序</div>
+            <h2>你是第 {turnOrderNotice.myOrder} 位出手</h2>
+            <p>先手玩家：{turnOrderNotice.firstPlayerName}</p>
+            <div className="turnOrderPath">{turnOrderNotice.orderText}</div>
+            <small>3 秒後自動關閉</small>
+          </div>
+        </section>
+      )}
 
       {gameEnded && (
         <section className="resultOverlay">
@@ -625,7 +1617,7 @@ function App() {
             <div className="resultActions">
               <button className="primaryBtn" onClick={playAgainFromResult}>再來一局</button>
               <button className="matchBtn" onClick={randomMatch}>隨機匹配</button>
-              <button className="secondary" onClick={returnHomeFromResult}>回到主頁面</button>
+              <button className="secondary" onClick={returnHomeFromResult}>回到主選單</button>
             </div>
           </div>
         </section>
@@ -633,8 +1625,27 @@ function App() {
 
       {showHelp && !gameEnded && <GuidePanel hint={hint} />}
 
-      <section className="playerStrip">
-        {room.players.map((p) => <PlayerSummary key={p.id} player={p} isMe={p.id === playerId} isCurrent={p.id === room.currentPlayerId} />)}
+      <section className="gfEnemyPlayers">
+        {enemies.map((p) => (
+          <PlayerSummary
+            key={p.id}
+            player={p}
+            isMe={false}
+            isCurrent={p.id === room.currentPlayerId}
+            onDetail={openCardDetail}
+          />
+        ))}
+      </section>
+
+      <section className="gfMyPlayer">
+        {me && (
+          <PlayerSummary
+            player={me}
+            isMe
+            isCurrent={me.id === room.currentPlayerId}
+            onDetail={openCardDetail}
+          />
+        )}
       </section>
 
       <section className="targetBar card">
@@ -660,7 +1671,7 @@ function App() {
           <div className="cardGrid">
             {targetPlayer?.field?.length ? (
               targetPlayer.field.map((card) => (
-                <UnitCard
+                <UnitCard onDetail={openCardDetail}
                   key={card.id}
                   card={card}
                   selected={magicPlan?.targetUnitIds.includes(card.id)}
@@ -686,7 +1697,7 @@ function App() {
             {me?.field?.length ? (
               me.field.map((card) => (
                 <div key={card.id} className="unitWrap">
-                  <UnitCard
+                  <UnitCard onDetail={openCardDetail}
                     card={card}
                     selected={attackerId === card.id || magicPlan?.casterId === card.id || magicPlan?.targetUnitIds.includes(card.id)}
                     disabled={!isMyTurn || (magicPlan && magicPlan.casterId && magicPlan.magic.target !== "我方")}
@@ -727,7 +1738,7 @@ function App() {
                 <div className="cardGrid compactGrid">
                   {me?.field?.filter((card) => card.type === "法師").length ? (
                     me.field.filter((card) => card.type === "法師").map((card) => (
-                      <UnitCard
+                      <UnitCard onDetail={openCardDetail}
                         key={card.id}
                         card={card}
                         compact
@@ -777,7 +1788,7 @@ function App() {
                 {magicTargetPlayer?.field?.length > 0 && magicPlan.magic.name !== "天殞術" && (
                   <div className="cardGrid compactGrid">
                     {magicTargetPlayer.field.map((card) => (
-                      <UnitCard
+                      <UnitCard onDetail={openCardDetail}
                         key={card.id}
                         card={card}
                         compact
@@ -843,7 +1854,25 @@ function App() {
           <div className="cardGrid">
             {me?.hand?.length ? (
               me.hand.map((card) => (
-                <button key={card.id} className="gameCard unit handCard" disabled={!isMyTurn || !!magicPlan} onClick={() => emit("game:deploy", { cardId: card.id })}>
+                <button
+                  key={card.id}
+                  className="gameCard unit handCard"
+                  disabled={!isMyTurn || !!magicPlan}
+                  onClick={() => openActionCardModal(card, "部署這張兵種", () => emit("game:deploy", { cardId: card.id }), "兵種手牌")}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    openCardDetail(card, "兵種手牌");
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openCardDetail(card, "兵種手牌");
+                  }}
+                  onMouseDown={() => startCardDetailPress(card, "兵種手牌")}
+                  onMouseUp={cancelCardDetailPress}
+                  onMouseLeave={cancelCardDetailPress}
+                  onTouchStart={() => startCardDetailPress(card, "兵種手牌")}
+                  onTouchEnd={cancelCardDetailPress}
+                >
                   <CardArt card={card} />
                   <strong>{card.name}</strong>
                   <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
@@ -861,7 +1890,7 @@ function App() {
             <h2>魔法卡</h2>
             <p>先點魔法卡，再依提示選法師與目標。</p>
             <div className="magicList">
-              {me?.magic?.length ? me.magic.map((card) => <MagicCard key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => beginMagic(card)} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => beginMagic(card)} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
             </div>
           </section>
 
