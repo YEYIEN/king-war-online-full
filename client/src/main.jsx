@@ -207,6 +207,21 @@ function App() {
     return () => socket.off("room:update");
   }, [socket, playerId, targetPlayerId]);
 
+  // AI visibility fix: keep target player as enemy.
+  // 單人模式或房間更新時，避免目標玩家被錯設成自己，導致 AI 場地看起來消失。
+  React.useEffect(() => {
+    if (!room || !playerId) return;
+
+    const validEnemy = room.players.find(
+      (p) => p.id === targetPlayerId && p.id !== playerId && !p.eliminated
+    );
+
+    if (!validEnemy) {
+      const firstEnemy = room.players.find((p) => p.id !== playerId && !p.eliminated);
+      if (firstEnemy) setTargetPlayerId(firstEnemy.id);
+    }
+  }, [room, playerId, targetPlayerId]);
+
   const emit = (event, data = {}) => socket.emit(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
   const safeName = () => Array.from((name || "").normalize("NFKC").trim() || "玩家").slice(0, 16).join("");
 
@@ -222,6 +237,16 @@ function App() {
   function joinRoom() {
     socket.emit("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "加入失敗");
+      setPlayerId(res.playerId);
+      setRoom(res.room);
+      setMessage("");
+    });
+  }
+
+  function startSinglePlayer() {
+    setMessage("正在建立單人模式...");
+    socket.emit("singleplayer:start", { name: safeName() }, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "單人模式建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
       setMessage("");
@@ -271,6 +296,12 @@ function App() {
               <p>不用房間代碼。系統會幫你配對另一位正在等待的玩家。</p>
               <button className="matchBtn" onClick={randomMatch}>開始隨機匹配</button>
             </section>
+
+            <section className="startBox soloBox">
+              <h2>單人模式</h2>
+              <p>和 AI「訓練騎士」對戰，適合第一次熟悉規則與操作。</p>
+              <button className="soloBtn" onClick={startSinglePlayer}>開始單人模式</button>
+            </section>
           </div>
 
           <div className="quickRules">
@@ -288,7 +319,7 @@ function App() {
   const isHost = room.hostId === playerId;
   const isMyTurn = room.currentPlayerId === playerId;
   const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
-  const targetPlayer = room.players.find((p) => p.id === targetPlayerId) || enemies[0];
+  const targetPlayer = enemies.find((p) => p.id === targetPlayerId) || enemies[0];
   const attacker = me?.field.find((u) => u.id === attackerId);
   const magicTargetPlayer = room.players.find((p) => p.id === magicPlan?.targetPlayerId);
   const hint = actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan });
