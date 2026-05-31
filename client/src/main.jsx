@@ -208,7 +208,7 @@ function App() {
   }, [socket, playerId, targetPlayerId]);
 
   const emit = (event, data = {}) => socket.emit(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
-  const safeName = () => name.trim() || "玩家";
+  const safeName = () => Array.from((name || "").normalize("NFKC").trim() || "玩家").slice(0, 16).join("");
 
   function createRoom() {
     socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
