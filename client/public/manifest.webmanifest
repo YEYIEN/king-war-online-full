@@ -1,11 +1,11 @@
 {
   "name": "國王戰爭",
   "short_name": "國王戰爭",
-  "description": "King War Online - landscape battle UI updated 2026-05-31 21:00",
+  "description": "King War Online - portrait battle UI updated",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "landscape",
+  "orientation": "portrait-primary",
   "background_color": "#020617",
   "theme_color": "#0f172a",
   "lang": "zh-Hant",

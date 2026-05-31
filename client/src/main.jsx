@@ -775,6 +775,7 @@ function App() {
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
+  const [mobileActionModal, setMobileActionModal] = useState(null);
   const [actionCardModal, setActionCardModal] = useState(null);
   const [tutorialMode, setTutorialMode] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -1283,6 +1284,28 @@ function App() {
     setCardDetailModal(null);
   }
 
+  function openMobileActionModal(card, source, actionText, runAction) {
+    closeCardDetailForAction();
+
+    const detail = typeof buildCardDetail === "function"
+      ? buildCardDetail(card, source)
+      : {
+          source,
+          name: card?.name || source,
+          rank: card?.rank || card?.level || "",
+          type: card?.type || "",
+          text: card?.text || card?.effect || "",
+          power: typeof effectivePower === "function" && card?.kind !== "magic" ? effectivePower(card) : null,
+          status: card?.status || []
+        };
+
+    setMobileActionModal({
+      detail,
+      actionText,
+      runAction
+    });
+  }
+
   function attackUnit(defenderId) {
     closeCardDetailForAction();
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
@@ -1510,6 +1533,53 @@ function App() {
       </header>
 
       {message && <p className="error floatingError">{message}</p>}
+
+      {mobileActionModal && (
+        <section className="mobileActionOverlay" onClick={() => setMobileActionModal(null)}>
+          <div className="mobileActionPanel" onClick={(e) => e.stopPropagation()}>
+            <div className="mobileActionTop">
+              <span>{mobileActionModal.detail?.source || "ACTION"}</span>
+              <button className="secondary" onClick={() => setMobileActionModal(null)}>關閉</button>
+            </div>
+
+            <h2>{mobileActionModal.detail?.name}</h2>
+
+            <div className="mobileActionMeta">
+              {mobileActionModal.detail?.rank && <b>{mobileActionModal.detail.rank}</b>}
+              {mobileActionModal.detail?.type && <b>{mobileActionModal.detail.type}</b>}
+              {mobileActionModal.detail?.power !== null && mobileActionModal.detail?.power !== undefined && (
+                <b>戰力 {mobileActionModal.detail.power}</b>
+              )}
+            </div>
+
+            {mobileActionModal.detail?.status?.length > 0 && (
+              <div className="mobileActionStatus">
+                {mobileActionModal.detail.status.map((s, index) => (
+                  <span key={index}>{typeof displayStatusLabel === "function" ? displayStatusLabel(s) : s}</span>
+                ))}
+              </div>
+            )}
+
+            <p>{mobileActionModal.detail?.text || "確認要執行這個動作嗎？"}</p>
+
+            <div className="mobileActionButtons">
+              <button
+                className="primaryBtn"
+                onClick={() => {
+                  mobileActionModal.runAction?.();
+                  setMobileActionModal(null);
+                }}
+              >
+                {mobileActionModal.actionText || "確認"}
+              </button>
+
+              <button className="secondary" onClick={() => setMobileActionModal(null)}>
+                取消
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {showRulesModal && (
         <section className="rulesLogOverlay" onClick={() => setShowRulesModal(false)}>
@@ -1741,7 +1811,7 @@ function App() {
               <h2>{targetPlayer?.name || "敵方"} 場上</h2>
               <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
             </div>
-            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>攻擊國王</button>
+            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={() => openMobileActionModal(targetPlayer?.king || { name: targetPlayer?.name || "敵方國王", kind: "king", effect: "確認攻擊敵方國王。" }, "敵方國王", "攻擊國王", attackKing)}>攻擊國王</button>
           </div>
 
           <div className="cardGrid">
@@ -1777,7 +1847,7 @@ function App() {
                     card={card}
                     selected={attackerId === card.id || magicPlan?.casterId === card.id || magicPlan?.targetUnitIds.includes(card.id)}
                     disabled={!isMyTurn || (magicPlan && magicPlan.casterId && magicPlan.magic.target !== "我方")}
-                    onClick={() => selectOwnUnit(card)}
+                    onClick={() => openMobileActionModal(card, "我方兵種", "選為攻擊者", () => selectOwnUnit(card))}
                     actionLabel={ownCardActionLabel(card)}
                     highlight={!card.tapped && !magicPlan ? "ready" : ""}
                   />
@@ -1819,7 +1889,7 @@ function App() {
                         card={card}
                         compact
                         selected={magicPlan.casterId === card.id}
-                        onClick={() => selectOwnUnit(card)}
+                        onClick={() => openMobileActionModal(card, "我方兵種", "選為攻擊者", () => selectOwnUnit(card))}
                         actionLabel={magicPlan.casterId === card.id ? "已選施法者" : "選為施法者"}
                       />
                     ))
@@ -1975,7 +2045,7 @@ function App() {
             <h2>魔法卡</h2>
             <p>先點魔法卡，再依提示選法師與目標。</p>
             <div className="magicList">
-              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => beginMagic(card)} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
             </div>
           </section>
 

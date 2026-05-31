@@ -382,9 +382,9 @@
 }
 
 
-/* FINAL_BATTLE_TABLE_UI_V1 */
-/* 重新設計版：固定戰鬥桌面，不再上下滑；中央戰場、底部手牌、右側操作 */
-@media (min-width: 760px), (orientation: landscape) {
+/* PORTRAIT_BATTLE_UI_V1 */
+/* 手機直版優先：固定戰鬥畫面，減少上下滑動 */
+@media (max-width: 900px), (orientation: portrait) {
   html,
   body,
   #root {
@@ -395,8 +395,8 @@
 
   body {
     background:
-      radial-gradient(circle at center, rgba(22, 101, 52, 0.16), transparent 50%),
-      linear-gradient(135deg, #020617, #0f172a 54%, #020617);
+      radial-gradient(circle at center, rgba(22, 101, 52, 0.16), transparent 52%),
+      linear-gradient(180deg, #020617, #0f172a 58%, #020617);
   }
 
   .page.guidedPage,
@@ -409,32 +409,34 @@
     overflow: hidden !important;
 
     display: grid !important;
-    grid-template-columns: 245px minmax(0, 1fr) 300px !important;
-    grid-template-rows: 50px minmax(0, 1fr) 178px !important;
+    grid-template-rows: 48px 82px 74px minmax(0, 1fr) 178px !important;
     grid-template-areas:
-      "top top top"
-      "left battle right"
-      "hand hand right" !important;
-    gap: 8px !important;
+      "top"
+      "players"
+      "action"
+      "battle"
+      "hand" !important;
+    gap: 7px !important;
   }
 
-  /* 頂部：房間 / 回合 / 結束回合 */
+  /* 頂部：只保留必要按鈕，橫向滑動 */
   .guidedTopbar,
   .topbar {
     grid-area: top !important;
     margin: 0 !important;
-    padding: 7px 12px !important;
+    padding: 6px 8px !important;
     min-height: 0 !important;
-    overflow: hidden !important;
     border-radius: 14px !important;
-    background: rgba(15, 23, 42, 0.94) !important;
+    overflow: hidden !important;
+    background: rgba(15, 23, 42, 0.96) !important;
   }
 
   .guidedTopbar h1,
   .topbar h1 {
-    font-size: 21px !important;
+    font-size: 17px !important;
     line-height: 1 !important;
     margin: 0 !important;
+    white-space: nowrap !important;
   }
 
   .guidedTopbar p,
@@ -443,7 +445,11 @@
   }
 
   .topActions {
-    gap: 6px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    overflow-x: auto !important;
+    max-width: 62vw !important;
   }
 
   .topActions button,
@@ -451,46 +457,48 @@
   .endTurnBtn,
   .primaryBtn,
   .dangerBtn {
-    padding: 6px 9px !important;
-    font-size: 12px !important;
-    border-radius: 10px !important;
+    flex: 0 0 auto !important;
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+    border-radius: 9px !important;
     white-space: nowrap !important;
   }
 
   .turnTimer {
-    margin-top: 4px !important;
-    padding: 4px 8px !important;
-    font-size: 12px !important;
+    margin-top: 2px !important;
+    padding: 3px 7px !important;
+    font-size: 11px !important;
   }
 
-  /* 左側：玩家資訊 + 遊戲紀錄 */
+  /* 玩家列：敵我狀態橫向卡片 */
   .playerStrip {
-    grid-area: left !important;
+    grid-area: players !important;
     display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
+    flex-direction: row !important;
+    gap: 7px !important;
     margin: 0 !important;
-    padding: 0 !important;
-    overflow: auto !important;
+    padding: 0 2px 4px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
     min-height: 0 !important;
   }
 
   .playerSummary {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    padding: 8px !important;
+    flex: 0 0 170px !important;
+    min-width: 170px !important;
+    max-width: 170px !important;
+    padding: 7px !important;
     border-radius: 14px !important;
-    background: rgba(15, 23, 42, 0.94) !important;
+    background: rgba(15, 23, 42, 0.95) !important;
   }
 
   .playerSummary.current {
     border-color: #22c55e !important;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.16) !important;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15) !important;
   }
 
   .playerSummaryTop strong {
-    font-size: 13px !important;
+    font-size: 12px !important;
   }
 
   .playerSummaryTop span {
@@ -498,13 +506,13 @@
   }
 
   .kingMini {
-    grid-template-columns: 54px 1fr !important;
-    gap: 7px !important;
-    margin-top: 6px !important;
+    grid-template-columns: 38px 1fr !important;
+    gap: 5px !important;
+    margin-top: 5px !important;
   }
 
   .kingMini .kingArt {
-    max-height: 62px !important;
+    max-height: 42px !important;
   }
 
   .kingMini small {
@@ -512,22 +520,90 @@
   }
 
   .playerStats {
-    margin-top: 6px !important;
-    gap: 4px !important;
+    margin-top: 5px !important;
+    gap: 3px !important;
   }
 
   .playerStats span {
-    font-size: 10px !important;
-    padding: 2px 6px !important;
+    font-size: 9px !important;
+    padding: 2px 5px !important;
   }
 
-  /* 中央：戰場，敵上我下 */
+  /* 操作提示 + 目標選擇合併成上方短區 */
+  .targetBar {
+    grid-area: action !important;
+    margin: 0 !important;
+    padding: 7px !important;
+    border-radius: 13px !important;
+    overflow: hidden !important;
+    background: rgba(15, 23, 42, 0.95) !important;
+  }
+
+  .targetBar h2,
+  .targetBar p {
+    display: none !important;
+  }
+
+  .targetBar label {
+    margin: 0 0 4px !important;
+    font-size: 11px !important;
+  }
+
+  .targetBar select {
+    height: 32px !important;
+    padding: 5px 8px !important;
+    font-size: 12px !important;
+  }
+
+  .guidePanel {
+    grid-area: action !important;
+    align-self: end !important;
+    justify-self: end !important;
+    width: 56vw !important;
+    height: 74px !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    border-radius: 13px !important;
+    overflow: hidden !important;
+    background:
+      radial-gradient(circle at top, rgba(34, 197, 94, 0.14), transparent 48%),
+      rgba(15, 23, 42, 0.96) !important;
+  }
+
+  .guideLabel {
+    display: none !important;
+  }
+
+  .guidePanel h2 {
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    margin: 0 0 4px !important;
+  }
+
+  .guidePanel ol {
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+  }
+
+  .guidePanel li {
+    display: none !important;
+  }
+
+  .guidePanel li:first-child {
+    display: block !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    color: #cbd5e1 !important;
+  }
+
+  /* 中央戰場：敵方上，我方下 */
   .battleGrid {
     grid-area: battle !important;
     display: grid !important;
     grid-template-columns: 1fr !important;
     grid-template-rows: 1fr 1fr !important;
-    gap: 8px !important;
+    gap: 7px !important;
     margin: 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
@@ -543,54 +619,54 @@
 
   .zoneCard {
     min-height: 0 !important;
-    padding: 10px !important;
-    border-radius: 16px !important;
-    gap: 7px !important;
+    padding: 8px !important;
+    border-radius: 15px !important;
+    gap: 5px !important;
     overflow: hidden !important;
-    background: rgba(15, 23, 42, 0.94) !important;
+    background: rgba(15, 23, 42, 0.95) !important;
   }
 
   .zoneHeader {
-    min-height: 30px !important;
+    min-height: 24px !important;
     align-items: center !important;
   }
 
   .zoneHeader h2 {
-    font-size: 16px !important;
+    font-size: 14px !important;
     margin: 0 !important;
   }
 
   .zoneHeader p {
-    font-size: 11px !important;
+    font-size: 10px !important;
     margin: 0 !important;
   }
 
   .zoneCard .cardGrid {
     display: flex !important;
     flex-wrap: nowrap !important;
-    gap: 12px !important;
+    gap: 8px !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
-    padding: 4px 4px 10px !important;
+    padding: 2px 2px 8px !important;
   }
 
-  /* 卡片：平常只承載快速資訊 */
+  /* 場上卡片：直版小卡，點擊/長按看詳情 */
   .unitWrap,
   .battleGrid .gameCard {
-    flex: 0 0 142px !important;
-    min-width: 142px !important;
-    max-width: 142px !important;
+    flex: 0 0 96px !important;
+    min-width: 96px !important;
+    max-width: 96px !important;
   }
 
   .gameCard {
     min-height: 0 !important;
-    padding: 8px !important;
-    gap: 5px !important;
-    border-radius: 14px !important;
+    padding: 6px !important;
+    gap: 3px !important;
+    border-radius: 12px !important;
   }
 
   .gameCard strong {
-    font-size: 13px !important;
+    font-size: 11px !important;
     line-height: 1.15 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -598,18 +674,18 @@
   }
 
   .gameCard span {
-    font-size: 10px !important;
+    font-size: 9px !important;
   }
 
   .battleGrid .cardArt {
-    max-height: 106px !important;
-    border-radius: 9px !important;
+    max-height: 62px !important;
+    border-radius: 8px !important;
     object-fit: contain !important;
   }
 
   .battleGrid .cardArt.small,
   .battleGrid .gameCard.compact .cardArt {
-    max-height: 96px !important;
+    max-height: 56px !important;
   }
 
   .gameCard .miniLine,
@@ -621,96 +697,29 @@
     display: none !important;
   }
 
-  .powerText {
-    font-size: 11px !important;
-    padding: 3px 7px !important;
-  }
-
+  .powerText,
   .statusPill,
   .actionLabel {
-    font-size: 10px !important;
-    padding: 3px 7px !important;
+    font-size: 9px !important;
+    padding: 2px 5px !important;
   }
 
   .status {
-    font-size: 10px !important;
-    line-height: 1.25 !important;
+    font-size: 9px !important;
+    line-height: 1.2 !important;
   }
 
   .smallBtn {
-    padding: 5px 7px !important;
-    font-size: 11px !important;
+    padding: 4px 6px !important;
+    font-size: 10px !important;
   }
 
-  /* 右側：目標 + 操作提示 + 魔法 + 相剋 */
-  .targetBar {
-    grid-area: right !important;
-    align-self: start !important;
-    margin: 0 !important;
-    padding: 10px !important;
-    border-radius: 14px !important;
-    max-height: 120px !important;
-    overflow: hidden !important;
-    background: rgba(15, 23, 42, 0.94) !important;
-  }
-
-  .targetBar h2 {
-    font-size: 15px !important;
-    margin: 0 0 6px !important;
-  }
-
-  .targetBar p {
-    display: none !important;
-  }
-
-  .targetBar label {
-    margin: 0 !important;
-    font-size: 11px !important;
-  }
-
-  .targetBar select {
-    padding: 6px 8px !important;
-    font-size: 12px !important;
-  }
-
-  .guidePanel {
-    grid-area: right !important;
-    align-self: center !important;
-    margin: 0 !important;
-    margin-top: 130px !important;
-    margin-bottom: 200px !important;
-    padding: 10px !important;
-    border-radius: 14px !important;
-    overflow: auto !important;
-    min-height: 0 !important;
-    background: rgba(15, 23, 42, 0.90) !important;
-  }
-
-  .guidePanel h2 {
-    font-size: 16px !important;
-    margin: 0 0 6px !important;
-  }
-
-  .guidePanel ol {
-    padding-left: 18px !important;
-  }
-
-  .guidePanel li,
-  .guidePanel p {
-    font-size: 12px !important;
-    line-height: 1.45 !important;
-  }
-
-  .guideLabel {
-    font-size: 11px !important;
-  }
-
-  /* 底部：手牌區 */
+  /* 底部手牌：兵種 + 魔法 */
   .handAndLog {
     grid-area: hand !important;
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) 245px !important;
-    gap: 8px !important;
+    grid-template-columns: minmax(0, 1fr) 132px !important;
+    gap: 7px !important;
     margin: 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
@@ -718,8 +727,8 @@
 
   .handAndLog > .zoneCard:first-child {
     min-height: 0 !important;
-    padding: 10px !important;
-    border-radius: 16px !important;
+    padding: 8px !important;
+    border-radius: 15px !important;
     overflow: hidden !important;
     border-color: #facc15 !important;
   }
@@ -727,44 +736,44 @@
   .handAndLog > .zoneCard:first-child .cardGrid {
     display: flex !important;
     flex-wrap: nowrap !important;
-    gap: 12px !important;
+    gap: 8px !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
-    padding: 4px 4px 10px !important;
+    padding: 2px 2px 8px !important;
   }
 
   .handAndLog > .zoneCard:first-child .gameCard {
-    flex: 0 0 130px !important;
-    min-width: 130px !important;
-    max-width: 130px !important;
+    flex: 0 0 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
   }
 
   .handAndLog > .zoneCard:first-child .cardArt {
-    max-height: 88px !important;
+    max-height: 58px !important;
   }
 
   .sideColumn {
     display: grid !important;
-    grid-template-rows: 1fr 0px 1fr !important;
-    gap: 8px !important;
+    grid-template-rows: 1fr !important;
+    gap: 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
   }
 
   .sideColumn .zoneCard {
     min-height: 0 !important;
-    padding: 10px !important;
-    border-radius: 16px !important;
+    padding: 8px !important;
+    border-radius: 15px !important;
     overflow: hidden !important;
   }
 
-  /* 魔法卡跟兵種手牌同區域右側 */
   .sideColumn .zoneCard:nth-child(1) {
     border-color: #a855f7 !important;
   }
 
   .sideColumn .zoneCard:nth-child(1) h2 {
-    font-size: 16px !important;
+    font-size: 13px !important;
+    margin-bottom: 5px !important;
   }
 
   .sideColumn .zoneCard:nth-child(1) p {
@@ -773,454 +782,63 @@
 
   .magicList {
     display: flex !important;
-    gap: 10px !important;
+    gap: 8px !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
     padding: 2px 2px 8px !important;
   }
 
   .magicList .gameCard {
-    flex: 0 0 112px !important;
-    min-width: 112px !important;
-    max-width: 112px !important;
+    flex: 0 0 84px !important;
+    min-width: 84px !important;
+    max-width: 84px !important;
   }
 
   .magicList .cardArt {
-    max-height: 72px !important;
+    max-height: 52px !important;
   }
 
-  /* 相剋先收小，避免干擾 */
-  .sideColumn .zoneCard:nth-child(2) {
+  /* 規則與紀錄改用彈窗，常駐區隱藏 */
+  .sideColumn .zoneCard:nth-child(2),
+  .sideColumn .zoneCard:nth-child(3) {
     display: none !important;
   }
 
-  /* 遊戲紀錄放左下側欄 */
-  .sideColumn .zoneCard:nth-child(3) {
-    border-color: #334155 !important;
-  }
-
-  .sideColumn .zoneCard:nth-child(3) h2 {
-    font-size: 16px !important;
-  }
-
-  .log {
-    max-height: calc(100% - 34px) !important;
-    overflow-y: auto !important;
-    font-size: 11px !important;
-    line-height: 1.4 !important;
-  }
-
-  .log div {
-    padding-bottom: 4px !important;
-  }
-
   .emptyState {
-    padding: 14px !important;
-    font-size: 12px !important;
+    padding: 10px !important;
+    font-size: 11px !important;
   }
 
   .reinforcementNotice,
   .formalTutorialNotice {
     position: fixed !important;
-    left: 50% !important;
-    bottom: 188px !important;
-    transform: translateX(-50%) !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 186px !important;
+    transform: none !important;
     z-index: 900 !important;
-    width: min(720px, calc(100vw - 560px)) !important;
+    width: auto !important;
     margin: 0 !important;
-    padding: 8px 12px !important;
-    font-size: 12px !important;
+    padding: 7px 10px !important;
+    font-size: 11px !important;
   }
 
   .floatingError,
   .attackFeedbackToast {
-    font-size: 12px !important;
+    font-size: 11px !important;
   }
 }
 
-/* 手機橫版壓縮版 */
-@media (orientation: landscape) and (max-height: 560px) {
+/* 桌機也用直版預覽比例時 */
+@media (min-width: 901px) and (orientation: portrait) {
   .page.guidedPage,
   .guidedPage {
-    grid-template-columns: 190px minmax(0, 1fr) 230px !important;
-    grid-template-rows: 42px minmax(0, 1fr) 136px !important;
-    gap: 6px !important;
-    padding: 6px !important;
-  }
-
-  .guidedTopbar h1,
-  .topbar h1 {
-    font-size: 18px !important;
-  }
-
-  .topActions button,
-  .secondary,
-  .endTurnBtn {
-    padding: 5px 7px !important;
-    font-size: 11px !important;
-  }
-
-  .battleGrid .gameCard,
-  .unitWrap {
-    flex-basis: 98px !important;
-    min-width: 98px !important;
-    max-width: 98px !important;
-  }
-
-  .battleGrid .cardArt {
-    max-height: 58px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child .gameCard,
-  .magicList .gameCard {
-    flex-basis: 88px !important;
-    min-width: 88px !important;
-    max-width: 88px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child .cardArt,
-  .magicList .cardArt {
-    max-height: 52px !important;
-  }
-
-  .kingMini small,
-  .zoneHeader p {
-    display: none !important;
-  }
-
-  .guidePanel li,
-  .guidePanel p,
-  .log {
-    font-size: 10px !important;
-  }
-
-  .targetBar {
-    max-height: 92px !important;
-  }
-
-  .guidePanel {
-    margin-top: 98px !important;
-    margin-bottom: 145px !important;
+    max-width: 520px !important;
+    margin: 0 auto !important;
   }
 }
 
-
-/* FINAL_BATTLE_TABLE_UI_V2 */
-/* 針對 V1 微調：右側不爆版、手牌更大、魔法區更像手牌 */
-@media (min-width: 760px), (orientation: landscape) {
-  .page.guidedPage,
-  .guidedPage {
-    grid-template-columns: 235px minmax(0, 1fr) 270px !important;
-    grid-template-rows: 48px minmax(0, 1fr) 205px !important;
-    gap: 8px !important;
-  }
-
-  /* 右側目標區縮小 */
-  .targetBar {
-    max-height: 96px !important;
-    padding: 8px !important;
-  }
-
-  .targetBar h2 {
-    display: none !important;
-  }
-
-  .targetBar p {
-    display: none !important;
-  }
-
-  .targetBar label {
-    font-size: 11px !important;
-    margin: 0 0 4px !important;
-    writing-mode: horizontal-tb !important;
-  }
-
-  .targetBar select {
-    height: 34px !important;
-    font-size: 12px !important;
-  }
-
-  /* 右側操作提示：避免文字被擠成直排 */
-  .guidePanel {
-    margin-top: 104px !important;
-    margin-bottom: 214px !important;
-    padding: 10px !important;
-    writing-mode: horizontal-tb !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-  }
-
-  .guidePanel * {
-    writing-mode: horizontal-tb !important;
-    word-break: normal !important;
-    overflow-wrap: normal !important;
-  }
-
-  .guidePanel h2 {
-    font-size: 15px !important;
-    line-height: 1.25 !important;
-  }
-
-  .guidePanel ol {
-    padding-left: 18px !important;
-    margin: 0 !important;
-  }
-
-  .guidePanel li {
-    font-size: 11px !important;
-    line-height: 1.45 !important;
-    margin-bottom: 4px !important;
-  }
-
-  /* 中央戰場卡片再清楚一點 */
-  .battleGrid .gameCard,
-  .battleGrid .unitWrap {
-    flex-basis: 150px !important;
-    min-width: 150px !important;
-    max-width: 150px !important;
-  }
-
-  .battleGrid .cardArt {
-    max-height: 116px !important;
-  }
-
-  .battleGrid .gameCard strong {
-    font-size: 13px !important;
-  }
-
-  /* 下方手牌區高度增加，卡片更好點 */
-  .handAndLog {
-    grid-template-columns: minmax(0, 1fr) 270px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child {
-    padding: 10px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child .gameCard {
-    flex-basis: 142px !important;
-    min-width: 142px !important;
-    max-width: 142px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child .cardArt {
-    max-height: 98px !important;
-  }
-
-  /* 魔法區調整成底部右側手牌區 */
-  .sideColumn {
-    grid-template-rows: 1fr !important;
-  }
-
-  .sideColumn .zoneCard:nth-child(1) {
-    height: 100% !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .sideColumn .zoneCard:nth-child(1) h2 {
-    font-size: 16px !important;
-    margin-bottom: 6px !important;
-  }
-
-  .sideColumn .zoneCard:nth-child(1) p {
-    display: none !important;
-  }
-
-  .magicList {
-    display: flex !important;
-    gap: 10px !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    padding-bottom: 8px !important;
-  }
-
-  .magicList .gameCard {
-    flex-basis: 118px !important;
-    min-width: 118px !important;
-    max-width: 118px !important;
-  }
-
-  .magicList .cardArt {
-    max-height: 82px !important;
-  }
-
-  /* 相剋區先隱藏，之後改成規則彈窗 */
-  .sideColumn .zoneCard:nth-child(2) {
-    display: none !important;
-  }
-
-  /* 遊戲紀錄不要卡在底部右側，避免干擾手牌 */
-  .sideColumn .zoneCard:nth-child(3) {
-    display: none !important;
-  }
-
-  /* 左側玩家資訊更緊湊 */
-  .playerSummary {
-    padding: 7px !important;
-  }
-
-  .kingMini {
-    grid-template-columns: 50px 1fr !important;
-    gap: 6px !important;
-  }
-
-  .kingMini .kingArt {
-    max-height: 56px !important;
-  }
-
-  .playerStats span {
-    font-size: 10px !important;
-    padding: 2px 5px !important;
-  }
-
-  /* 急援提示不要擋住手牌 */
-  .reinforcementNotice,
-  .formalTutorialNotice {
-    bottom: 214px !important;
-    width: min(680px, calc(100vw - 540px)) !important;
-  }
-}
-
-/* 手機橫版專用比例 */
-@media (orientation: landscape) and (max-height: 560px) {
-  .page.guidedPage,
-  .guidedPage {
-    grid-template-columns: 180px minmax(0, 1fr) 210px !important;
-    grid-template-rows: 40px minmax(0, 1fr) 132px !important;
-    gap: 6px !important;
-    padding: 6px !important;
-  }
-
-  .battleGrid .gameCard,
-  .battleGrid .unitWrap {
-    flex-basis: 104px !important;
-    min-width: 104px !important;
-    max-width: 104px !important;
-  }
-
-  .battleGrid .cardArt {
-    max-height: 64px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child .gameCard {
-    flex-basis: 94px !important;
-    min-width: 94px !important;
-    max-width: 94px !important;
-  }
-
-  .handAndLog > .zoneCard:first-child .cardArt,
-  .magicList .cardArt {
-    max-height: 56px !important;
-  }
-
-  .guidePanel {
-    margin-top: 86px !important;
-    margin-bottom: 140px !important;
-  }
-
-  .guidePanel li {
-    font-size: 10px !important;
-  }
-}
-
-
-/* ACTION_PANEL_CLEAN_V1 */
-/* 右側操作提示改成玩家真正看得懂的簡潔提示，不再顯示長清單 */
-@media (min-width: 760px), (orientation: landscape) {
-  .guidePanel {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    gap: 10px !important;
-    padding: 14px !important;
-    overflow: hidden !important;
-    background:
-      radial-gradient(circle at top, rgba(34, 197, 94, 0.12), transparent 48%),
-      rgba(15, 23, 42, 0.94) !important;
-    border-color: #16a34a !important;
-  }
-
-  .guideLabel {
-    display: inline-flex !important;
-    width: fit-content !important;
-    border-radius: 999px !important;
-    padding: 4px 9px !important;
-    background: #064e3b !important;
-    color: #bbf7d0 !important;
-    font-size: 11px !important;
-    font-weight: 900 !important;
-  }
-
-  .guidePanel h2 {
-    font-size: 22px !important;
-    line-height: 1.25 !important;
-    margin: 0 !important;
-    color: #f8fafc !important;
-  }
-
-  .guidePanel ol {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    list-style: none !important;
-  }
-
-  .guidePanel li {
-    display: none !important;
-  }
-
-  .guidePanel li:first-child {
-    display: block !important;
-    font-size: 14px !important;
-    line-height: 1.55 !important;
-    color: #cbd5e1 !important;
-    padding: 10px 12px !important;
-    border-radius: 14px !important;
-    background: rgba(2, 6, 23, 0.55) !important;
-    border: 1px solid #334155 !important;
-  }
-
-  .guidePanel.attack {
-    border-color: #f97316 !important;
-    background:
-      radial-gradient(circle at top, rgba(249, 115, 22, 0.16), transparent 48%),
-      rgba(15, 23, 42, 0.94) !important;
-  }
-
-  .guidePanel.attack .guideLabel {
-    background: #7c2d12 !important;
-    color: #fed7aa !important;
-  }
-
-  .guidePanel.magic {
-    border-color: #a855f7 !important;
-    background:
-      radial-gradient(circle at top, rgba(168, 85, 247, 0.16), transparent 48%),
-      rgba(15, 23, 42, 0.94) !important;
-  }
-
-  .guidePanel.magic .guideLabel {
-    background: #581c87 !important;
-    color: #e9d5ff !important;
-  }
-
-  .guidePanel.waiting {
-    border-color: #60a5fa !important;
-    background:
-      radial-gradient(circle at top, rgba(96, 165, 250, 0.14), transparent 48%),
-      rgba(15, 23, 42, 0.94) !important;
-  }
-
-  .guidePanel.waiting .guideLabel {
-    background: #1e3a8a !important;
-    color: #bfdbfe !important;
-  }
-}
-
-
-/* RULES_LOG_MODAL_V1 */
-/* 規則與遊戲紀錄改成彈窗，主戰鬥畫面保持乾淨 */
+/* 規則 / 紀錄彈窗 */
 .rulesLogOverlay {
   position: fixed;
   inset: 0;
@@ -1309,23 +927,13 @@
   line-height: 1.45;
 }
 
-/* 舊的常駐兵種相剋 / 遊戲紀錄先收掉，避免干擾主畫面 */
-@media (min-width: 760px), (orientation: landscape) {
-  .sideColumn .zoneCard:nth-child(2),
-  .sideColumn .zoneCard:nth-child(3) {
-    display: none !important;
-  }
-}
-
-
-/* CARD_DETAIL_NON_BLOCKING_V1 */
-/* 長按詳情改成非阻擋式資訊窗，不再蓋住整個戰鬥畫面 */
+/* 長按卡片詳情：非阻擋式浮窗 */
 .cardDetailOverlay {
   position: fixed !important;
-  inset: auto auto 18px 18px !important;
+  inset: auto 10px 10px 10px !important;
   z-index: 880 !important;
   display: block !important;
-  width: min(380px, calc(100vw - 36px)) !important;
+  width: auto !important;
   height: auto !important;
   padding: 0 !important;
   background: transparent !important;
@@ -1335,10 +943,10 @@
 
 .cardDetailPanel {
   width: 100% !important;
-  max-height: min(420px, 70dvh) !important;
+  max-height: 44dvh !important;
   overflow: auto !important;
   border-radius: 20px !important;
-  padding: 16px !important;
+  padding: 14px !important;
   border: 1px solid #facc15 !important;
   background:
     radial-gradient(circle at top, rgba(250, 204, 21, 0.16), transparent 42%),
@@ -1348,12 +956,12 @@
 }
 
 .cardDetailPanel h2 {
-  font-size: 26px !important;
+  font-size: 24px !important;
   margin: 10px 0 8px !important;
 }
 
 .cardDetailPanel p {
-  font-size: 14px !important;
+  font-size: 13px !important;
   line-height: 1.65 !important;
 }
 
@@ -1363,32 +971,581 @@
   padding: 4px 8px !important;
 }
 
-/* 其他真正需要阻擋操作的視窗一定要在卡片詳情上方 */
-.rulesLogOverlay,
-.actionCardOverlay,
-.resultOverlay,
-.turnOrderOverlay,
-.tutorialOverlay {
-  z-index: 2100 !important;
+
+/* PORTRAIT_MAGIC_DRAWER_FIX_V1 */
+/* 手機直版：施法流程改成底部浮動抽屜，不再把版面撐爆 */
+@media (max-width: 900px), (orientation: portrait) {
+  .magicPanel,
+  .guidedMagicPanel {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    z-index: 1200 !important;
+
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: 42dvh !important;
+
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+
+    margin: 0 !important;
+    padding: 12px !important;
+    border-radius: 22px !important;
+    overflow: auto !important;
+
+    border: 1px solid #a855f7 !important;
+    background:
+      radial-gradient(circle at top, rgba(168, 85, 247, 0.28), transparent 48%),
+      rgba(30, 15, 68, 0.98) !important;
+    box-shadow: 0 -18px 70px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  .magicPanel h2,
+  .guidedMagicPanel h2 {
+    font-size: 20px !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .magicPanel p,
+  .guidedMagicPanel p {
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+    margin: 4px 0 !important;
+  }
+
+  .magicStepBar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    margin: 6px 0 !important;
+  }
+
+  .magicStepBar span {
+    font-size: 11px !important;
+    padding: 5px 8px !important;
+    border-radius: 999px !important;
+  }
+
+  .magicControls,
+  .panelActions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .magicControls button,
+  .panelActions button,
+  .magicPanel button,
+  .guidedMagicPanel button {
+    padding: 7px 10px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+  }
+
+  .confirmBox {
+    padding: 10px !important;
+    border-radius: 14px !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+  }
+
+  /* 施法抽屜內的可選卡片橫向排列 */
+  .magicPanel .cardGrid,
+  .guidedMagicPanel .cardGrid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 2px 2px 8px !important;
+  }
+
+  .magicPanel .gameCard,
+  .guidedMagicPanel .gameCard {
+    flex: 0 0 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+    padding: 6px !important;
+  }
+
+  .magicPanel .cardArt,
+  .guidedMagicPanel .cardArt {
+    max-height: 58px !important;
+  }
+
+  .magicPanel .gameCard strong,
+  .guidedMagicPanel .gameCard strong {
+    font-size: 11px !important;
+  }
+
+  /* 避免底部急援提示與施法抽屜打架 */
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    bottom: calc(42dvh + 16px) !important;
+  }
 }
 
-/* 手機橫版時把詳情窗再縮小，避免擋戰場 */
-@media (orientation: landscape) and (max-height: 560px) {
-  .cardDetailOverlay {
-    inset: auto auto 10px 10px !important;
-    width: min(300px, calc(100vw - 20px)) !important;
+/* 很矮的手機螢幕再縮一點 */
+@media (max-width: 900px) and (orientation: portrait) and (max-height: 740px) {
+  .magicPanel,
+  .guidedMagicPanel {
+    max-height: 48dvh !important;
+    padding: 10px !important;
   }
 
-  .cardDetailPanel {
-    max-height: 64dvh !important;
-    padding: 12px !important;
+  .magicPanel h2,
+  .guidedMagicPanel h2 {
+    font-size: 18px !important;
   }
 
-  .cardDetailPanel h2 {
-    font-size: 22px !important;
-  }
-
-  .cardDetailPanel p {
+  .magicPanel p,
+  .guidedMagicPanel p {
     font-size: 12px !important;
+  }
+
+  .magicPanel .gameCard,
+  .guidedMagicPanel .gameCard {
+    flex-basis: 84px !important;
+    min-width: 84px !important;
+    max-width: 84px !important;
+  }
+
+  .magicPanel .cardArt,
+  .guidedMagicPanel .cardArt {
+    max-height: 50px !important;
+  }
+}
+
+
+/* PORTRAIT_BOTTOM_ACTIONS_V1 */
+/* 手機直版：把頂部操作按鈕固定到底部，避免看不到結束回合 / 回主選單 */
+@media (max-width: 900px), (orientation: portrait) {
+  .guidedTopbar,
+  .topbar {
+    position: relative !important;
+    padding-right: 8px !important;
+  }
+
+  .topActions {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    z-index: 1600 !important;
+
+    max-width: none !important;
+    width: auto !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+
+    padding: 7px !important;
+    border-radius: 18px !important;
+    border: 1px solid #334155 !important;
+    background: rgba(15, 23, 42, 0.96) !important;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45) !important;
+
+    overflow: visible !important;
+  }
+
+  .topActions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    border-radius: 12px !important;
+    white-space: nowrap !important;
+  }
+
+  /* 避免底部固定按鈕蓋住手牌 */
+  .page.guidedPage,
+  .guidedPage {
+    padding-bottom: 62px !important;
+  }
+
+  /* 施法抽屜要在底部按鈕上方 */
+  .magicPanel,
+  .guidedMagicPanel {
+    bottom: 64px !important;
+    max-height: 38dvh !important;
+  }
+
+  /* 長按詳情窗也不要蓋住底部按鈕 */
+  .cardDetailOverlay {
+    inset: auto 10px 68px 10px !important;
+  }
+
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    bottom: 250px !important;
+  }
+}
+
+/* 螢幕很窄時，按鈕文字再縮 */
+@media (max-width: 390px) and (orientation: portrait) {
+  .topActions {
+    gap: 4px !important;
+    padding: 6px !important;
+  }
+
+  .topActions button {
+    font-size: 10px !important;
+    padding: 7px 4px !important;
+  }
+}
+
+
+/* MOBILE_SCROLL_SAFE_FIX_V1 */
+/* 手機直版：允許主畫面滑動，並避免底部操作列遮住內容 */
+@media (max-width: 900px), (orientation: portrait) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-height: 100%;
+    height: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  body {
+    overscroll-behavior-y: contain;
+  }
+
+  .page.guidedPage,
+  .guidedPage {
+    width: 100vw !important;
+    min-height: 100dvh !important;
+    height: auto !important;
+    max-width: none !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    padding: 8px 8px 92px !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .guidedTopbar,
+  .topbar {
+    flex: 0 0 auto !important;
+  }
+
+  .playerStrip {
+    flex: 0 0 auto !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+  }
+
+  .targetBar {
+    flex: 0 0 auto !important;
+  }
+
+  .guidePanel {
+    position: relative !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 74px !important;
+    max-height: 110px !important;
+    flex: 0 0 auto !important;
+    align-self: stretch !important;
+    justify-self: auto !important;
+    overflow: auto !important;
+  }
+
+  .battleGrid {
+    flex: 0 0 auto !important;
+    min-height: 360px !important;
+    height: auto !important;
+
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(170px, auto) minmax(170px, auto) !important;
+    gap: 8px !important;
+
+    overflow: visible !important;
+  }
+
+  .enemyZone,
+  .myZone,
+  .zoneCard {
+    min-height: 170px !important;
+    height: auto !important;
+    overflow: hidden !important;
+  }
+
+  .zoneCard .cardGrid {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .handAndLog {
+    flex: 0 0 auto !important;
+    min-height: 180px !important;
+    height: auto !important;
+
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 132px !important;
+    gap: 8px !important;
+
+    overflow: visible !important;
+  }
+
+  .handAndLog > .zoneCard:first-child,
+  .sideColumn,
+  .sideColumn .zoneCard {
+    min-height: 170px !important;
+    height: auto !important;
+  }
+
+  .sideColumn {
+    display: grid !important;
+    grid-template-rows: minmax(170px, auto) !important;
+    overflow: visible !important;
+  }
+
+  .sideColumn .zoneCard:nth-child(2),
+  .sideColumn .zoneCard:nth-child(3) {
+    display: none !important;
+  }
+
+  /* 底部固定操作列：保留，但不再擋住主內容 */
+  .topActions {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    z-index: 1600 !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+
+    padding: 7px !important;
+    border-radius: 18px !important;
+    border: 1px solid #334155 !important;
+    background: rgba(15, 23, 42, 0.96) !important;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  .topActions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    border-radius: 12px !important;
+    white-space: nowrap !important;
+  }
+
+  /* 施法面板：固定在底部按鈕上方，自己可滑動 */
+  .magicPanel,
+  .guidedMagicPanel {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+    z-index: 1450 !important;
+
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: 46dvh !important;
+
+    margin: 0 !important;
+    padding: 12px !important;
+    border-radius: 22px !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    border: 1px solid #a855f7 !important;
+    background:
+      radial-gradient(circle at top, rgba(168, 85, 247, 0.28), transparent 48%),
+      rgba(30, 15, 68, 0.98) !important;
+    box-shadow: 0 -18px 70px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  .magicPanel .cardGrid,
+  .guidedMagicPanel .cardGrid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding-bottom: 8px !important;
+  }
+
+  .magicPanel .gameCard,
+  .guidedMagicPanel .gameCard {
+    flex: 0 0 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+  }
+
+  .magicPanel .cardArt,
+  .guidedMagicPanel .cardArt {
+    max-height: 58px !important;
+  }
+
+  /* 非阻擋式卡片說明窗不要蓋住底部按鈕 */
+  .cardDetailOverlay {
+    inset: auto 10px calc(78px + env(safe-area-inset-bottom)) 10px !important;
+    z-index: 880 !important;
+  }
+
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+  }
+}
+
+/* 小螢幕再縮一點 */
+@media (max-width: 390px) and (orientation: portrait) {
+  .page.guidedPage,
+  .guidedPage {
+    padding-bottom: 88px !important;
+  }
+
+  .topActions {
+    gap: 4px !important;
+    padding: 6px !important;
+  }
+
+  .topActions button {
+    font-size: 10px !important;
+    padding: 7px 4px !important;
+  }
+
+  .magicPanel,
+  .guidedMagicPanel {
+    max-height: 48dvh !important;
+  }
+}
+
+
+/* MOBILE_ACTION_MODAL_V1 */
+/* 手機版：部署 / 攻擊 / 使用魔法統一改成彈出式操作視窗 */
+.mobileActionOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: grid;
+  place-items: end center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.mobileActionPanel {
+  width: min(520px, 100%);
+  max-height: 82dvh;
+  overflow: auto;
+  border-radius: 26px;
+  padding: 20px;
+  border: 1px solid #38bdf8;
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.17), transparent 46%),
+    linear-gradient(135deg, #0f172a, #111827);
+  box-shadow: 0 -18px 80px rgba(0, 0, 0, 0.58);
+}
+
+.mobileActionTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobileActionTop span {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #020617;
+  border: 1px solid #475569;
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.mobileActionPanel h2 {
+  margin: 14px 0 10px;
+  font-size: clamp(28px, 7vw, 44px);
+  line-height: 1.15;
+}
+
+.mobileActionPanel p {
+  margin: 14px 0;
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.7;
+  font-weight: 700;
+}
+
+.mobileActionMeta,
+.mobileActionStatus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0;
+}
+
+.mobileActionMeta b,
+.mobileActionStatus span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #020617;
+  border: 1px solid #475569;
+  color: #bfdbfe;
+  font-size: 12px;
+}
+
+.mobileActionButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mobileActionButtons button {
+  padding: 12px 14px !important;
+  font-size: 15px !important;
+  border-radius: 14px !important;
+}
+
+/* 手機直版時，操作視窗像底部大抽屜 */
+@media (max-width: 900px), (orientation: portrait) {
+  .mobileActionOverlay {
+    padding: 10px 10px calc(74px + env(safe-area-inset-bottom));
+    place-items: end center;
+  }
+
+  .mobileActionPanel {
+    max-height: 72dvh;
+    padding: 18px;
+    border-radius: 24px 24px 20px 20px;
+  }
+
+  .mobileActionPanel h2 {
+    font-size: 30px;
+  }
+
+  .mobileActionPanel p {
+    font-size: 14px;
   }
 }
