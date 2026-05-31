@@ -49,3 +49,81 @@
 .confirmBox p {
   margin: 0;
 }
+
+
+.soloBox {
+  border-color: #f97316;
+  background: linear-gradient(135deg, #7c2d12, #111827);
+}
+
+.soloBtn {
+  background: #f97316;
+}
+
+.soloBtn:hover {
+  background: #fb923c;
+}
+
+
+.resultOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.resultModal {
+  width: min(520px, 100%);
+  border-radius: 28px;
+  padding: 28px;
+  text-align: center;
+  border: 1px solid #334155;
+  background: linear-gradient(135deg, #0f172a, #111827);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.resultModal.win {
+  border-color: #facc15;
+  background: radial-gradient(circle at top, rgba(250, 204, 21, 0.22), transparent 42%),
+              linear-gradient(135deg, #0f172a, #111827);
+}
+
+.resultModal.lose {
+  border-color: #ef4444;
+  background: radial-gradient(circle at top, rgba(239, 68, 68, 0.22), transparent 42%),
+              linear-gradient(135deg, #0f172a, #111827);
+}
+
+.resultBadge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  background: #020617;
+  border: 1px solid #475569;
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.resultModal h2 {
+  font-size: clamp(40px, 8vw, 72px);
+  margin: 4px 0 10px;
+}
+
+.resultHint {
+  color: #cbd5e1;
+  margin-bottom: 20px;
+}
+
+.resultActions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}

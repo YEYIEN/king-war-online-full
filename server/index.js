@@ -46,15 +46,15 @@ const KINGS = [
 ];
 
 const MAGIC_DEFS = [
-  { name: "火球術", count: 2, level: "初級魔法", target: "敵方", maxTargets: 1, text: "初級死亡；中高級階級-1。" },
-  { name: "冰凍術", count: 2, level: "初級魔法", target: "敵方", maxTargets: 1, text: "暫停行動一回合；不可疊加。" },
-  { name: "力量術", count: 3, level: "初級魔法", target: "我方", maxTargets: 1, text: "階級+1，並重置攻擊。" },
-  { name: "虛弱術", count: 2, level: "中級魔法", target: "敵方", maxTargets: 1, text: "階級-1；若原本初級則不能攻擊。" },
-  { name: "增強術", count: 2, level: "中級魔法", target: "我方", maxTargets: 1, text: "階級+1。" },
-  { name: "流星雨", count: 1, level: "中級魔法", target: "敵方", maxTargets: 3, text: "指定1至3名敵方。初級死亡；中高級階級-1。" },
-  { name: "毒藥瓶", count: 1, level: "高級魔法", target: "敵方", maxTargets: 1, text: "下回合死亡。" },
-  { name: "燃血術", count: 1, level: "高級魔法", target: "我方", maxTargets: 1, text: "自己失去3生命；目標階級+1並重置攻擊。" },
-  { name: "天殞術", count: 1, level: "高級魔法", target: "敵方全場", maxTargets: 0, text: "低於高級全部死亡；高級暫停行動一回合。" }
+  { name: "火球術", count: 3, level: "初級魔法", target: "敵方", maxTargets: 1, text: "初級死亡；中級、高級階級-1。" },
+  { name: "冰凍術", count: 2, level: "初級魔法", target: "敵方", maxTargets: 1, text: "初級、中級暫停行動一回合；高級改為階級-1。不可疊加。" },
+  { name: "力量術", count: 3, level: "初級魔法", target: "我方", maxTargets: 1, text: "我方一名兵種階級+1，直到本回合結束；不能重置攻擊。" },
+  { name: "虛弱術", count: 2, level: "中級魔法", target: "敵方", maxTargets: 1, text: "敵方一名兵種階級-1；若目標原本是初級，則不能攻擊一回合。" },
+  { name: "增強術", count: 2, level: "中級魔法", target: "我方", maxTargets: 1, text: "我方一名兵種階級+1，直到下次自己回合開始；若目標尚未行動，本回合攻擊國王傷害+1。" },
+  { name: "流星雨", count: 1, level: "中級魔法", target: "敵方", maxTargets: 3, text: "指定1至3名敵方。初級死亡；中級、高級階級-1。" },
+  { name: "毒藥瓶", count: 1, level: "高級魔法", target: "敵方", maxTargets: 1, text: "指定敵方一名兵種，該兵種在其控制者下次回合結束時死亡。" },
+  { name: "燃血術", count: 1, level: "高級魔法", target: "我方", maxTargets: 1, text: "自己失去3HP；我方一名兵種階級+1並重置攻擊；若攻擊國王，額外造成1傷害。" },
+  { name: "天殞術", count: 1, level: "高級魔法", target: "敵方全場", maxTargets: 0, text: "敵方場上低於高級的兵種全部死亡；高級兵種暫停行動一回合。" }
 ];
 
 function shuffle(a) {
@@ -123,7 +123,7 @@ function startTurn(room, p) {
   p.fieldBonus = 0;
   p.field.forEach(u => {
     u.tapped = false; u.justDeployed = false; u.archerBonusUsed = false;
-    u.status = u.status.filter(s => !["階級+1","階級-1","整備"].includes(s));
+    u.status = u.status.filter(s => !["階級+1","階級-1","整備","傷害+1","燃血+1傷害"].includes(s));
   });
   const ud = p.king?.name === "秦始皇" ? 2 : 1;
   drawUnits(room, p, ud);
@@ -134,12 +134,20 @@ function startTurn(room, p) {
 function power(u) {
   let v = RANK_VALUE[u.rank];
   if (u.status.includes("階級+1")) v++;
+  if (u.status.includes("力量術+1")) v++;
   if (u.status.includes("屋大維+1")) v++;
   if (u.status.includes("整備")) v--;
   if (u.status.includes("階級-1")) v--;
   return v;
 }
 function canAttack(u) { return u && !u.tapped && !u.status.includes("不能攻擊") && !u.status.includes("整備") && !(u.justDeployed && u.type !== "騎兵"); }
+
+function effectiveDamage(unit) {
+  let dmg = unit?.damage || 0;
+  if (unit?.status?.includes("傷害+1")) dmg += 1;
+  if (unit?.status?.includes("燃血+1傷害")) dmg += 1;
+  return dmg;
+}
 function battle(a,d) {
   let av=power(a), dv=power(d);
   if (a.counterTarget === d.type) av++;
@@ -358,10 +366,11 @@ function aiResolveAttackKing(room, ai, enemy, attackerId) {
   if (!attacker || !aiCanAttack(attacker)) return false;
   if (enemy.field.some((u) => u.type === "步兵")) return false;
 
-  enemy.hp -= attacker.damage;
+  const dmg = effectiveDamage(attacker);
+  enemy.hp -= dmg;
   attacker.tapped = true;
 
-  room.log.push(`${ai.name} 用 ${attacker.name} 攻擊 ${enemy.name} 國王，造成${attacker.damage}傷害。`);
+  room.log.push(`${ai.name} 用 ${attacker.name} 攻擊 ${enemy.name} 國王，造成${dmg}傷害。`);
 
   if (enemy.hp <= 0) {
     enemy.eliminated = true;
@@ -473,7 +482,7 @@ function aiChooseMagic(room, ai, enemy) {
         const id = target.id;
         if (magic.name === "火球術") fireball(enemy, id);
         if (magic.name === "流星雨") fireball(enemy, id);
-        if (magic.name === "冰凍術") freeze(target);
+        if (magic.name === "冰凍術") { if(target.rank === "高級") target.status.push("階級-1"); else freeze(target); }
         if (magic.name === "虛弱術") {
           target.status.push("階級-1");
           if (target.rank === "初級") freeze(target);
@@ -503,8 +512,20 @@ function aiChooseMagic(room, ai, enemy) {
       room.magicDeck.push(magic);
 
       if (magic.name === "燃血術") ai.hp -= 3;
-      target.status.push("階級+1");
-      if (magic.name === "力量術" || magic.name === "燃血術") target.tapped = false;
+      if (magic.name === "力量術") {
+        target.status.push("力量術+1");
+      }
+
+      if (magic.name === "增強術") {
+        target.status.push("階級+1");
+        if (!target.tapped) target.status.push("傷害+1");
+      }
+
+      if (magic.name === "燃血術") {
+        target.status.push("階級+1");
+        target.status.push("燃血+1傷害");
+        target.tapped = false;
+      }
 
       const usedCaster = ai.field.find((u) => u.id === caster.id);
       if (usedCaster) usedCaster.tapped = true;
@@ -517,7 +538,14 @@ function aiChooseMagic(room, ai, enemy) {
   return false;
 }
 
+function clearEndOfTurnBuffs(player) {
+  player.field.forEach((u) => {
+    u.status = u.status.filter((s) => s !== "力量術+1");
+  });
+}
+
 function aiEndTurn(room, ai) {
+  clearEndOfTurnBuffs(ai);
   ai.field = ai.field.filter((u) => !u.status.includes("下回合死亡"));
   trimHand(room, ai);
   applyOct(room, ai);
@@ -801,8 +829,8 @@ io.on("connection", socket => {
     const target=getPlayer(room,targetPlayerId); if(!target||target.id===p.id||target.eliminated) return reply?.({ok:false,error:"目標玩家不合法。"});
     if(target.field.some(u=>u.type==="步兵")) return reply?.({ok:false,error:"目標場上仍有步兵，不能攻擊國王。"});
     const a=p.field.find(u=>u.id===attackerId); if(!canAttack(a)) return reply?.({ok:false,error:"這名兵種不能攻擊。"});
-    target.hp-=a.damage; a.tapped=true; if(target.hp<=0){target.eliminated=true; room.log.push(`${target.name} 出局。`);}
-    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 國王，造成${a.damage}傷害。`); if (finishIfGameOver(room)) { reply?.({ok:true}); broadcast(room); return; } reply?.({ok:true}); broadcast(room);
+    const dmg = effectiveDamage(a); target.hp-=dmg; a.tapped=true; if(target.hp<=0){target.eliminated=true; room.log.push(`${target.name} 出局。`);}
+    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 國王，造成${dmg}傷害。`); if (finishIfGameOver(room)) { reply?.({ok:true}); broadcast(room); return; } reply?.({ok:true}); broadcast(room);
   });
 
   socket.on("game:castMagic", ({magicId,casterId,targetPlayerId,targetUnitIds}, reply) => {
@@ -833,12 +861,12 @@ io.on("connection", socket => {
       ids.forEach(id=>{
         const i=target.field.findIndex(u=>u.id===id); if(i<0)return; const u=target.field[i];
         if(magic.name==="火球術") fireball(target,id);
-        if(magic.name==="冰凍術") freeze(u);
-        if(magic.name==="力量術"){u.status.push("階級+1"); u.tapped=false;}
+        if(magic.name==="冰凍術"){ if(u.rank==="高級") u.status.push("階級-1"); else freeze(u); }
+        if(magic.name==="力量術"){u.status.push("力量術+1");}
         if(magic.name==="虛弱術"){u.status.push("階級-1"); if(u.rank==="初級") freeze(u);}
-        if(magic.name==="增強術") u.status.push("階級+1");
+        if(magic.name==="增強術"){u.status.push("階級+1"); if(!u.tapped) u.status.push("傷害+1");}
         if(magic.name==="毒藥瓶") u.status.push("下回合死亡");
-        if(magic.name==="燃血術"){p.hp-=3; u.status.push("階級+1"); u.tapped=false;}
+        if(magic.name==="燃血術"){p.hp-=3; u.status.push("階級+1"); u.status.push("燃血+1傷害"); u.tapped=false;}
         if(magic.name==="流星雨") fireball(target,id);
       });
       room.log.push(`${p.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
@@ -861,7 +889,7 @@ reply?.({ok:true}); broadcast(room);
   socket.on("game:endTurn", (_, reply) => {
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    p.field=p.field.filter(u=>!u.status.includes("下回合死亡")); trimHand(room,p); applyOct(room,p);
+    clearEndOfTurnBuffs(p); p.field=p.field.filter(u=>!u.status.includes("下回合死亡")); trimHand(room,p); applyOct(room,p);
     const a=alive(room); if(a.length<=1){room.status="ended"; room.log.push(`${a[0]?.name||"無人"} 獲勝！`); reply?.({ok:true}); broadcast(room); return;}
     const n=nextAlive(room,p.id); room.currentPlayerId=n.id; room.log.push(`${p.name} 結束回合。`); startTurn(room,n); reply?.({ok:true}); broadcast(room); scheduleAITurn(room);
   });

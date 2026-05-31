@@ -253,6 +253,28 @@ function App() {
     });
   }
 
+  function returnHomeFromResult() {
+    setRoom(null);
+    setPlayerId(null);
+    setTargetPlayerId("");
+    setAttackerId(null);
+    setMagicPlan(null);
+    setMessage("");
+  }
+
+  function playAgainFromResult() {
+    setAttackerId(null);
+    setMagicPlan(null);
+    setMessage("");
+
+    if (isSingleplayerRoom) {
+      startSinglePlayer();
+      return;
+    }
+
+    createRoom();
+  }
+
   function randomMatch() {
     setMessage("正在尋找玩家...");
     socket.emit("matchmaking:join", { name: safeName() }, (res) => {
@@ -323,6 +345,11 @@ function App() {
   const attacker = me?.field.find((u) => u.id === attackerId);
   const magicTargetPlayer = room.players.find((p) => p.id === magicPlan?.targetPlayerId);
   const hint = actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan });
+
+  const gameEnded = room.status === "ended";
+  const winner = gameEnded ? room.players.find((p) => !p.eliminated && p.hp > 0) : null;
+  const didWin = gameEnded && winner?.id === playerId;
+  const isSingleplayerRoom = room.players.some((p) => p.isAI);
 
   if (room.status === "lobby") {
     return (
@@ -540,7 +567,33 @@ function App() {
       </header>
 
       {message && <p className="error floatingError">{message}</p>}
-      {showHelp && <GuidePanel hint={hint} />}
+
+      {gameEnded && (
+        <section className="resultOverlay">
+          <div className={`resultModal ${didWin ? "win" : "lose"}`}>
+            <div className="resultBadge">{didWin ? "VICTORY" : "DEFEAT"}</div>
+            <h2>{didWin ? "勝利！" : "失敗..."}</h2>
+            <p>
+              {winner
+                ? `本局勝利者：${winner.name}`
+                : "本局已結束。"}
+            </p>
+            <p className="resultHint">
+              {didWin
+                ? "你成功擊敗了對手的國王。"
+                : "你的國王被擊敗了，再調整策略試一次。"}
+            </p>
+
+            <div className="resultActions">
+              <button className="primaryBtn" onClick={playAgainFromResult}>再來一局</button>
+              <button className="matchBtn" onClick={randomMatch}>隨機匹配</button>
+              <button className="secondary" onClick={returnHomeFromResult}>回到主頁面</button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {showHelp && !gameEnded && <GuidePanel hint={hint} />}
 
       <section className="playerStrip">
         {room.players.map((p) => <PlayerSummary key={p.id} player={p} isMe={p.id === playerId} isCurrent={p.id === room.currentPlayerId} />)}
