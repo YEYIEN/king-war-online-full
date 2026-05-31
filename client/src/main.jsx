@@ -31,16 +31,53 @@ function KingArt({ king }) {
 function unitEffectText(card) {
   if (!card || card.kind !== "unit") return "";
   if (card.type === "步兵") return "守衛：防守方場上仍有步兵時，敵人不能直接攻擊國王。";
-  if (card.type === "弓兵") return "遠射：攻擊低階敵人時，第一次可再攻擊一次；攻擊同階或高階敵人時不死亡，攻擊高階敵人則階級-1到下回合。";
+  if (card.type === "弓兵") return "遠射：攻擊戰力低於自己的敵人時，第一次可再攻擊一次；攻擊戰力等於或高於自己的敵人時不死亡；若攻擊戰力高於自己的敵人，下回合不能攻擊。";
   if (card.type === "法師") return "施法：回合開始時依場上法師數抽魔法卡。使用魔法視為一次攻擊。剛部署時不能使用同級魔法。";
-  if (card.type === "騎兵") return "突擊：剛部署的回合即可攻擊；但高級騎兵仍須整備一回合。";
+  if (card.type === "騎兵") return "突擊：剛部署的回合即可攻擊；但高級騎兵仍須整備一回合；整備中不能攻擊，且目前戰力-1。";
   return "";
+}
+
+function effectivePower(card) {
+  if (!card) return 0;
+
+  const rankMap = {
+    "初級": 1,
+    "中級": 2,
+    "高級": 3
+  };
+
+  const statuses = card.status || [];
+  let value = rankMap[card.rank] || 1;
+
+  if (statuses.includes("整備")) value -= 1;
+  if (statuses.includes("階級-1") || statuses.includes("戰力-1")) value -= 1;
+  if (statuses.includes("階級+1") || statuses.includes("戰力+1")) value += 1;
+  if (statuses.includes("力量術+1")) value += 1;
+  if (statuses.includes("屋大維+1")) value += 1;
+
+  return Math.max(1, value);
+}
+
+function displayStatusLabel(status) {
+  const s = String(status || "");
+
+  if (s === "戰力+1") return "戰力+1";
+  if (s === "戰力-1") return "戰力-1";
+  if (s === "力量術+1") return "力量術：戰力+1";
+  if (s === "屋大維+1") return "屋大維：戰力+1";
+  if (s === "傷害+1") return "攻擊國王傷害+1";
+  if (s === "燃血+1傷害") return "燃血：攻擊國王傷害+1";
+  if (s === "整備") return "整備：不能攻擊，戰力-1";
+  if (s === "疲乏" || s === "疲乏待解") return "疲乏：下回合不能攻擊";
+
+  return s.replaceAll("階級", "戰力");
 }
 
 function unitStatusText(card) {
   if (!card) return "";
   if (card.status?.includes("整備")) return "整備中";
   if (card.status?.includes("不能攻擊")) return "不能攻擊";
+  if (card.status?.includes("疲乏") || card.status?.includes("疲乏待解")) return "疲乏";
   if (card.tapped) return "已行動";
   if (card.justDeployed && card.type !== "騎兵") return "剛部署";
   return "可行動";
@@ -161,9 +198,10 @@ function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = fa
       <CardArt card={card} small={compact} />
       <strong>{card.name}</strong>
       <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
+      <span className="powerText">目前戰力：{effectivePower(card)}</span>
       <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
       <span className="effectText">{unitEffectText(card)}</span>
-      {card.status?.length > 0 && <span className="status">{card.status.join("、")}</span>}
+      {card.status?.length > 0 && <span className="status">{card.status.map(displayStatusLabel).join("、")}</span>}
       {actionLabel && <span className="actionLabel">{actionLabel}</span>}
     </button>
   );
@@ -809,6 +847,7 @@ function App() {
                   <CardArt card={card} />
                   <strong>{card.name}</strong>
                   <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
+                  <span className="powerText">目前戰力：{effectivePower(card)}</span>
                   <span className="effectText">{unitEffectText(card)}</span>
                   <span className="actionLabel">部署</span>
                 </button>

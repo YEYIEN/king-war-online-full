@@ -127,3 +127,16 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+
+
+.powerText {
+  display: inline-flex !important;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #172554;
+  border: 1px solid #3b82f6;
+  color: #bfdbfe !important;
+  font-size: 12px !important;
+  font-weight: 900;
+}
