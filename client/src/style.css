@@ -1549,3 +1549,358 @@
     font-size: 14px;
   }
 }
+
+
+/* MOBILE_SCROLL_SMOOTH_FIX_V1 */
+/* 修正手機直版滑動困難：主頁上下滑，卡片列左右滑，避免多層 overflow 打架 */
+@media (max-width: 900px), (orientation: portrait) {
+  html,
+  body,
+  #root {
+    height: 100% !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+
+  body {
+    position: static !important;
+    overscroll-behavior-y: auto !important;
+  }
+
+  .page.guidedPage,
+  .guidedPage {
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+
+    padding-bottom: calc(112px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* 這些區塊不要攔截整頁垂直滑動 */
+  .playerStrip,
+  .battleGrid,
+  .handAndLog,
+  .sideColumn,
+  .zoneCard,
+  .enemyZone,
+  .myZone,
+  .targetBar,
+  .guidePanel {
+    max-height: none !important;
+    overflow-y: visible !important;
+    touch-action: pan-y !important;
+  }
+
+  /* 只有卡片橫列可以左右滑 */
+  .cardGrid,
+  .zoneCard .cardGrid,
+  .handAndLog .cardGrid,
+  .magicList {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x !important;
+    overscroll-behavior-x: contain !important;
+    overscroll-behavior-y: auto !important;
+  }
+
+  /* 底部固定按鈕不要吃掉太大觸控區 */
+  .topActions {
+    pointer-events: auto !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .topActions::before,
+  .topActions::after {
+    pointer-events: none !important;
+  }
+
+  /* 施法抽屜內部自己可滑，但不影響整頁 */
+  .magicPanel,
+  .guidedMagicPanel {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    bottom: calc(74px + env(safe-area-inset-bottom)) !important;
+    max-height: 42dvh !important;
+  }
+
+  /* 彈窗內才允許內部滑動 */
+  .mobileActionPanel,
+  .rulesLogPanel,
+  .cardDetailPanel {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+
+  /* 避免某些 fixed 提示卡住滑動區 */
+  .floatingError,
+  .attackFeedbackToast,
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    pointer-events: none !important;
+  }
+}
+
+/* 超小手機：多留一點底部空間 */
+@media (max-width: 390px) and (orientation: portrait) {
+  .page.guidedPage,
+  .guidedPage {
+    padding-bottom: calc(124px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+
+/* MOBILE_BOTTOM_BAR_FINAL_V1 */
+/* 手機直版：底部按鈕固定在最底部，主內容預留空間，不再擋住視野 */
+@media (max-width: 900px), (orientation: portrait) {
+  .page.guidedPage,
+  .guidedPage {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom)) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .topActions {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 1600 !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom)) !important;
+    border-radius: 18px 18px 0 0 !important;
+    border: 1px solid #334155 !important;
+    border-bottom: none !important;
+    background: rgba(15, 23, 42, 0.98) !important;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5) !important;
+
+    max-width: none !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
+
+  .topActions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 8px 4px !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    border-radius: 12px !important;
+    white-space: nowrap !important;
+  }
+
+  /* 施法抽屜固定在底部工具列上方 */
+  .magicPanel,
+  .guidedMagicPanel {
+    bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    max-height: 40dvh !important;
+  }
+
+  /* 部署 / 使用魔法確認視窗也不要被底部工具列蓋住 */
+  .mobileActionOverlay {
+    padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* 長按說明窗不要壓到底部工具列 */
+  .cardDetailOverlay {
+    inset: auto 10px calc(82px + env(safe-area-inset-bottom)) 10px !important;
+  }
+
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* 小手機按鈕再縮一點 */
+@media (max-width: 390px) and (orientation: portrait) {
+  .topActions {
+    gap: 4px !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .topActions button {
+    font-size: 10px !important;
+    padding: 7px 3px !important;
+  }
+
+  .page.guidedPage,
+  .guidedPage {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+
+/* MOBILE_MODAL_AND_ACTIONBAR_FIX_V1 */
+/* 修正：
+   1. 部署 / 使用魔法確認按鈕固定在彈窗底部
+   2. 結束回合 / 回主選單不再固定在畫面最底部擋視野
+*/
+@media (max-width: 900px), (orientation: portrait) {
+  /* 取消底部 fixed 操作列，讓按鈕回到頁面頂部操作區 */
+  .topActions {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: auto !important;
+
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 5px !important;
+
+    width: auto !important;
+    max-width: 100% !important;
+
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .topActions button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  /* 因為底部按鈕不再 fixed，所以主畫面底部不需要留那麼大空間 */
+  .page.guidedPage,
+  .guidedPage {
+    padding-bottom: 24px !important;
+  }
+
+  /* 施法抽屜回到底部，不需要避開底部 fixed 按鈕 */
+  .magicPanel,
+  .guidedMagicPanel {
+    bottom: 8px !important;
+    max-height: 46dvh !important;
+  }
+
+  /* 部署 / 使用魔法操作視窗：改成真正的底部確認抽屜 */
+  .mobileActionOverlay {
+    place-items: end center !important;
+    padding: 10px !important;
+    background: rgba(2, 6, 23, 0.66) !important;
+  }
+
+  .mobileActionPanel {
+    width: min(520px, 100%) !important;
+    max-height: 78dvh !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    padding: 18px !important;
+    border-radius: 26px 26px 18px 18px !important;
+    overflow: hidden !important;
+  }
+
+  .mobileActionTop {
+    flex: 0 0 auto !important;
+  }
+
+  .mobileActionPanel h2 {
+    flex: 0 0 auto !important;
+    margin: 12px 0 8px !important;
+    font-size: clamp(26px, 7vw, 40px) !important;
+  }
+
+  .mobileActionMeta,
+  .mobileActionStatus {
+    flex: 0 0 auto !important;
+  }
+
+  /* 文字內容可以自己滑，但不把確認按鈕擠到奇怪位置 */
+  .mobileActionPanel p {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: 34dvh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+
+    margin: 10px 0 !important;
+    padding-right: 4px !important;
+    font-size: 14px !important;
+    line-height: 1.65 !important;
+  }
+
+  /* 確認 / 取消固定在彈窗底部 */
+  .mobileActionButtons {
+    flex: 0 0 auto !important;
+    position: sticky !important;
+    bottom: 0 !important;
+
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+
+    margin: 12px -2px 0 !important;
+    padding-top: 12px !important;
+
+    background:
+      linear-gradient(to top, rgba(15, 23, 42, 1), rgba(15, 23, 42, 0.92), transparent) !important;
+  }
+
+  .mobileActionButtons button {
+    min-height: 46px !important;
+    padding: 12px 14px !important;
+    font-size: 15px !important;
+    border-radius: 14px !important;
+  }
+
+  /* 長按詳情窗也不用再避開底部 fixed 按鈕 */
+  .cardDetailOverlay {
+    inset: auto 10px 10px 10px !important;
+  }
+
+  .reinforcementNotice,
+  .formalTutorialNotice {
+    bottom: 12px !important;
+  }
+}
+
+/* 小手機：操作視窗再壓縮一點 */
+@media (max-width: 390px) and (orientation: portrait) {
+  .mobileActionPanel {
+    max-height: 80dvh !important;
+    padding: 16px !important;
+  }
+
+  .mobileActionPanel h2 {
+    font-size: 26px !important;
+  }
+
+  .mobileActionPanel p {
+    max-height: 32dvh !important;
+    font-size: 13px !important;
+  }
+
+  .mobileActionButtons button {
+    font-size: 14px !important;
+    min-height: 44px !important;
+  }
+}

@@ -1811,7 +1811,7 @@ function App() {
               <h2>{targetPlayer?.name || "敵方"} 場上</h2>
               <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
             </div>
-            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={() => openMobileActionModal(targetPlayer?.king || { name: targetPlayer?.name || "敵方國王", kind: "king", effect: "確認攻擊敵方國王。" }, "敵方國王", "攻擊國王", attackKing)}>攻擊國王</button>
+            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>攻擊國王</button>
           </div>
 
           <div className="cardGrid">
@@ -1847,7 +1847,7 @@ function App() {
                     card={card}
                     selected={attackerId === card.id || magicPlan?.casterId === card.id || magicPlan?.targetUnitIds.includes(card.id)}
                     disabled={!isMyTurn || (magicPlan && magicPlan.casterId && magicPlan.magic.target !== "我方")}
-                    onClick={() => openMobileActionModal(card, "我方兵種", "選為攻擊者", () => selectOwnUnit(card))}
+                    onClick={() => selectOwnUnit(card)}
                     actionLabel={ownCardActionLabel(card)}
                     highlight={!card.tapped && !magicPlan ? "ready" : ""}
                   />
@@ -1889,7 +1889,7 @@ function App() {
                         card={card}
                         compact
                         selected={magicPlan.casterId === card.id}
-                        onClick={() => openMobileActionModal(card, "我方兵種", "選為攻擊者", () => selectOwnUnit(card))}
+                        onClick={() => selectOwnUnit(card)}
                         actionLabel={magicPlan.casterId === card.id ? "已選施法者" : "選為施法者"}
                       />
                     ))
