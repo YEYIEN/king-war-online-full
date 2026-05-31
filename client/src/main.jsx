@@ -59,25 +59,40 @@ function actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan }) {
   }
 
   if (magicPlan) {
-    const caster = me?.field.find((u) => u.id === magicPlan.casterId);
-
-    if (!caster) {
-      return { tone: "magic", title: `正在使用魔法：${magicPlan.magic.name}`, steps: ["第 1 步：請點選我方場上一名可施法的法師。", "法師使用魔法後，本回合不能再攻擊。"] };
+    if (magicPlan.step === "caster") {
+      return {
+        tone: "magic",
+        title: `魔法步驟 1：選擇施法者`,
+        steps: [
+          `你正在使用：${magicPlan.magic.name}。`,
+          "請選擇我方場上一名法師作為施法者。",
+          "選好後按「確認施法者」。"
+        ],
+      };
     }
 
-    if (magicPlan.magic.name === "天殞術") {
-      return { tone: "magic", title: `施法者：${caster.name}`, steps: [`第 2 步：確認目標玩家是 ${targetPlayer?.name || "敵方"}。`, "第 3 步：按「確認施放」。"] };
+    if (magicPlan.step === "target") {
+      return {
+        tone: "magic",
+        title: `魔法步驟 2：選擇目標`,
+        steps: [
+          "請先選目標玩家。",
+          magicPlan.magic.name === "天殞術" ? "天殞術是全場效果，不需要選單一兵種。" : "接著選擇要施法的目標兵種。",
+          "切換目標玩家時，系統會自動清空原本選到的目標。"
+        ],
+      };
     }
 
-    return {
-      tone: "magic",
-      title: `施法者：${caster.name}`,
-      steps: [
-        `第 2 步：請選擇 ${magicPlan.magic.target === "我方" ? "我方" : "敵方"}兵種作為目標。`,
-        `已選擇 ${magicPlan.targetUnitIds.length}/${magicPlan.magic.maxTargets || 1} 個目標。`,
-        "第 3 步：按「確認施放」。",
-      ],
-    };
+    if (magicPlan.step === "confirm") {
+      return {
+        tone: "magic",
+        title: `魔法步驟 3：確認施放`,
+        steps: [
+          "請確認魔法卡、施法者、目標玩家與目標兵種是否正確。",
+          "確認無誤後，按「確認施放」。"
+        ],
+      };
+    }
   }
 
   if (attacker) {
@@ -317,8 +332,63 @@ function App() {
   }
 
   function beginMagic(magic) {
-    setMagicPlan({ magic, casterId: "", targetPlayerId: magic.target === "我方" ? playerId : targetPlayer?.id || "", targetUnitIds: [] });
+    setMagicPlan({
+      magic,
+      step: "caster",
+      casterId: "",
+      targetPlayerId: magic.target === "我方" ? playerId : targetPlayer?.id || "",
+      targetUnitIds: []
+    });
     setAttackerId(null);
+  }
+
+  function confirmMagicCaster() {
+    if (!magicPlan?.casterId) {
+      return setMessage("請先選擇一名我方法師作為施法者。");
+    }
+
+    setMagicPlan({
+      ...magicPlan,
+      step: "target",
+      targetUnitIds: []
+    });
+    setMessage("");
+  }
+
+  function confirmMagicTarget() {
+    if (!magicPlan?.targetPlayerId) {
+      return setMessage("請先選擇目標玩家。");
+    }
+
+    if (magicPlan.magic.name !== "天殞術" && magicPlan.targetUnitIds.length === 0) {
+      return setMessage("請至少選擇一個魔法目標。");
+    }
+
+    setMagicPlan({
+      ...magicPlan,
+      step: "confirm"
+    });
+    setMessage("");
+  }
+
+  function backMagicStep() {
+    if (!magicPlan) return;
+
+    if (magicPlan.step === "target") {
+      setMagicPlan({
+        ...magicPlan,
+        step: "caster",
+        targetUnitIds: []
+      });
+      return;
+    }
+
+    if (magicPlan.step === "confirm") {
+      setMagicPlan({
+        ...magicPlan,
+        step: "target"
+      });
+    }
   }
 
   function chooseMagicTarget(unitId) {
@@ -335,21 +405,52 @@ function App() {
   }
 
   function castMagic() {
-    if (!magicPlan.casterId) return setMessage("請先點選一名我方法師作為施法者。");
-    emit("game:castMagic", { magicId: magicPlan.magic.id, casterId: magicPlan.casterId, targetPlayerId: magicPlan.targetPlayerId, targetUnitIds: magicPlan.targetUnitIds });
+    if (!magicPlan) return;
+
+    if (!magicPlan.casterId) {
+      return setMessage("請先選擇一名我方法師作為施法者。");
+    }
+
+    if (!magicPlan.targetPlayerId) {
+      return setMessage("請先選擇目標玩家。");
+    }
+
+    if (magicPlan.magic.name !== "天殞術" && magicPlan.targetUnitIds.length === 0) {
+      return setMessage("請至少選擇一個魔法目標。");
+    }
+
+    emit("game:castMagic", {
+      magicId: magicPlan.magic.id,
+      casterId: magicPlan.casterId,
+      targetPlayerId: magicPlan.targetPlayerId,
+      targetUnitIds: magicPlan.targetUnitIds
+    });
+
     setMagicPlan(null);
   }
 
   function selectOwnUnit(card) {
     if (!isMyTurn) return;
 
-    if (magicPlan && !magicPlan.casterId && card.type === "法師") {
-      setMagicPlan({ ...magicPlan, casterId: card.id });
-      return;
-    }
+    if (magicPlan) {
+      if (magicPlan.step === "caster") {
+        if (card.type !== "法師") {
+          return setMessage("請選擇法師作為施法者。");
+        }
 
-    if (magicPlan && magicPlan.magic.target === "我方") {
-      chooseMagicTarget(card.id);
+        setMagicPlan({
+          ...magicPlan,
+          casterId: card.id
+        });
+        setMessage("");
+        return;
+      }
+
+      if (magicPlan.step === "target" && magicPlan.magic.target === "我方") {
+        chooseMagicTarget(card.id);
+        return;
+      }
+
       return;
     }
 
@@ -358,18 +459,35 @@ function App() {
 
   function enemyCardActionLabel(card) {
     if (!isMyTurn) return "";
+
     if (magicPlan) {
+      if (magicPlan.step !== "target") return "";
+      if (magicPlan.magic.target === "我方") return "";
       if (magicPlan.magic.name === "天殞術") return "";
       return magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選為魔法目標";
     }
+
     if (attackerId) return "攻擊此兵種";
     return "先選我方攻擊者";
   }
 
   function ownCardActionLabel(card) {
     if (!isMyTurn) return "";
-    if (magicPlan && !magicPlan.casterId && card.type === "法師") return "選為施法者";
-    if (magicPlan && magicPlan.magic.target === "我方") return magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選為魔法目標";
+
+    if (magicPlan) {
+      if (magicPlan.step === "caster") {
+        return card.type === "法師"
+          ? magicPlan.casterId === card.id ? "已選施法者" : "選為施法者"
+          : "不是法師";
+      }
+
+      if (magicPlan.step === "target" && magicPlan.magic.target === "我方") {
+        return magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選為魔法目標";
+      }
+
+      return "";
+    }
+
     return "選為攻擊者";
   }
 
@@ -465,32 +583,128 @@ function App() {
       {magicPlan && (
         <section className="magicPanel guidedMagicPanel">
           <div>
-            <div className="titleBadge">Magic Step</div>
+            <div className="titleBadge">MAGIC STEP</div>
             <h2>施放魔法：{magicPlan.magic.name}</h2>
             <p>{magicPlan.magic.text}</p>
-            <p>施法者：{me?.field.find((u) => u.id === magicPlan.casterId)?.name || "請點選我方場上的法師"}</p>
+
+            <div className="magicStepBar">
+              <span className={magicPlan.step === "caster" ? "active" : ""}>1 選施法者</span>
+              <span className={magicPlan.step === "target" ? "active" : ""}>2 選目標</span>
+              <span className={magicPlan.step === "confirm" ? "active" : ""}>3 確認施放</span>
+            </div>
+
+            <p>施法者：{me?.field.find((u) => u.id === magicPlan.casterId)?.name || "尚未選擇"}</p>
           </div>
 
           <div className="magicControls">
-            <label>目標玩家</label>
-            <select value={magicPlan.targetPlayerId} onChange={(e) => setMagicPlan({ ...magicPlan, targetPlayerId: e.target.value, targetUnitIds: [] })}>
-              {(magicPlan.magic.target === "我方" ? [me] : enemies).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            {magicPlan.step === "caster" && (
+              <>
+                <h3>第一步：選擇我方法師</h3>
+                <p>只有法師可以使用魔法。使用魔法視為該法師本回合攻擊一次。</p>
 
-            <p>{magicPlan.magic.name === "天殞術" ? "全場效果，不用選單一兵種。" : `已選目標：${magicPlan.targetUnitIds.length}/${magicPlan.magic.maxTargets}`}</p>
+                <div className="cardGrid compactGrid">
+                  {me?.field?.filter((card) => card.type === "法師").length ? (
+                    me.field.filter((card) => card.type === "法師").map((card) => (
+                      <UnitCard
+                        key={card.id}
+                        card={card}
+                        compact
+                        selected={magicPlan.casterId === card.id}
+                        onClick={() => selectOwnUnit(card)}
+                        actionLabel={magicPlan.casterId === card.id ? "已選施法者" : "選為施法者"}
+                      />
+                    ))
+                  ) : (
+                    <EmptyState>你場上沒有法師，不能使用魔法。</EmptyState>
+                  )}
+                </div>
 
-            {magicTargetPlayer?.field?.length > 0 && magicPlan.magic.name !== "天殞術" && (
-              <div className="cardGrid compactGrid">
-                {magicTargetPlayer.field.map((card) => (
-                  <UnitCard key={card.id} card={card} compact selected={magicPlan.targetUnitIds.includes(card.id)} onClick={() => chooseMagicTarget(card.id)} actionLabel={magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選擇目標"} />
-                ))}
-              </div>
+                <div className="panelActions">
+                  <button className="primaryBtn" disabled={!magicPlan.casterId} onClick={confirmMagicCaster}>確認施法者</button>
+                  <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+                </div>
+              </>
             )}
 
-            <div className="panelActions">
-              <button className="primaryBtn" onClick={castMagic}>確認施放</button>
-              <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
-            </div>
+            {magicPlan.step === "target" && (
+              <>
+                <h3>第二步：選擇目標玩家與目標兵種</h3>
+
+                <label>目標玩家</label>
+                <select
+                  value={magicPlan.targetPlayerId}
+                  onChange={(e) =>
+                    setMagicPlan({
+                      ...magicPlan,
+                      targetPlayerId: e.target.value,
+                      targetUnitIds: []
+                    })
+                  }
+                >
+                  {(magicPlan.magic.target === "我方" ? [me] : enemies).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+
+                <p>
+                  {magicPlan.magic.name === "天殞術"
+                    ? "天殞術是全場效果，不用選單一兵種。"
+                    : `已選目標：${magicPlan.targetUnitIds.length}/${magicPlan.magic.maxTargets || 1}`}
+                </p>
+
+                {magicTargetPlayer?.field?.length > 0 && magicPlan.magic.name !== "天殞術" && (
+                  <div className="cardGrid compactGrid">
+                    {magicTargetPlayer.field.map((card) => (
+                      <UnitCard
+                        key={card.id}
+                        card={card}
+                        compact
+                        selected={magicPlan.targetUnitIds.includes(card.id)}
+                        onClick={() => chooseMagicTarget(card.id)}
+                        actionLabel={magicPlan.targetUnitIds.includes(card.id) ? "已選目標" : "選擇目標"}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {(!magicTargetPlayer?.field?.length && magicPlan.magic.name !== "天殞術") && (
+                  <EmptyState>這位玩家場上沒有兵種可以選。</EmptyState>
+                )}
+
+                <div className="panelActions">
+                  <button className="primaryBtn" onClick={confirmMagicTarget}>確認目標</button>
+                  <button className="secondary" onClick={backMagicStep}>上一步</button>
+                  <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+                </div>
+              </>
+            )}
+
+            {magicPlan.step === "confirm" && (
+              <>
+                <h3>第三步：確認施放</h3>
+
+                <div className="confirmBox">
+                  <p><strong>魔法卡：</strong>{magicPlan.magic.name}</p>
+                  <p><strong>施法者：</strong>{me?.field.find((u) => u.id === magicPlan.casterId)?.name || "未選擇"}</p>
+                  <p><strong>目標玩家：</strong>{room.players.find((p) => p.id === magicPlan.targetPlayerId)?.name || "未選擇"}</p>
+                  <p>
+                    <strong>目標兵種：</strong>
+                    {magicPlan.magic.name === "天殞術"
+                      ? "全場效果"
+                      : magicTargetPlayer?.field
+                          ?.filter((u) => magicPlan.targetUnitIds.includes(u.id))
+                          .map((u) => u.name)
+                          .join("、") || "未選擇"}
+                  </p>
+                </div>
+
+                <div className="panelActions">
+                  <button className="primaryBtn" onClick={castMagic}>確認施放</button>
+                  <button className="secondary" onClick={backMagicStep}>上一步</button>
+                  <button className="secondary" onClick={() => setMagicPlan(null)}>取消</button>
+                </div>
+              </>
+            )}
           </div>
         </section>
       )}
