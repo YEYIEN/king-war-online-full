@@ -1,0 +1,20 @@
+{
+  "name": "國王戰爭",
+  "short_name": "國王戰爭",
+  "description": "線上多人卡牌對戰遊戲：部署兵種、使用魔法、擊敗敵方國王。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "/icons/king-war-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
