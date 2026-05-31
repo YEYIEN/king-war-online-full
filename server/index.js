@@ -15,6 +15,21 @@ const io = new Server(server, { cors: { origin: "*" } });
 const rooms = new Map();
 let matchmakingRoomCode = null;
 
+function cleanDisplayName(name) {
+  const raw = String(name ?? "").normalize("NFKC").trim();
+  const fallback = raw || "玩家";
+  return Array.from(fallback).slice(0, 16).join("");
+}
+
+function asId(value) {
+  return String(value ?? "");
+}
+
+function findPlayerByIdOrName(room, value) {
+  const key = asId(value);
+  return room.players.find((p) => p.id === key) || room.players.find((p) => p.name === key);
+}
+
 const TYPES = ["步兵", "弓兵", "法師", "騎兵"];
 const RANKS = ["初級", "中級", "高級"];
 const COUNTER = { 步兵: "弓兵", 弓兵: "法師", 法師: "騎兵", 騎兵: "步兵" };
@@ -150,7 +165,7 @@ function startGame(room) {
 io.on("connection", socket => {
 
   socket.on("matchmaking:join", ({ name }, reply) => {
-    const playerName = String(name || "玩家").slice(0, 16);
+    const playerName = cleanDisplayName(name);
 
     // 沒有等待中的隨機房：建立 2 人等待房
     if (!matchmakingRoomCode || !rooms.has(matchmakingRoomCode)) {
@@ -299,6 +314,12 @@ io.on("connection", socket => {
   });
 
   socket.on("game:castMagic", ({magicId,casterId,targetPlayerId,targetUnitIds}, reply) => {
+    // 中文 ID 修正：統一魔法相關 ID，避免目標玩家或目標兵種比對失敗。
+    magicId = asId(magicId);
+    casterId = asId(casterId);
+    targetPlayerId = asId(targetPlayerId);
+    targetUnitIds = Array.isArray(targetUnitIds) ? targetUnitIds.map(asId) : [];
+
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const mi=p.magic.findIndex(m=>m.id===magicId), caster=p.field.find(u=>u.id===casterId);
