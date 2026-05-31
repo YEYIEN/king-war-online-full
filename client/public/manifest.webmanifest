@@ -1,11 +1,11 @@
 {
   "name": "國王戰爭",
   "short_name": "國王戰爭",
-  "description": "線上多人卡牌對戰遊戲：部署兵種、使用魔法、擊敗敵方國王。",
+  "description": "King War Online - landscape battle UI updated 2026-05-31 21:00",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "landscape",
   "background_color": "#020617",
   "theme_color": "#0f172a",
   "lang": "zh-Hant",
@@ -16,5 +16,10 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
+  ],
+  "display_override": [
+    "standalone",
+    "fullscreen",
+    "minimal-ui"
   ]
 }
