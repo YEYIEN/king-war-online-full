@@ -904,6 +904,16 @@ function App() {
   }, []);
 
   React.useEffect(() => {
+    socket.on("room:deleted", ({ reason } = {}) => {
+      clearSavedSession();
+      setRoom(null);
+      setPlayerId(null);
+      setTargetPlayerId("");
+      setAttackerId(null);
+      setMagicPlan(null);
+      setMessage(reason || "房間已結束並清理。");
+    });
+
     socket.on("room:update", (next) => {
       // kw_attack_feedback
       const latestLog = next?.log?.[next.log.length - 1] || "";
@@ -1015,6 +1025,12 @@ function App() {
   }
 
   function createRoom() {
+    // CLIENT_CLEAR_BEFORE_CREATE_MIN_V1
+    clearSavedSession();
+
+    // CLIENT_CLEAR_SESSION_BEFORE_CREATE_V1
+    clearSavedSession();
+
     socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "建立失敗");
       setPlayerId(res.playerId);
@@ -1025,6 +1041,12 @@ function App() {
   }
 
   function joinRoom() {
+    // CLIENT_CLEAR_BEFORE_JOIN_MIN_V1
+    clearSavedSession();
+
+    // CLIENT_CLEAR_SESSION_BEFORE_JOIN_V1
+    clearSavedSession();
+
     socket.emit("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "加入失敗");
       setPlayerId(res.playerId);
@@ -1046,14 +1068,26 @@ function App() {
   }
 
   function addAIPlayer() {
-    emit("room:addAI");
+    socket.emit("room:addAI", {}, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "添加機器人失敗");
+      setMessage("");
+    });
   }
 
   function removeAIPlayer() {
-    emit("room:removeAI");
+    socket.emit("room:removeAI", {}, (res) => {
+      if (!res?.ok) return setMessage(res?.error || "刪除機器人失敗");
+      setMessage("");
+    });
   }
 
   function startSinglePlayer() {
+    // CLIENT_CLEAR_BEFORE_SINGLE_MIN_V1
+    clearSavedSession();
+
+    // CLIENT_CLEAR_SESSION_BEFORE_SINGLEPLAYER_V1
+    clearSavedSession();
+
     setMessage("正在建立單人模式...");
     socket.emit("singleplayer:start", { name: safeName() }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "單人模式建立失敗");
@@ -1084,6 +1118,7 @@ function App() {
   }
 
   function returnHomeFromResult() {
+    // CLIENT_RETURN_HOME_CLEAR_SESSION_FINAL_V1
     clearSavedSession();
     setRoom(null);
     setPlayerId(null);
@@ -1099,6 +1134,12 @@ function App() {
   }
 
   function startTutorialRoom() {
+    // CLIENT_CLEAR_BEFORE_TUTORIAL_MIN_V1
+    clearSavedSession();
+
+    // CLIENT_CLEAR_SESSION_BEFORE_TUTORIAL_V1
+    clearSavedSession();
+
     setMessage("正在建立操作教學房...");
 
     socket.emit("tutorial:start", { name: safeName() }, (res) => {
@@ -1116,6 +1157,12 @@ function App() {
   }
 
   function randomMatch() {
+    // CLIENT_CLEAR_BEFORE_MATCH_MIN_V1
+    clearSavedSession();
+
+    // CLIENT_CLEAR_SESSION_BEFORE_MATCH_V1
+    clearSavedSession();
+
     setMessage("正在尋找公開房間...");
     socket.emit("matchmaking:join", { name: safeName() }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "隨機匹配失敗");

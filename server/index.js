@@ -14,6 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const rooms = new Map();
 const turnTimers = new Map();
+const roomCleanupTimers = new Map();
 const disconnectGraceTimers = new Map();
 let matchmakingRoomCode = null;
 
@@ -103,6 +104,11 @@ function finishIfGameOver(room) {
     room.status = "ended";
     room.currentPlayerId = null;
     room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
+
+    // ROOM_CLEANUP_ON_GAME_OVER_V1
+    // 結束後保留一段時間讓玩家看結果，之後刪除房間，避免舊房間污染新局。
+    scheduleRoomCleanup(room, room.singleplayer || room.tutorial ? 45 : 180);
+
     return true;
   }
 
@@ -209,6 +215,100 @@ function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId
     tutorial: !!room.tutorial, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer)) }; }
 function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
+
+
+function kwConnectedHumans(room) {
+  if (!room) return [];
+  return room.players.filter((p) => !p.isAI && p.connected && p.socketId);
+}
+
+function kwDeleteRoomNow(roomCode, reason = "房間已清理。") {
+  const room = rooms.get(roomCode);
+  if (!room) return false;
+
+  clearTurnTimer(room);
+
+  if (typeof clearDisconnectGrace === "function") {
+    for (const p of room.players) {
+      clearDisconnectGrace(room, p);
+    }
+  }
+
+  if (matchmakingRoomCode === room.code) {
+    matchmakingRoomCode = null;
+  }
+
+  try {
+    io.in(room.code).emit("room:deleted", { reason });
+    io.socketsLeave(room.code);
+  } catch (_) {}
+
+  rooms.delete(room.code);
+  return true;
+}
+
+function kwDeleteRoomIfNoHumans(room, reason = "房間內已無真人玩家，房間已清理。") {
+  if (!room?.code) return false;
+  if (!rooms.has(room.code)) return false;
+
+  if (kwConnectedHumans(room).length === 0) {
+    return kwDeleteRoomNow(room.code, reason);
+  }
+
+  return false;
+}
+
+function kwDetachSocketFromOtherRooms(sid, keepRoomCode = null) {
+  if (!sid) return;
+
+  for (const room of Array.from(rooms.values())) {
+    if (keepRoomCode && room.code === keepRoomCode) continue;
+
+    let changed = false;
+
+    for (const p of room.players) {
+      if (p.socketId === sid) {
+        p.socketId = null;
+        p.connected = false;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      if (room.status !== "ended") {
+        room.log.push("系統清理舊連線，避免玩家身份殘留。");
+        broadcast(room);
+      }
+
+      kwDeleteRoomIfNoHumans(room, "玩家已離開，房間內無真人玩家，已清理。");
+    }
+  }
+}
+
+
+
+function detachSocketFromOtherRooms(sid, keepRoomCode = null) {
+  if (!sid) return;
+
+  for (const room of rooms.values()) {
+    if (keepRoomCode && room.code === keepRoomCode) continue;
+
+    let changed = false;
+
+    for (const p of room.players) {
+      if (p.socketId === sid) {
+        p.socketId = null;
+        p.connected = false;
+        changed = true;
+      }
+    }
+
+    if (changed && room.status !== "ended") {
+      room.log.push("系統清理舊連線，避免玩家身份殘留。");
+      broadcast(room);
+    }
+  }
+}
 function code() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let c;
@@ -234,6 +334,50 @@ function clearTurnTimer(room) {
     clearTimeout(timer);
     turnTimers.delete(room.code);
   }
+}
+
+function clearRoomCleanup(room) {
+  if (!room?.code) return;
+
+  const timer = roomCleanupTimers.get(room.code);
+  if (timer) {
+    clearTimeout(timer);
+    roomCleanupTimers.delete(room.code);
+  }
+}
+
+function deleteRoomNow(roomCode, reason = "房間已清理。") {
+  const room = rooms.get(roomCode);
+  if (!room) return false;
+
+  clearTurnTimer(room);
+  clearRoomCleanup(room);
+
+  if (matchmakingRoomCode === room.code) {
+    matchmakingRoomCode = null;
+  }
+
+  try {
+    io.in(room.code).emit("room:deleted", { reason });
+    io.socketsLeave(room.code);
+  } catch (_) {}
+
+  rooms.delete(room.code);
+  return true;
+}
+
+function scheduleRoomCleanup(room, seconds = 120) {
+  if (!room?.code) return;
+
+  clearRoomCleanup(room);
+
+  const delay = Math.max(5, Number(seconds) || 120) * 1000;
+
+  const timer = setTimeout(() => {
+    deleteRoomNow(room.code, "遊戲已結束，房間已自動清理。");
+  }, delay);
+
+  roomCleanupTimers.set(room.code, timer);
 }
 
 function disconnectKey(room, player) {
@@ -375,6 +519,8 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
 }
 
 function startGame(room) {
+  // ROOM_CLEANUP_CLEAR_ON_STARTGAME_V1
+  clearRoomCleanup(room);
   room.status = "playing";
   room.unitDeck = makeUnits();
   room.magicDeck = makeMagic();
@@ -920,6 +1066,7 @@ io.on("connection", socket => {
 
 
   socket.on("room:resume", ({ roomCode, playerId }, reply) => {
+    // ROOM_RESUME_REJECT_ENDED_V1
     const codeText = String(roomCode || "").trim().toUpperCase();
     const pid = String(playerId || "");
 
@@ -957,7 +1104,19 @@ io.on("connection", socket => {
     } else {
       player.connected = false;
       player.socketId = null;
-      socket.leave(room.code);
+      // ROOM_LEAVE_CLEAR_SOCKET_FINAL_V1
+    player.socketId = null;
+    player.connected = false;
+
+    // KW_DELETE_EMPTY_ON_LEAVE_MIN_V1
+    player.socketId = null;
+    player.connected = false;
+
+    socket.leave(room.code);
+
+    if (kwDeleteRoomIfNoHumans(room, "最後一位真人玩家已離開，房間已清理。")) {
+      return reply?.({ ok: true });
+    }
       room.log.push(`${player.name} 離開房間。`);
       broadcast(room);
     }
@@ -966,6 +1125,12 @@ io.on("connection", socket => {
   });
 
   socket.on("singleplayer:start", ({ name }, reply) => {
+    // KW_DETACH_BEFORE_SINGLE_MIN_V1
+    kwDetachSocketFromOtherRooms(socket.id);
+
+    // ROOM_CLEANUP_BEFORE_SINGLEPLAYER_V1
+    detachSocketFromOtherRooms(socket.id);
+
     const roomCode = code();
     const humanId = nanoid(10);
     const aiId = nanoid(10);
@@ -1026,6 +1191,12 @@ io.on("connection", socket => {
 
 
   socket.on("tutorial:start", ({ name }, reply) => {
+    // KW_DETACH_BEFORE_TUTORIAL_MIN_V1
+    kwDetachSocketFromOtherRooms(socket.id);
+
+    // ROOM_CLEANUP_BEFORE_TUTORIAL_V1
+    detachSocketFromOtherRooms(socket.id);
+
     const roomCode = code();
     const pid = nanoid(10);
     const aiId = nanoid(10);
@@ -1149,6 +1320,12 @@ io.on("connection", socket => {
   });
 
   socket.on("matchmaking:join", ({ name }, reply) => {
+    // KW_DETACH_BEFORE_MATCH_MIN_V1
+    kwDetachSocketFromOtherRooms(socket.id);
+
+    // ROOM_CLEANUP_BEFORE_MATCHMAKING_V1
+    detachSocketFromOtherRooms(socket.id);
+
     const playerName = cleanDisplayName(name);
 
     let room = Array.from(rooms.values()).find((candidate) =>
@@ -1238,6 +1415,12 @@ io.on("connection", socket => {
   });
 
   socket.on("room:create", ({ name, maxPlayers }, reply) => {
+    // KW_DETACH_BEFORE_CREATE_MIN_V1
+    kwDetachSocketFromOtherRooms(socket.id);
+
+    // ROOM_CLEANUP_BEFORE_CREATE_V1
+    detachSocketFromOtherRooms(socket.id);
+
     const roomCode = code();
     const pid = nanoid(10);
 
@@ -1283,6 +1466,12 @@ io.on("connection", socket => {
   });
 
   socket.on("room:join", ({name,code:roomCode}, reply) => {
+    // KW_DETACH_BEFORE_JOIN_MIN_V1
+    kwDetachSocketFromOtherRooms(socket.id);
+
+    // ROOM_CLEANUP_BEFORE_JOIN_V1
+    detachSocketFromOtherRooms(socket.id);
+
     const room=rooms.get(String(roomCode||"").trim().toUpperCase());
     if(!room) return reply?.({ok:false,error:"找不到房間。"});
     if(room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始。"});
@@ -1293,117 +1482,13 @@ io.on("connection", socket => {
 
 
   socket.on("game:rematch", (_, reply) => {
-    const f = findBySocket(socket.id);
-    if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
-
-    const { room, player } = f;
-
-    if (room.status !== "ended") {
-      return reply?.({ ok: false, error: "目前遊戲尚未結束。" });
-    }
-
-    if (typeof clearTurnTimer === "function") {
-      clearTurnTimer(room);
-    }
-
-    // 保留原房間；只移除已斷線真人，AI 保留。
-    room.players = room.players.filter((p) => p.connected || p.isAI);
-
-    if (room.players.length < 2) {
-      return reply?.({ ok: false, error: "房間內玩家不足，無法再來一局。" });
-    }
-
-    // 確保按下按鈕的玩家仍在線
-    const livePlayer = room.players.find((p) => p.id === player.id);
-    if (livePlayer) {
-      livePlayer.socketId = socket.id;
-      livePlayer.connected = true;
-    }
-
-    // 確保房主存在
-    const hostStillHere = room.players.some((p) => p.id === room.hostId);
-    if (!hostStillHere) {
-      const newHost = room.players.find((p) => !p.isAI) || room.players[0];
-      room.hostId = newHost.id;
-    }
-
-    room.players.forEach((p) => {
-      p.isHost = p.id === room.hostId;
-      p.ready = true;
-      p.eliminated = false;
-      p.hp = 30;
-      p.field = [];
-      p.hand = [];
-      p.magic = [];
-      p.magicDrawUsed = false;
-      p.recallUsed = false;
-      p.fieldBonus = 0;
-      p.reinforcementAvailable = false;
-      p.reinforcementUsed = false;
+    // KW_REMATCH_DISABLED_MIN_V1
+    return reply?.({
+      ok: false,
+      error: "再來一局已停用。請回主選單或使用隨機匹配建立新房間。"
     });
-
-    room.log = [`${player.name} 選擇再來一局，原房間重新開始。`];
-
-    startGame(room);
-
-    const viewerId = livePlayer?.id || player.id;
-
-    reply?.({
-      ok: true,
-      playerId: viewerId,
-      room: viewFor(room, viewerId)
-    });
-
-    broadcast(room);
-    scheduleAITurn(room);
   });
 
-
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit }, reply) => {
-    const f = findBySocket(socket.id);
-    if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
-
-    const { room, player } = f;
-
-    if (room.status !== "lobby") {
-      return reply?.({ ok: false, error: "遊戲開始後不能調整房間設定。" });
-    }
-
-    if (player.id !== room.hostId) {
-      return reply?.({ ok: false, error: "只有房主可以調整房間設定。" });
-    }
-
-    if (!room.settings) room.settings = { turnTimeLimit: 0 };
-
-    if (maxPlayers !== undefined) {
-      const nextMax = Math.min(5, Math.max(2, Number(maxPlayers) || 2));
-
-      if (nextMax < room.players.length) {
-        return reply?.({
-          ok: false,
-          error: `目前房間已有 ${room.players.length} 位玩家，不能調成 ${nextMax} 人。`
-        });
-      }
-
-      room.maxPlayers = nextMax;
-    }
-
-    if (turnTimeLimit !== undefined) {
-      const allowed = [0, 30, 60, 120];
-      const nextLimit = Number(turnTimeLimit);
-
-      if (!allowed.includes(nextLimit)) {
-        return reply?.({ ok: false, error: "不支援的回合時間限制。" });
-      }
-
-      room.settings.turnTimeLimit = nextLimit;
-    }
-
-    room.log.push(`${player.name} 更新了房間設定。`);
-
-    reply?.({ ok: true });
-    broadcast(room);
-  });
 
   socket.on("room:addAI", (_, reply) => {
     const f = findBySocket(socket.id);
@@ -1474,28 +1559,6 @@ io.on("connection", socket => {
 
     const [removed] = room.players.splice(aiIndex, 1);
     room.log.push(`${player.name} 刪除了機器人：${removed.name}。`);
-
-    reply?.({ ok: true });
-    broadcast(room);
-  });
-
-  socket.on("room:toggleReady", (_, reply) => {
-    const f = findBySocket(socket.id);
-    if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
-
-    const { room, player } = f;
-
-    if (room.status !== "lobby") {
-      return reply?.({ ok: false, error: "遊戲已開始，不能切換準備狀態。" });
-    }
-
-    if (player.isHost) {
-      return reply?.({ ok: false, error: "房主不需要準備。" });
-    }
-
-    player.ready = !player.ready;
-
-    room.log.push(`${player.name} ${player.ready ? "準備完成" : "取消準備"}。`);
 
     reply?.({ ok: true });
     broadcast(room);
