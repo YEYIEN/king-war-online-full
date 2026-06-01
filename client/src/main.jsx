@@ -825,14 +825,9 @@ function App() {
   }
 
   function openActionCardModal(card, actionText, runAction, source = "卡片") {
-    const detail = buildCardDetail(card, source);
-    if (!detail) return;
-
-    setActionCardModal({
-      detail,
-      actionText,
-      runAction
-    });
+    // DEPLOY_MOBILE_MODAL_FINAL_V1
+    setActionCardModal(null);
+    openMobileActionModal(card, source, actionText, runAction);
   }
 
   function startCardDetailPress(card, source = "卡片") {
@@ -945,7 +940,11 @@ function App() {
       const firstEnemy = next.players.find((p) => p.id !== playerId && !p.eliminated);
       if (!targetPlayerId && firstEnemy) setTargetPlayerId(firstEnemy.id);
     });
-    return () => socket.off("room:update");
+    return () => {
+      // FINAL_OFF_ROOM_DELETED_TINY_V1
+      socket.off("room:deleted");
+      socket.off("room:update");
+    };
   }, [socket, playerId, targetPlayerId]);
 
   React.useEffect(() => {
@@ -1129,8 +1128,8 @@ function App() {
   }
 
   function playAgainFromResult() {
-    // 已停用：結果畫面不再提供「再來一局」。
-    setMessage("請使用隨機匹配或回到主選單。");
+    // PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1
+    setMessage("本局結束後會自動回到主選單。");
   }
 
   function startTutorialRoom() {
@@ -1172,6 +1171,24 @@ function App() {
       setMessage(res.waiting ? "已建立公開房間，正在等待其他玩家加入..." : "已加入公開房間。");
     });
   }
+
+
+  React.useEffect(() => {
+    // AUTO_RETURN_HOME_AFTER_RESULT_CLEAN_V1
+    if (room?.status !== "ended") return;
+
+    const timer = window.setTimeout(() => {
+      clearSavedSession();
+      setRoom(null);
+      setPlayerId(null);
+      setTargetPlayerId("");
+      setAttackerId(null);
+      setMagicPlan(null);
+      setMessage("本局已結束，已自動回到主選單。");
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [room?.status, room?.roomCode]);
 
   if (tutorialMode) {
     return <InteractiveTutorial onExit={() => setTutorialMode(false)} />;
@@ -1290,31 +1307,46 @@ function App() {
             <section className="hostSettingsPanel">
               <h2>房主設定</h2>
 
-              <div className="hostSettingGrid">
-                <label>
-                  遊玩人數
-                  <select
-                    value={room.maxPlayers}
-                    onChange={(e) => updateRoomSettings({ maxPlayers: Number(e.target.value) })}
-                  >
+              <div className="hostSettingGrid hostSettingButtonsGrid">
+                {/* HOST_SETTINGS_BUTTONS_V2 */}
+                <div className="settingBlock">
+                  {/* HOST_SETTINGS_BUTTON_CLICK_FIX_V1 */}
+                  <span className="settingLabel">遊玩人數</span>
+                  <div className="settingButtonGroup">
                     {[2, 3, 4, 5].map((n) => (
-                      <option key={n} value={n}>{n} 人</option>
+                      <button
+                        key={n}
+                        type="button"
+                        className={room.maxPlayers === n ? "settingChoice active" : "settingChoice"}
+                        disabled={n < room.players.length}
+                        onClick={() => updateRoomSettings({ maxPlayers: n })}
+                      >
+                        {n} 人
+                      </button>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </div>
 
-                <label>
-                  每回合時間限制
-                  <select
-                    value={room.settings?.turnTimeLimit ?? 0}
-                    onChange={(e) => updateRoomSettings({ turnTimeLimit: Number(e.target.value) })}
-                  >
-                    <option value={0}>無限制</option>
-                    <option value={30}>30 秒</option>
-                    <option value={60}>60 秒</option>
-                    <option value={120}>120 秒</option>
-                  </select>
-                </label>
+                <div className="settingBlock">
+                  <span className="settingLabel">每回合時間限制</span>
+                  <div className="settingButtonGroup">
+                    {[
+                      { label: "無限制", value: 0 },
+                      { label: "30 秒", value: 30 },
+                      { label: "60 秒", value: 60 },
+                      { label: "120 秒", value: 120 }
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        className={(room.settings?.turnTimeLimit ?? 0) === item.value ? "settingChoice active" : "settingChoice"}
+                        onClick={() => updateRoomSettings({ turnTimeLimit: item.value })}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="aiControlRow">
@@ -1861,11 +1893,9 @@ function App() {
                 ? "你成功擊敗了對手的國王。"
                 : "你的國王被擊敗了，再調整策略試一次。"}
             </p>
-
-            <div className="resultActions">
-              <button className="matchBtn" onClick={randomMatch}>隨機匹配</button>
-              <button className="secondary" onClick={returnHomeFromResult}>回到主選單</button>
-            </div>
+            <p className="resultHint">
+              結果畫面將停留 5 秒，之後自動回到主選單。
+            </p>
           </div>
         </section>
       )}
@@ -2114,7 +2144,7 @@ function App() {
                   key={card.id}
                   className="gameCard unit handCard"
                   disabled={!isMyTurn || !!magicPlan}
-                  onClick={() => openActionCardModal(card, "部署這張兵種", () => emit("game:deploy", { cardId: card.id }), "兵種手牌")}
+                  onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => emit("game:deploy", { cardId: card.id }))}
                   onDoubleClick={(e) => {
                     e.preventDefault();
                     openCardDetail(card, "兵種手牌");

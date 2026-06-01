@@ -1482,13 +1482,58 @@ io.on("connection", socket => {
 
 
   socket.on("game:rematch", (_, reply) => {
-    // KW_REMATCH_DISABLED_MIN_V1
+    // REMATCH_FULLY_DISABLED_CLEAN_V1
     return reply?.({
       ok: false,
-      error: "再來一局已停用。請回主選單或使用隨機匹配建立新房間。"
+      error: "再來一局已停用。遊戲結束後會自動回到主選單。"
     });
   });
 
+  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit }, reply) => {
+    const f = findBySocket(socket.id);
+    if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
+
+    const { room, player } = f;
+
+    if (room.status !== "lobby") {
+      return reply?.({ ok: false, error: "遊戲開始後不能調整房間設定。" });
+    }
+
+    if (player.id !== room.hostId && !player.isHost) {
+      return reply?.({ ok: false, error: "只有房主可以調整房間設定。" });
+    }
+
+    if (!room.settings) room.settings = { turnTimeLimit: 0 };
+
+    if (maxPlayers !== undefined) {
+      const nextMax = Math.min(5, Math.max(2, Number(maxPlayers) || 2));
+
+      if (nextMax < room.players.length) {
+        return reply?.({
+          ok: false,
+          error: `目前房間已有 ${room.players.length} 位玩家，不能調成 ${nextMax} 人。`
+        });
+      }
+
+      room.maxPlayers = nextMax;
+    }
+
+    if (turnTimeLimit !== undefined) {
+      const allowed = [0, 30, 60, 120];
+      const nextLimit = Number(turnTimeLimit);
+
+      if (!allowed.includes(nextLimit)) {
+        return reply?.({ ok: false, error: "不支援的回合時間限制。" });
+      }
+
+      room.settings.turnTimeLimit = nextLimit;
+    }
+
+    room.log.push(`${player.name} 更新了房間設定。`);
+
+    reply?.({ ok: true });
+    broadcast(room);
+  });
 
   socket.on("room:addAI", (_, reply) => {
     const f = findBySocket(socket.id);
