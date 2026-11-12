@@ -72,14 +72,22 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
 
     const duplicate = await connect(port);
     sockets.push(duplicate);
+    const unauthorized = await request(duplicate, "room:resume", {
+      roomCode: created.room.roomCode, playerId: joined.playerId
+    });
+    assert.equal(unauthorized.ok, false, "public player ID cannot authorize a resume");
+    const wrongToken = await request(duplicate, "room:resume", {
+      roomCode: created.room.roomCode, playerId: joined.playerId, resumeToken: "invalid"
+    });
+    assert.equal(wrongToken.ok, false, "incorrect resume token is rejected");
     const takeover = await request(duplicate, "room:resume", {
       roomCode: created.room.roomCode,
-      playerId: joined.playerId
+      playerId: joined.playerId, resumeToken: joined.resumeToken
     });
     assert.equal(takeover.ok, false, "an active connection cannot be taken over");
     const hostResume = await request(host, "room:resume", {
       roomCode: created.room.roomCode,
-      playerId: created.playerId
+      playerId: created.playerId, resumeToken: created.resumeToken
     });
     assert.equal(hostResume.ok, true, "the same connected socket can resume");
 
@@ -91,7 +99,7 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
     const firstSnapshot = firstId === created.playerId
       ? startedRoom
       : (await request(guest, "room:resume", {
-          roomCode: created.room.roomCode, playerId: joined.playerId
+          roomCode: created.room.roomCode, playerId: joined.playerId, resumeToken: joined.resumeToken
         })).room;
     const active = firstSnapshot.players.find(p => p.id === firstId);
     const defender = firstSnapshot.players.find(p => p.id !== firstId);
@@ -123,7 +131,7 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
     assert.equal((await request(lobbyHost, "room:leave")).ok, true);
     const transferred = await request(lobbyGuest, "room:resume", {
       roomCode: lobbyCreated.room.roomCode,
-      playerId: lobbyJoined.playerId
+      playerId: lobbyJoined.playerId, resumeToken: lobbyJoined.resumeToken
     });
     assert.equal(transferred.ok, true);
     assert.equal(transferred.room.hostId, lobbyJoined.playerId, "remaining guest inherits host role");
@@ -147,17 +155,18 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
     await request(threeSockets[2], "room:toggleReady");
     assert.equal((await request(threeSockets[0], "game:start")).ok, true);
     const threeStarted = (await request(threeSockets[0], "room:resume", {
-      roomCode: threeHost.room.roomCode, playerId: threeHost.playerId
+      roomCode: threeHost.room.roomCode, playerId: threeHost.playerId, resumeToken: threeHost.resumeToken
     })).room;
     const ids = [threeHost.playerId, second.playerId, third.playerId];
     const socketFor = new Map(ids.map((id, i) => [id, threeSockets[i]]));
+    const tokenByPlayer = new Map([[threeHost.playerId, threeHost.resumeToken], [second.playerId, second.resumeToken], [third.playerId, third.resumeToken]]);
     const currentId = threeStarted.currentPlayerId;
     const seatOrder = threeStarted.players.map(p => p.id);
     const nextExpected = seatOrder[(seatOrder.indexOf(currentId) + 1) % seatOrder.length];
     assert.equal((await request(socketFor.get(currentId), "room:leave")).ok, true);
     const survivor = ids.find(id => id !== currentId);
     const updated = (await request(socketFor.get(survivor), "room:resume", {
-      roomCode: threeHost.room.roomCode, playerId: survivor
+      roomCode: threeHost.room.roomCode, playerId: survivor, resumeToken: tokenByPlayer.get(survivor)
     })).room;
     assert.equal(updated.status, "playing", "two survivors should continue playing");
     assert.equal(updated.currentPlayerId, nextExpected, "next living seat must take its turn");
