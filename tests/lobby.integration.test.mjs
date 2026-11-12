@@ -83,6 +83,33 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
     });
     assert.equal(hostResume.ok, true, "the same connected socket can resume");
 
+    // Human attacks: first-turn reinforcement makes a freshly deployed low/mid unit actionable.
+    // Select the actual current player because player order is randomized on game start.
+    const startedRoom = hostResume.room;
+    const firstId = startedRoom.currentPlayerId;
+    const firstSocket = firstId === created.playerId ? host : guest;
+    const firstSnapshot = firstId === created.playerId
+      ? startedRoom
+      : (await request(guest, "room:resume", {
+          roomCode: created.room.roomCode, playerId: joined.playerId
+        })).room;
+    const active = firstSnapshot.players.find(p => p.id === firstId);
+    const defender = firstSnapshot.players.find(p => p.id !== firstId);
+    const playable = active.hand.find(card => card.rank !== "高級");
+    assert.ok(playable, "first player's opening hand should contain an eligible initial unit");
+    assert.equal((await request(firstSocket, "game:deploy", { cardId: playable.id })).ok, true);
+    const invalidUnit = await request(firstSocket, "game:attackUnit", {
+      attackerId: playable.id, targetPlayerId: defender.id, defenderId: "missing"
+    });
+    assert.equal(invalidUnit.ok, false, "combat must reject a nonexistent defender");
+    const kingAttack = await request(firstSocket, "game:attackKing", {
+      attackerId: playable.id, targetPlayerId: defender.id
+    });
+    assert.equal(kingAttack.ok, true, "reinforced first unit may attack an unguarded king");
+    assert.equal((await request(firstSocket, "game:attackKing", {
+      attackerId: playable.id, targetPlayerId: defender.id
+    })).ok, false, "a unit cannot attack twice without a reset");
+
     // Verify lobby host transfer and cleanup when the final human exits.
     const lobbyHost = await connect(port);
     sockets.push(lobbyHost);
