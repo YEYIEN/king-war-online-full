@@ -246,6 +246,7 @@ function detachSocketFromOtherRooms(sid, keepRoomCode = null) {
     if (keepRoomCode && room.code === keepRoomCode) continue;
     const departing = room.players.find(p => p.socketId === sid);
     if (!departing) continue;
+    io.sockets.sockets.get(sid)?.leave(room.code);
     if (room.status === "playing") {
       clearDisconnectGrace(room, departing);
       forcePlayerDefeat(room, departing, "離開原本房間，視同投降。");
@@ -1039,8 +1040,9 @@ io.on("connection", socket => {
 
     const { room, player } = f;
 
-    // DISCONNECT_GRACE_LEAVE_V1
+    // Exit the Socket.IO room for both active games and lobbies.
     clearDisconnectGrace(room, player);
+    socket.leave(room.code);
 
     if (room.status === "playing") {
       forcePlayerDefeat(room, player, "回到主選單，視同投降.");
