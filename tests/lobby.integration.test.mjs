@@ -91,20 +91,6 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
     });
     assert.equal(hostResume.ok, true, "the same connected socket can resume");
 
-    // Simulate a real network disconnect and recover the same player from a new socket.
-    guest.disconnect();
-    const recoveredSocket = await connect(port);
-    sockets.push(recoveredSocket);
-    const recovered = await request(recoveredSocket, "room:resume", {
-      roomCode: created.room.roomCode,
-      playerId: joined.playerId,
-      resumeToken: joined.resumeToken
-    });
-    assert.equal(recovered.ok, true, "disconnected player can recover with their private token");
-    assert.equal(recovered.playerId, joined.playerId, "recovery preserves player identity");
-    assert.equal(recovered.room.players.find(p => p.id === joined.playerId).connected, true);
-    assert.ok(!JSON.stringify(recovered.room).includes(joined.resumeToken), "public room views must never contain credentials");
-
     // Human attacks: first-turn reinforcement makes a freshly deployed low/mid unit actionable.
     // Select the actual current player because player order is randomized on game start.
     const startedRoom = hostResume.room;
@@ -131,6 +117,21 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
     assert.equal((await request(firstSocket, "game:attackKing", {
       attackerId: playable.id, targetPlayerId: defender.id
     })).ok, false, "a unit cannot attack twice without a reset");
+
+    // Simulate a real network disconnect and recover the same player from a new socket.
+    guest.disconnect();
+    const recoveredSocket = await connect(port);
+    sockets.push(recoveredSocket);
+    const recovered = await request(recoveredSocket, "room:resume", {
+      roomCode: created.room.roomCode,
+      playerId: joined.playerId,
+      resumeToken: joined.resumeToken
+    });
+    assert.equal(recovered.ok, true, "disconnected player can recover with their private token");
+    assert.equal(recovered.playerId, joined.playerId, "recovery preserves player identity");
+    assert.equal(recovered.room.players.find(p => p.id === joined.playerId).connected, true);
+    assert.ok(!JSON.stringify(recovered.room).includes(joined.resumeToken), "public room views must never contain credentials");
+
 
     // Verify lobby host transfer and cleanup when the final human exits.
     const lobbyHost = await connect(port);
