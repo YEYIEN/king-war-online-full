@@ -1024,10 +1024,6 @@ function App() {
   }
 
   function createRoom() {
-    // CLIENT_CLEAR_BEFORE_CREATE_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_CREATE_V1
     clearSavedSession();
 
     socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
@@ -1040,10 +1036,6 @@ function App() {
   }
 
   function joinRoom() {
-    // CLIENT_CLEAR_BEFORE_JOIN_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_JOIN_V1
     clearSavedSession();
 
     socket.emit("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
@@ -1081,10 +1073,6 @@ function App() {
   }
 
   function startSinglePlayer() {
-    // CLIENT_CLEAR_BEFORE_SINGLE_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_SINGLEPLAYER_V1
     clearSavedSession();
 
     setMessage("正在建立單人模式...");
@@ -1133,10 +1121,6 @@ function App() {
   }
 
   function startTutorialRoom() {
-    // CLIENT_CLEAR_BEFORE_TUTORIAL_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_TUTORIAL_V1
     clearSavedSession();
 
     setMessage("正在建立操作教學房...");
@@ -1156,10 +1140,6 @@ function App() {
   }
 
   function randomMatch() {
-    // CLIENT_CLEAR_BEFORE_MATCH_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_MATCH_V1
     clearSavedSession();
 
     setMessage("正在尋找公開房間...");
