@@ -219,94 +219,51 @@ function findBySocket(sid) { for (const room of rooms.values()) { const p=room.p
 
 function kwConnectedHumans(room) {
   if (!room) return [];
-  return room.players.filter((p) => !p.isAI && p.connected && p.socketId);
+  return room.players.filter(p => !p.isAI && p.connected && p.socketId);
 }
 
-function kwDeleteRoomNow(roomCode, reason = "房間已清理。") {
+function deleteRoomNow(roomCode, reason = "房間已清理。") {
   const room = rooms.get(roomCode);
   if (!room) return false;
-
   clearTurnTimer(room);
-
-  if (typeof clearDisconnectGrace === "function") {
-    for (const p of room.players) {
-      clearDisconnectGrace(room, p);
-    }
-  }
-
-  if (matchmakingRoomCode === room.code) {
-    matchmakingRoomCode = null;
-  }
-
-  try {
-    io.in(room.code).emit("room:deleted", { reason });
-    io.socketsLeave(room.code);
-  } catch (_) {}
-
+  clearRoomCleanup(room);
+  for (const player of room.players) clearDisconnectGrace(room, player);
+  if (matchmakingRoomCode === room.code) matchmakingRoomCode = null;
+  io.in(room.code).emit("room:deleted", { reason });
+  io.socketsLeave(room.code);
   rooms.delete(room.code);
   return true;
 }
 
 function kwDeleteRoomIfNoHumans(room, reason = "房間內已無真人玩家，房間已清理。") {
-  if (!room?.code) return false;
-  if (!rooms.has(room.code)) return false;
-
-  if (kwConnectedHumans(room).length === 0) {
-    return kwDeleteRoomNow(room.code, reason);
-  }
-
-  return false;
+  if (!room?.code || !rooms.has(room.code)) return false;
+  return kwConnectedHumans(room).length === 0 ? deleteRoomNow(room.code, reason) : false;
 }
-
-function kwDetachSocketFromOtherRooms(sid, keepRoomCode = null) {
-  if (!sid) return;
-
-  for (const room of Array.from(rooms.values())) {
-    if (keepRoomCode && room.code === keepRoomCode) continue;
-
-    let changed = false;
-
-    for (const p of room.players) {
-      if (p.socketId === sid) {
-        p.socketId = null;
-        p.connected = false;
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      if (room.status !== "ended") {
-        room.log.push("系統清理舊連線，避免玩家身份殘留。");
-        broadcast(room);
-      }
-
-      kwDeleteRoomIfNoHumans(room, "玩家已離開，房間內無真人玩家，已清理。");
-    }
-  }
-}
-
-
 
 function detachSocketFromOtherRooms(sid, keepRoomCode = null) {
   if (!sid) return;
-
-  for (const room of rooms.values()) {
+  for (const room of Array.from(rooms.values())) {
     if (keepRoomCode && room.code === keepRoomCode) continue;
-
-    let changed = false;
-
-    for (const p of room.players) {
-      if (p.socketId === sid) {
-        p.socketId = null;
-        p.connected = false;
-        changed = true;
+    const departing = room.players.find(p => p.socketId === sid);
+    if (!departing) continue;
+    if (room.status === "playing") {
+      clearDisconnectGrace(room, departing);
+      forcePlayerDefeat(room, departing, "離開原本房間，視同投降。");
+    } else {
+      departing.socketId = null;
+      departing.connected = false;
+      room.players = room.players.filter(p => p.id !== departing.id);
+      if (room.hostId === departing.id) {
+        const successor = room.players.find(p => !p.isAI && p.connected);
+        if (successor) {
+          room.hostId = successor.id;
+          room.players.forEach(p => { p.isHost = p.id === successor.id; });
+        }
       }
     }
-
-    if (changed && room.status !== "ended") {
-      room.log.push("系統清理舊連線，避免玩家身份殘留。");
-      broadcast(room);
-    }
+    if (kwDeleteRoomIfNoHumans(room, "玩家已切換房間，原房間已清理。")) continue;
+    room.log.push(`${departing.name} 離開房間。`);
+    broadcast(room);
   }
 }
 function code() {
@@ -344,26 +301,6 @@ function clearRoomCleanup(room) {
     clearTimeout(timer);
     roomCleanupTimers.delete(room.code);
   }
-}
-
-function deleteRoomNow(roomCode, reason = "房間已清理。") {
-  const room = rooms.get(roomCode);
-  if (!room) return false;
-
-  clearTurnTimer(room);
-  clearRoomCleanup(room);
-
-  if (matchmakingRoomCode === room.code) {
-    matchmakingRoomCode = null;
-  }
-
-  try {
-    io.in(room.code).emit("room:deleted", { reason });
-    io.socketsLeave(room.code);
-  } catch (_) {}
-
-  rooms.delete(room.code);
-  return true;
 }
 
 function scheduleRoomCleanup(room, seconds = 120) {
@@ -1081,7 +1018,7 @@ io.on("connection", socket => {
       return reply?.({ ok: false, error: "此玩家目前仍在線上。" });
     }
 
-    kwDetachSocketFromOtherRooms(socket.id, room.code);
+    detachSocketFromOtherRooms(socket.id, room.code);
     player.socketId = socket.id;
     player.connected = true;
     socket.join(room.code);
@@ -1110,19 +1047,18 @@ io.on("connection", socket => {
     } else {
       player.connected = false;
       player.socketId = null;
-      // ROOM_LEAVE_CLEAR_SOCKET_FINAL_V1
-    player.socketId = null;
-    player.connected = false;
-
-    // KW_DELETE_EMPTY_ON_LEAVE_MIN_V1
-    player.socketId = null;
-    player.connected = false;
-
-    socket.leave(room.code);
-
-    if (kwDeleteRoomIfNoHumans(room, "最後一位真人玩家已離開，房間已清理。")) {
-      return reply?.({ ok: true });
-    }
+      room.players = room.players.filter(p => p.id !== player.id);
+      socket.leave(room.code);
+      if (room.hostId === player.id) {
+        const successor = room.players.find(p => !p.isAI && p.connected);
+        if (successor) {
+          room.hostId = successor.id;
+          room.players.forEach(p => { p.isHost = p.id === successor.id; });
+        }
+      }
+      if (kwDeleteRoomIfNoHumans(room, "最後一位真人玩家已離開，房間已清理。")) {
+        return reply?.({ ok: true });
+      }
       room.log.push(`${player.name} 離開房間。`);
       broadcast(room);
     }
@@ -1131,10 +1067,6 @@ io.on("connection", socket => {
   });
 
   socket.on("singleplayer:start", ({ name }, reply) => {
-    // KW_DETACH_BEFORE_SINGLE_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_SINGLEPLAYER_V1
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1197,10 +1129,6 @@ io.on("connection", socket => {
 
 
   socket.on("tutorial:start", ({ name }, reply) => {
-    // KW_DETACH_BEFORE_TUTORIAL_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_TUTORIAL_V1
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1326,10 +1254,6 @@ io.on("connection", socket => {
   });
 
   socket.on("matchmaking:join", ({ name }, reply) => {
-    // KW_DETACH_BEFORE_MATCH_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_MATCHMAKING_V1
     detachSocketFromOtherRooms(socket.id);
 
     const playerName = cleanDisplayName(name);
@@ -1421,10 +1345,6 @@ io.on("connection", socket => {
   });
 
   socket.on("room:create", ({ name, maxPlayers }, reply) => {
-    // KW_DETACH_BEFORE_CREATE_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_CREATE_V1
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1472,10 +1392,6 @@ io.on("connection", socket => {
   });
 
   socket.on("room:join", ({name,code:roomCode}, reply) => {
-    // KW_DETACH_BEFORE_JOIN_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_JOIN_V1
     detachSocketFromOtherRooms(socket.id);
 
     const room=rooms.get(String(roomCode||"").trim().toUpperCase());
