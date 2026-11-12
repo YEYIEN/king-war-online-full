@@ -65,8 +65,9 @@ test("full two-human match reaches winner, blocks invalid actions, and consumes 
     assert.equal((await emit(host, "game:start")).ok, true);
 
     const players = new Map([[initial.playerId, host], [joined.playerId, guest]]);
+    const tokenFor = new Map([[initial.playerId, initial.resumeToken], [joined.playerId, joined.resumeToken]]);
     const firstState = (await emit(host, "room:resume", {
-      roomCode: initial.room.roomCode, playerId: initial.playerId
+      roomCode: initial.room.roomCode, playerId: initial.playerId, resumeToken: initial.resumeToken
     })).room;
     const attackerId = firstState.currentPlayerId;
     const opponentId = [...players.keys()].find(id => id !== attackerId);
@@ -77,7 +78,7 @@ test("full two-human match reaches winner, blocks invalid actions, and consumes 
       const last = latest.get(attackerSocket);
       if (last?.status === "ended") { reachedEnd = true; break; }
       const stateReply = await emit(attackerSocket, "room:resume", {
-        roomCode: initial.room.roomCode, playerId: attackerId
+        roomCode: initial.room.roomCode, playerId: attackerId, resumeToken: tokenFor.get(attackerId)
       });
       if (!stateReply.ok) {
         reachedEnd = latest.get(attackerSocket)?.status === "ended";
@@ -101,7 +102,7 @@ test("full two-human match reaches winner, blocks invalid actions, and consumes 
       }
       // Request the authoritative field after deployment.
       const afterDeploy = (await emit(attackerSocket, "room:resume", {
-        roomCode: initial.room.roomCode, playerId: attackerId
+        roomCode: initial.room.roomCode, playerId: attackerId, resumeToken: tokenFor.get(attackerId)
       })).room;
       me = afterDeploy.players.find(p => p.id === attackerId);
       for (const unit of me.field) {
