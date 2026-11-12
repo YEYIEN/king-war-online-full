@@ -1,0 +1,43 @@
+name: Dependency vulnerability audit
+on:
+  push:
+    branches:
+      - fix/lobby-readiness-start-resume-20261112
+  workflow_dispatch:
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install both dependency trees
+        run: |
+          npm install --ignore-scripts
+          npm --prefix client install --ignore-scripts
+      - name: Summarize production and all-dependency advisories
+        shell: bash
+        run: |
+          for scope in root client; do
+            if [ "$scope" = "root" ]; then cd "$GITHUB_WORKSPACE"; else cd "$GITHUB_WORKSPACE/client"; fi
+            for mode in production all; do
+              if [ "$mode" = "production" ]; then
+                npm audit --json --omit=dev > "$RUNNER_TEMP/$scope-$mode.json" || true
+              else
+                npm audit --json > "$RUNNER_TEMP/$scope-$mode.json" || true
+              fi
+              node -e '
+                const fs = require("fs");
+                const [scope, mode, path] = process.argv.slice(1);
+                const report = JSON.parse(fs.readFileSync(path, "utf8"));
+                console.log("\nAUDIT " + scope + " (" + mode + ") counts: " + JSON.stringify(report.metadata?.vulnerabilities));
+                for (const [name, v] of Object.entries(report.vulnerabilities || {})) {
+                  const causes = (v.via || []).map(x => typeof x === "string" ? x : (x.name + " " + x.range + " " + x.url)).join(", ");
+                  console.log(name + " | " + v.severity + " | direct=" + v.isDirect + " | installed=" + v.range + " | fix=" + JSON.stringify(v.fixAvailable) + " | via=" + causes);
+                }
+              ' "$scope" "$mode" "$RUNNER_TEMP/$scope-$mode.json"
+            done
+          done
