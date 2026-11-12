@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import net from "node:net";
 import { test } from "node:test";
 
@@ -33,7 +34,7 @@ function request(socket, name, payload = {}) {
 test("private room readiness, repeated start, and resume safeguards", { timeout: 20000 }, async () => {
   const port = await availablePort();
   const child = spawn(process.execPath, ["server/index.js"], {
-    cwd: new URL("../", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("../", import.meta.url)),
     env: { ...process.env, NODE_ENV: "development", PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"]
   });
