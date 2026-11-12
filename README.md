@@ -103,3 +103,31 @@ Start Command:
 ```bash
 npm start
 ```
+
+
+## 2026-11 — 部署前驗收與安全依賴（修復分支）
+
+本專案使用 Node.js 24、Express/Socket.IO 與 Vite 8。根目錄及 `client/` 具有獨立鎖定檔，部署時請使用 `npm ci`，避免安裝不一致的依賴版本。
+
+### Render 設定（同一個 Node Web Service）
+
+- Repository: `YEYIEN/king-war-online-full`
+- Root directory: repository root (leave blank)
+- Runtime: Node
+- Build Command: `npm ci && npm --prefix client ci && npm run build`
+- Start Command: `npm start`
+- Environment variable: `NODE_VERSION=24`（若服務未使用其他方式固定版本）
+- Health check path: `/`
+
+正式伺服器在 `NODE_ENV=production` 下提供 `client/dist` 的靜態檔與 Socket.IO。同一個服務處理前端網頁及 WebSocket，不需要另開靜態站點。此階段**未直接操作 Render**；上述指令依 GitHub Actions 的正式模式建置／瀏覽器測試驗證，不等同 Render 上線實測。
+
+### 自動驗收
+
+`npm test` 涵蓋房間、施法、AI、回合移交及完整雙人勝負流程。GitHub Actions 另外安裝 Playwright Chromium，執行 `node scripts/production-browser-smoke.mjs`，在正式模式下檢查：
+
+- 桌面版建立私人房間
+- 手機尺寸訪客加入、按下準備、開始遊戲
+- JavaScript 未捕捉例外與手機橫向溢位
+- npm audit 的前後端依賴安全公告
+
+真實 Android/iOS 裝置、不同瀏覽器及 Render 服務上的雙人實測仍須另外驗收。原本舊版 `kw_session` 沒有恢復憑證，更新後需重新加入新的房間。

@@ -955,10 +955,17 @@ function App() {
 
       try {
         const saved = JSON.parse(raw);
-        if (!saved?.roomCode || !saved?.playerId) return;
+        if (!saved?.roomCode || !saved?.playerId || !saved?.resumeToken) {
+          localStorage.removeItem("kw_session");
+          return;
+        }
 
         socket.emit("room:resume", saved, (res) => {
-          if (!res?.ok) return;
+          if (!res?.ok) {
+            localStorage.removeItem("kw_session");
+            return;
+          }
+          rememberSession(res.playerId, res.room, res.resumeToken);
           setPlayerId(res.playerId);
           setRoom(res.room);
           setMessage("");
@@ -1011,11 +1018,12 @@ function App() {
     return guest;
   }
 
-  function rememberSession(pid, nextRoom) {
-    if (!pid || !nextRoom?.roomCode) return;
+  function rememberSession(pid, nextRoom, resumeToken) {
+    if (!pid || !nextRoom?.roomCode || !resumeToken) return;
     localStorage.setItem("kw_session", JSON.stringify({
       playerId: pid,
-      roomCode: nextRoom.roomCode
+      roomCode: nextRoom.roomCode,
+      resumeToken
     }));
   }
 
@@ -1024,33 +1032,25 @@ function App() {
   }
 
   function createRoom() {
-    // CLIENT_CLEAR_BEFORE_CREATE_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_CREATE_V1
     clearSavedSession();
 
     socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
-      rememberSession(res.playerId, res.room);
+      rememberSession(res.playerId, res.room, res.resumeToken);
       setMessage("");
     });
   }
 
   function joinRoom() {
-    // CLIENT_CLEAR_BEFORE_JOIN_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_JOIN_V1
     clearSavedSession();
 
     socket.emit("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "加入失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
-      rememberSession(res.playerId, res.room);
+      rememberSession(res.playerId, res.room, res.resumeToken);
       setMessage("");
     });
   }
@@ -1081,10 +1081,6 @@ function App() {
   }
 
   function startSinglePlayer() {
-    // CLIENT_CLEAR_BEFORE_SINGLE_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_SINGLEPLAYER_V1
     clearSavedSession();
 
     setMessage("正在建立單人模式...");
@@ -1092,7 +1088,7 @@ function App() {
       if (!res?.ok) return setMessage(res?.error || "單人模式建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
-      rememberSession(res.playerId, res.room);
+      rememberSession(res.playerId, res.room, res.resumeToken);
       setMessage("");
     });
   }
@@ -1133,10 +1129,6 @@ function App() {
   }
 
   function startTutorialRoom() {
-    // CLIENT_CLEAR_BEFORE_TUTORIAL_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_TUTORIAL_V1
     clearSavedSession();
 
     setMessage("正在建立操作教學房...");
@@ -1148,7 +1140,7 @@ function App() {
       setRoom(res.room);
 
       if (typeof rememberSession === "function") {
-        rememberSession(res.playerId, res.room);
+        rememberSession(res.playerId, res.room, res.resumeToken);
       }
 
       setMessage("操作教學：請依照畫面提示完成部署、攻擊、施法與結束回合。");
@@ -1156,10 +1148,6 @@ function App() {
   }
 
   function randomMatch() {
-    // CLIENT_CLEAR_BEFORE_MATCH_MIN_V1
-    clearSavedSession();
-
-    // CLIENT_CLEAR_SESSION_BEFORE_MATCH_V1
     clearSavedSession();
 
     setMessage("正在尋找公開房間...");
@@ -1167,7 +1155,7 @@ function App() {
       if (!res?.ok) return setMessage(res?.error || "隨機匹配失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
-      rememberSession(res.playerId, res.room);
+      rememberSession(res.playerId, res.room, res.resumeToken);
       setMessage(res.waiting ? "已建立公開房間，正在等待其他玩家加入..." : "已加入公開房間。");
     });
   }

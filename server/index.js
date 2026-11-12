@@ -3,6 +3,8 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
+import { applyMagicFieldEffect } from "./magic-effects.js";
+import { nextLivingPlayer } from "./turn-order.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -114,7 +116,7 @@ function finishIfGameOver(room) {
 
   return false;
 }
-function nextAlive(room, id) { const a=alive(room); const i=a.findIndex(p=>p.id===id); return a[(i+1)%a.length] || a[0]; }
+function nextAlive(room, id) { return nextLivingPlayer(room.players, id); }
 function clearOct(p) { p.field.forEach(u => u.status = u.status.filter(s => s !== "屋大維+1")); }
 function applyOct(room, p) {
   if (p.king?.name !== "屋大維奧古斯都") return;
@@ -204,9 +206,6 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
-function freeze(u) { if (!u.status.includes("不能攻擊")) u.status.push("不能攻擊"); }
-function fireball(owner, id) { const i=owner.field.findIndex(u=>u.id===id); if(i<0)return; const u=owner.field[i]; if(u.rank==="初級") owner.field.splice(i,1); else u.status.push("階級-1"); }
-
 function publicPlayer(p, viewer) {
   const isMe = p.id === viewer;
   return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
@@ -219,94 +218,52 @@ function findBySocket(sid) { for (const room of rooms.values()) { const p=room.p
 
 function kwConnectedHumans(room) {
   if (!room) return [];
-  return room.players.filter((p) => !p.isAI && p.connected && p.socketId);
+  return room.players.filter(p => !p.isAI && p.connected && p.socketId);
 }
 
-function kwDeleteRoomNow(roomCode, reason = "房間已清理。") {
+function deleteRoomNow(roomCode, reason = "房間已清理。") {
   const room = rooms.get(roomCode);
   if (!room) return false;
-
   clearTurnTimer(room);
-
-  if (typeof clearDisconnectGrace === "function") {
-    for (const p of room.players) {
-      clearDisconnectGrace(room, p);
-    }
-  }
-
-  if (matchmakingRoomCode === room.code) {
-    matchmakingRoomCode = null;
-  }
-
-  try {
-    io.in(room.code).emit("room:deleted", { reason });
-    io.socketsLeave(room.code);
-  } catch (_) {}
-
+  clearRoomCleanup(room);
+  for (const player of room.players) clearDisconnectGrace(room, player);
+  if (matchmakingRoomCode === room.code) matchmakingRoomCode = null;
+  io.in(room.code).emit("room:deleted", { reason });
+  io.socketsLeave(room.code);
   rooms.delete(room.code);
   return true;
 }
 
 function kwDeleteRoomIfNoHumans(room, reason = "房間內已無真人玩家，房間已清理。") {
-  if (!room?.code) return false;
-  if (!rooms.has(room.code)) return false;
-
-  if (kwConnectedHumans(room).length === 0) {
-    return kwDeleteRoomNow(room.code, reason);
-  }
-
-  return false;
+  if (!room?.code || !rooms.has(room.code)) return false;
+  return kwConnectedHumans(room).length === 0 ? deleteRoomNow(room.code, reason) : false;
 }
-
-function kwDetachSocketFromOtherRooms(sid, keepRoomCode = null) {
-  if (!sid) return;
-
-  for (const room of Array.from(rooms.values())) {
-    if (keepRoomCode && room.code === keepRoomCode) continue;
-
-    let changed = false;
-
-    for (const p of room.players) {
-      if (p.socketId === sid) {
-        p.socketId = null;
-        p.connected = false;
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      if (room.status !== "ended") {
-        room.log.push("系統清理舊連線，避免玩家身份殘留。");
-        broadcast(room);
-      }
-
-      kwDeleteRoomIfNoHumans(room, "玩家已離開，房間內無真人玩家，已清理。");
-    }
-  }
-}
-
-
 
 function detachSocketFromOtherRooms(sid, keepRoomCode = null) {
   if (!sid) return;
-
-  for (const room of rooms.values()) {
+  for (const room of Array.from(rooms.values())) {
     if (keepRoomCode && room.code === keepRoomCode) continue;
-
-    let changed = false;
-
-    for (const p of room.players) {
-      if (p.socketId === sid) {
-        p.socketId = null;
-        p.connected = false;
-        changed = true;
+    const departing = room.players.find(p => p.socketId === sid);
+    if (!departing) continue;
+    io.sockets.sockets.get(sid)?.leave(room.code);
+    if (room.status === "playing") {
+      clearDisconnectGrace(room, departing);
+      forcePlayerDefeat(room, departing, "離開原本房間，視同投降。");
+    } else {
+      departing.socketId = null;
+      departing.connected = false;
+      room.players = room.players.filter(p => p.id !== departing.id);
+      if (room.hostId === departing.id) {
+        const successor = room.players.find(p => !p.isAI && p.connected);
+        if (successor) {
+          room.hostId = successor.id;
+          room.players.forEach(p => { p.isHost = p.id === successor.id; });
+        }
       }
     }
-
-    if (changed && room.status !== "ended") {
-      room.log.push("系統清理舊連線，避免玩家身份殘留。");
-      broadcast(room);
-    }
+    if (kwDeleteRoomIfNoHumans(room, "玩家已切換房間，原房間已清理。")) continue;
+    room.log.push(`${departing.name} 離開房間。`);
+    broadcast(room);
   }
 }
 function code() {
@@ -344,26 +301,6 @@ function clearRoomCleanup(room) {
     clearTimeout(timer);
     roomCleanupTimers.delete(room.code);
   }
-}
-
-function deleteRoomNow(roomCode, reason = "房間已清理。") {
-  const room = rooms.get(roomCode);
-  if (!room) return false;
-
-  clearTurnTimer(room);
-  clearRoomCleanup(room);
-
-  if (matchmakingRoomCode === room.code) {
-    matchmakingRoomCode = null;
-  }
-
-  try {
-    io.in(room.code).emit("room:deleted", { reason });
-    io.socketsLeave(room.code);
-  } catch (_) {}
-
-  rooms.delete(room.code);
-  return true;
 }
 
 function scheduleRoomCleanup(room, seconds = 120) {
@@ -422,41 +359,35 @@ function scheduleDisconnectGrace(room, player, seconds = 60) {
   disconnectGraceTimers.set(key, timer);
 }
 
-function finishTimedOutTurn(room, player) {
-  if (!room || !player) return;
-  if (room.status !== "playing") return;
-  if (room.currentPlayerId !== player.id) return;
-  if (player.eliminated) return;
+// One end-of-turn path for humans, AI and countdown expiry.
+function finishTurn(room, player, reason = "結束回合") {
+  if (!room || !player || room.status !== "playing" ||
+      room.currentPlayerId !== player.id || player.eliminated) return false;
 
   clearTurnTimer(room);
-
   clearEndOfTurnBuffs(player);
-
-  if (typeof clearEndTurnControl === "function") {
-    clearEndTurnControl(player);
-  }
-
-  if (typeof advanceFatigue === "function") {
-    advanceFatigue(player);
-  }
-
-  player.field = player.field.filter((u) => !u.status.includes("下回合死亡"));
-
+  clearEndTurnControl(player);
+  advanceFatigue(player);
+  player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   trimHand(room, player);
   applyOct(room, player);
 
   if (finishIfGameOver(room)) {
     broadcast(room);
-    return;
+    return true;
   }
 
   const next = nextAlive(room, player.id);
   room.currentPlayerId = next.id;
-  room.log.push(`${player.name} 時間到，系統自動結束回合。`);
-
+  room.log.push(`${player.name} ${reason}。`);
   startTurn(room, next);
   broadcast(room);
   scheduleAITurn(room);
+  return true;
+}
+
+function finishTimedOutTurn(room, player) {
+  finishTurn(room, player, "時間到，系統自動結束回合");
 }
 
 function scheduleTurnTimer(room, player) {
@@ -488,6 +419,20 @@ function allGuestsReady(room) {
     .every((p) => p.ready);
 }
 
+// When self-damage eliminates the current player, do not leave the turn on a dead player.
+function advanceAfterElimination(room, player) {
+  if (finishIfGameOver(room)) return;
+  if (room.currentPlayerId !== player.id) return;
+  clearTurnTimer(room);
+  const next = nextAlive(room, player.id);
+  if (!next) return;
+  room.currentPlayerId = next.id;
+  room.log.push(`輪到 ${next.name} 行動。`);
+  startTurn(room, next);
+  broadcast(room);
+  scheduleAITurn(room);
+}
+
 function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降。") {
   if (!room || !player || room.status !== "playing" || player.eliminated) return false;
 
@@ -497,24 +442,8 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
   player.socketId = null;
   room.log.push(`${player.name} ${reason}`);
 
-  if (finishIfGameOver(room)) {
-    broadcast(room);
-    return true;
-  }
-
-  if (room.currentPlayerId === player.id) {
-    const next = nextAlive(room, player.id);
-    if (next) {
-      room.currentPlayerId = next.id;
-      room.log.push(`輪到 ${next.name} 行動。`);
-      startTurn(room, next);
-      broadcast(room);
-      scheduleAITurn(room);
-    }
-  } else {
-    broadcast(room);
-  }
-
+  advanceAfterElimination(room, player);
+  broadcast(room);
   return true;
 }
 
@@ -691,78 +620,79 @@ function aiAttackScore(attacker, enemy, defender) {
   return score;
 }
 
-function aiResolveAttackUnit(room, ai, enemy, attackerId, defenderId) {
-  const aiIdx = ai.field.findIndex((u) => u.id === attackerId);
-  const enemyIdx = enemy.field.findIndex((u) => u.id === defenderId);
-  if (aiIdx < 0 || enemyIdx < 0) return false;
+// Shared combat resolution for both human Socket.IO actions and AI decisions.
+function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, defenderId) {
+  if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
+    return { ok: false, error: "目標玩家不合法。" };
+  }
+  const ai = attackerPlayer.field.findIndex(u => u.id === attackerId);
+  const di = defenderPlayer.field.findIndex(u => u.id === defenderId);
+  if (ai < 0 || di < 0) return { ok: false, error: "找不到攻擊或防守兵種。" };
+  const attacker = attackerPlayer.field[ai];
+  const defender = defenderPlayer.field[di];
+  if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
 
-  const attacker = ai.field[aiIdx];
-  const defender = enemy.field[enemyIdx];
-  if (!aiCanAttack(attacker)) return false;
-
-  const aPower = power(attacker);
-  const dPower = power(defender);
-  const result = aiBattleResult(attacker, defender);
-
+  const attackerPower = power(attacker);
+  const defenderPower = power(defender);
+  const result = battle(attacker, defender);
   attacker.tapped = true;
 
-  let killedEnemy = false;
-  let archerSaved = false;
-  let archerExtra = false;
-
-  if (attacker.type === "弓兵") {
-    if (dPower < aPower && !attacker.archerBonusUsed) archerExtra = true;
-    if (dPower >= aPower) {
-      archerSaved = true;
-      if (dPower > aPower && !attacker.status.includes("疲乏")) attacker.status.push("疲乏");
-    }
+  const archerSaved = attacker.type === "弓兵" && defenderPower >= attackerPower;
+  const archerExtra = attacker.type === "弓兵" && defenderPower < attackerPower && !attacker.archerBonusUsed;
+  if (archerSaved && defenderPower > attackerPower && !attacker.status.includes("疲乏")) {
+    attacker.status.push("疲乏");
   }
 
-  if (result === "attacker") {
-    enemy.field.splice(enemyIdx, 1);
-    killedEnemy = true;
-  } else if (result === "defender") {
-    if (!archerSaved) ai.field.splice(aiIdx, 1);
-  } else {
-    enemy.field.splice(enemyIdx, 1);
-    killedEnemy = true;
-    if (!archerSaved) ai.field.splice(aiIdx, 1);
+  const killedEnemy = result === "attacker" || result === "both";
+  const killedAttacker = (result === "defender" || result === "both") && !archerSaved;
+  if (killedEnemy) defenderPlayer.field.splice(di, 1);
+  if (killedAttacker) attackerPlayer.field.splice(ai, 1);
+
+  const survivor = attackerPlayer.field.find(u => u.id === attacker.id);
+  if (survivor && archerExtra) {
+    survivor.tapped = false;
+    survivor.archerBonusUsed = true;
+    room.log.push(`${survivor.name} 觸發弓兵額外攻擊。`);
   }
 
-  const survivingAttacker = ai.field.find((u) => u.id === attacker.id);
-  if (survivingAttacker && archerExtra) {
-    survivingAttacker.tapped = false;
-    survivingAttacker.archerBonusUsed = true;
-    room.log.push(`${survivingAttacker.name} 觸發弓兵額外攻擊。`);
+  if (killedEnemy && attackerPlayer.king?.name === "亞歷山大大帝") {
+    drawUnits(room, attackerPlayer, 1);
+    room.log.push(`${attackerPlayer.name} 的亞歷山大效果：抽1張兵種卡。`);
   }
 
-  if (killedEnemy && ai.king?.name === "亞歷山大大帝") {
-    drawUnits(room, ai, 1);
-    room.log.push(`${ai.name} 的亞歷山大效果：抽1張兵種卡。`);
-  }
+  room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 的 ${defender.name}。`);
+  return { ok: true, killedEnemy, killedAttacker };
+}
 
-  room.log.push(`${ai.name} 用 ${attacker.name} 攻擊 ${enemy.name} 的 ${defender.name}。`);
-  return true;
+function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
+  if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
+    return { ok: false, error: "目標玩家不合法。" };
+  }
+  if (defenderPlayer.field.some(u => u.type === "步兵")) {
+    return { ok: false, error: "目標場上仍有步兵，不能攻擊國王。" };
+  }
+  const attacker = attackerPlayer.field.find(u => u.id === attackerId);
+  if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
+
+  const damage = effectiveDamage(attacker);
+  defenderPlayer.hp -= damage;
+  attacker.tapped = true;
+  room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 國王，造成${damage}傷害。`);
+
+  if (defenderPlayer.hp <= 0) {
+    defenderPlayer.eliminated = true;
+    room.log.push(`${defenderPlayer.name} 出局。`);
+    finishIfGameOver(room);
+  }
+  return { ok: true, damage };
+}
+
+function aiResolveAttackUnit(room, ai, enemy, attackerId, defenderId) {
+  return resolveAttackUnit(room, ai, enemy, attackerId, defenderId).ok;
 }
 
 function aiResolveAttackKing(room, ai, enemy, attackerId) {
-  const attacker = ai.field.find((u) => u.id === attackerId);
-  if (!attacker || !aiCanAttack(attacker)) return false;
-  if (enemy.field.some((u) => u.type === "步兵")) return false;
-
-  const dmg = effectiveDamage(attacker);
-  enemy.hp -= dmg;
-  attacker.tapped = true;
-
-  room.log.push(`${ai.name} 用 ${attacker.name} 攻擊 ${enemy.name} 國王，造成${dmg}傷害。`);
-
-  if (enemy.hp <= 0) {
-    enemy.eliminated = true;
-    room.log.push(`${enemy.name} 出局。`);
-    finishIfGameOver(room);
-  }
-
-  return true;
+  return resolveAttackKing(room, ai, enemy, attackerId).ok;
 }
 
 async function aiAttackPhase(room, ai, enemy) {
@@ -813,120 +743,114 @@ async function aiAttackPhase(room, ai, enemy) {
   }
 }
 
-function aiChooseMagic(room, ai, enemy) {
-  const mages = ai.field.filter((u) => u.type === "法師" && !u.tapped && !u.status.includes("不能攻擊"));
-  if (!mages.length || !ai.magic.length) return false;
+// The only place where spell validation and effects are applied.
+// AI chooses an action, while Socket.IO receives one from a human; both use this function.
+function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetUnitIds = [] }) {
+  magicId = asId(magicId);
+  casterId = asId(casterId);
+  targetPlayerId = asId(targetPlayerId);
+  const ids = Array.isArray(targetUnitIds) ? targetUnitIds.map(asId) : [];
 
-  for (const magic of [...ai.magic]) {
-    const caster = mages.find((m) => mageCanCast(m, magic));
-    if (!caster) continue;
+  const index = player.magic.findIndex(m => m.id === magicId);
+  if (index < 0) return { ok: false, error: "找不到魔法卡。" };
+  const magic = player.magic[index];
+  const caster = player.field.find(u => u.id === casterId);
+  if (!mageCanCast(caster, magic)) return { ok: false, error: "此法師不能施放這張魔法。" };
 
-    if (magic.name === "天殞術") {
-      const lowRankTargets = enemy.field.filter((u) => u.rank !== "高級");
-      if (lowRankTargets.length >= 2 || enemy.field.length >= 4) {
-        const idx = ai.magic.findIndex((m) => m.id === magic.id);
-        ai.magic.splice(idx, 1);
-        caster.tapped = true;
-        room.magicDeck.push(magic);
+  const target = getPlayer(room, targetPlayerId);
+  if (!target || target.eliminated) return { ok: false, error: "找不到有效的目標玩家。" };
 
-        const before = enemy.field.length;
-        enemy.field = enemy.field.filter((unit) => {
-          if (unit.rank !== "高級") return false;
-          freeze(unit);
-          return true;
-        });
+  if (magic.target === "我方" && target.id !== player.id) {
+    return { ok: false, error: "此魔法只能指定我方。" };
+  }
+  if (magic.target !== "我方" && target.id === player.id) {
+    return { ok: false, error: "此魔法只能指定敵方。" };
+  }
 
-        room.log.push(`${ai.name} 用 ${caster.name} 施放天殞術，消滅 ${before - enemy.field.length} 名低於高級的兵種。`);
-        return true;
-      }
-    }
-
-    if (["火球術", "流星雨", "冰凍術", "虛弱術", "毒藥瓶"].includes(magic.name)) {
-      let targets = [...enemy.field];
-
-      if (magic.name === "火球術" || magic.name === "流星雨") {
-        targets.sort((a, b) => {
-          const aScore = (a.type === "步兵" ? 20 : 0) + aiRankValue(a.rank) * 8;
-          const bScore = (b.type === "步兵" ? 20 : 0) + aiRankValue(b.rank) * 8;
-          return bScore - aScore;
-        });
-      } else if (magic.name === "冰凍術" || magic.name === "虛弱術" || magic.name === "毒藥瓶") {
-        targets.sort((a, b) => aiRankValue(b.rank) - aiRankValue(a.rank));
-      }
-
-      targets = targets.slice(0, magic.maxTargets || 1);
-      if (!targets.length) continue;
-
-      const idx = ai.magic.findIndex((m) => m.id === magic.id);
-      ai.magic.splice(idx, 1);
-      caster.tapped = true;
-      room.magicDeck.push(magic);
-
-      for (const target of targets) {
-        const id = target.id;
-        if (magic.name === "火球術") fireball(enemy, id);
-        if (magic.name === "流星雨") fireball(enemy, id);
-        if (magic.name === "冰凍術") { if(target.rank === "高級") target.status.push("階級-1"); else freeze(target); }
-        if (magic.name === "虛弱術") {
-          target.status.push("階級-1");
-          if (target.rank === "初級") freeze(target);
-        }
-        if (magic.name === "毒藥瓶") target.status.push("下回合死亡");
-      }
-
-      const usedCaster = ai.field.find((u) => u.id === caster.id);
-      if (usedCaster) usedCaster.tapped = true;
-
-      room.log.push(`${ai.name} 用 ${caster.name} 施放 ${magic.name}。`);
-      return true;
-    }
-
-    if (["力量術", "增強術", "燃血術"].includes(magic.name)) {
-      const candidates = ai.field
-        .filter((u) => !u.status.includes("整備"))
-        .sort((a, b) => aiRankValue(b.rank) - aiRankValue(a.rank));
-
-      const target = candidates[0];
-      if (!target) continue;
-      if (magic.name === "燃血術" && ai.hp <= 10) continue;
-
-      const idx = ai.magic.findIndex((m) => m.id === magic.id);
-      ai.magic.splice(idx, 1);
-      caster.tapped = true;
-      room.magicDeck.push(magic);
-
-      if (magic.name === "燃血術") {
-        ai.hp -= 3;
-        if (ai.hp <= 0) {
-          ai.eliminated = true;
-          room.log.push(`${ai.name} 因燃血術失去過多 HP，出局。`);
-          finishIfGameOver(room);
-          return true;
-        }
-      }
-      if (magic.name === "力量術") {
-        target.status.push("力量術+1");
-      }
-
-      if (magic.name === "增強術") {
-        target.status.push("階級+1");
-        if (!target.tapped) target.status.push("傷害+1");
-      }
-
-      if (magic.name === "燃血術") {
-        target.status.push("階級+1");
-        target.status.push("燃血+1傷害");
-        target.tapped = false;
-      }
-
-      const usedCaster = ai.field.find((u) => u.id === caster.id);
-      if (usedCaster) usedCaster.tapped = true;
-
-      room.log.push(`${ai.name} 用 ${caster.name} 施放 ${magic.name} 強化 ${target.name}。`);
-      return true;
+  // Validate all targets before consuming a card or the caster's action.
+  if (magic.name === "天殞術") {
+    if (ids.length !== 0) return { ok: false, error: "天殞術不需要指定個別兵種。" };
+  } else {
+    if (ids.length === 0) return { ok: false, error: "請至少指定1個目標。" };
+    if (ids.length > magic.maxTargets) return { ok: false, error: `最多只能指定${magic.maxTargets}個目標。` };
+    if (new Set(ids).size !== ids.length) return { ok: false, error: "不能重複指定同一兵種。" };
+    if (ids.some(id => !target.field.some(unit => unit.id === id))) {
+      return { ok: false, error: "指定的魔法目標已不存在，請重新選擇目標。" };
     }
   }
 
+  player.magic.splice(index, 1);
+  room.magicDeck.push(magic);
+  caster.tapped = true;
+
+  const { destroyed } = applyMagicFieldEffect(magic.name, target, ids);
+  if (magic.name === "燃血術") {
+    player.hp -= 3;
+    if (player.hp <= 0) {
+      player.eliminated = true;
+      room.log.push(`${player.name} 因燃血術失去過多 HP，出局。`);
+      finishIfGameOver(room);
+    }
+  }
+  if (magic.name === "天殞術") {
+    room.log.push(`${player.name} 施放天殞術：${target.name} 低於高級死亡${destroyed}名，高級暫停。`);
+  } else {
+    room.log.push(`${player.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
+  }
+
+  if (player.king?.name === "路易十四" && !player.magicDrawUsed) {
+    drawUnits(room, player, 1);
+    player.magicDrawUsed = true;
+    room.log.push(`${player.name} 的路易十四效果：抽1張兵種卡。`);
+  }
+  // Casting consumes one attack even when a buff targets the caster.
+  caster.tapped = true;
+  if (player.eliminated) {
+    advanceAfterElimination(room, player);
+  }
+  return { ok: true };
+}
+
+function aiChooseMagic(room, ai, enemy) {
+  const mages = ai.field.filter(unit => unit.type === "法師" && canAttack(unit));
+  if (!mages.length || !ai.magic.length) return false;
+
+  for (const magic of [...ai.magic]) {
+    const caster = mages.find(unit => mageCanCast(unit, magic));
+    if (!caster) continue;
+
+    let target = enemy;
+    let targets = [];
+    if (magic.name === "天殞術") {
+      const lowRankCount = enemy.field.filter(unit => unit.rank !== "高級").length;
+      if (lowRankCount < 2 && enemy.field.length < 4) continue;
+    } else if (magic.target === "我方") {
+      target = ai;
+      if (magic.name === "燃血術" && ai.hp <= 10) continue;
+      const choices = [...ai.field].filter(unit => !unit.status.includes("整備"));
+      choices.sort((a,b) => aiRankValue(b.rank) - aiRankValue(a.rank));
+      if (!choices.length) continue;
+      targets = [choices[0].id];
+    } else {
+      const choices = [...enemy.field];
+      if (["火球術","流星雨"].includes(magic.name)) {
+        choices.sort((a,b) => ((b.type === "步兵" ? 20 : 0) + aiRankValue(b.rank) * 8) -
+                               ((a.type === "步兵" ? 20 : 0) + aiRankValue(a.rank) * 8));
+      } else {
+        choices.sort((a,b) => aiRankValue(b.rank) - aiRankValue(a.rank));
+      }
+      targets = choices.slice(0, magic.maxTargets || 1).map(unit => unit.id);
+      if (!targets.length) continue;
+    }
+
+    const result = resolveMagic(room, ai, {
+      magicId: magic.id,
+      casterId: caster.id,
+      targetPlayerId: target.id,
+      targetUnitIds: targets
+    });
+    if (result.ok) return true;
+  }
   return false;
 }
 
@@ -961,27 +885,7 @@ function advanceFatigue(player) {
 }
 
 function aiEndTurn(room, ai) {
-  clearEndOfTurnBuffs(ai);
-  clearEndTurnControl(ai);
-  advanceFatigue(ai);
-  ai.field = ai.field.filter((u) => !u.status.includes("下回合死亡"));
-  trimHand(room, ai);
-  applyOct(room, ai);
-
-  const living = alive(room);
-  if (living.length <= 1) {
-    room.status = "ended";
-    room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
-    broadcast(room);
-    return;
-  }
-
-  const next = nextAlive(room, ai.id);
-  room.currentPlayerId = next.id;
-  room.log.push(`${ai.name} 結束回合。`);
-  startTurn(room, next);
-  broadcast(room);
-  scheduleAITurn(room);
+  return finishTurn(room, ai);
 }
 
 function isStillAITurn(room, ai) {
@@ -1004,8 +908,7 @@ async function performAITurn(roomCode) {
   const enemy = enemies[0];
 
   if (!enemy) {
-    room.status = "ended";
-    room.log.push(`${ai.name} 獲勝！`);
+    finishIfGameOver(room);
     broadcast(room);
     return;
   }
@@ -1065,7 +968,7 @@ async function performAITurn(roomCode) {
 io.on("connection", socket => {
 
 
-  socket.on("room:resume", ({ roomCode, playerId }, reply) => {
+  socket.on("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
     // ROOM_RESUME_REJECT_ENDED_V1
     const codeText = String(roomCode || "").trim().toUpperCase();
     const pid = String(playerId || "");
@@ -1075,7 +978,14 @@ io.on("connection", socket => {
 
     const player = room.players.find((p) => p.id === pid);
     if (!player) return reply?.({ ok: false, error: "找不到原本玩家。" });
+    if (!player.resumeToken || typeof resumeToken !== "string" || resumeToken !== player.resumeToken) return reply?.({ ok: false, error: "重連憑證無效，請重新加入房間。" });
+    if (room.status === "ended") return reply?.({ ok: false, error: "對局已結束，無法重新加入。" });
+    if (player.isAI || player.eliminated) return reply?.({ ok: false, error: "此玩家無法重新加入。" });
+    if (player.connected && player.socketId !== socket.id && io.sockets.sockets.has(player.socketId)) {
+      return reply?.({ ok: false, error: "此玩家目前仍在線上。" });
+    }
 
+    detachSocketFromOtherRooms(socket.id, room.code);
     player.socketId = socket.id;
     player.connected = true;
     socket.join(room.code);
@@ -1085,7 +995,7 @@ io.on("connection", socket => {
 
     room.log.push(`${player.name} 已重新連線。`);
 
-    reply?.({ ok: true, playerId: player.id, room: viewFor(room, player.id) });
+    reply?.({ ok: true, playerId: player.id, resumeToken: player.resumeToken, room: viewFor(room, player.id) });
     broadcast(room);
   });
 
@@ -1096,27 +1006,27 @@ io.on("connection", socket => {
 
     const { room, player } = f;
 
-    // DISCONNECT_GRACE_LEAVE_V1
+    // Exit the Socket.IO room for both active games and lobbies.
     clearDisconnectGrace(room, player);
+    socket.leave(room.code);
 
     if (room.status === "playing") {
       forcePlayerDefeat(room, player, "回到主選單，視同投降.");
     } else {
       player.connected = false;
       player.socketId = null;
-      // ROOM_LEAVE_CLEAR_SOCKET_FINAL_V1
-    player.socketId = null;
-    player.connected = false;
-
-    // KW_DELETE_EMPTY_ON_LEAVE_MIN_V1
-    player.socketId = null;
-    player.connected = false;
-
-    socket.leave(room.code);
-
-    if (kwDeleteRoomIfNoHumans(room, "最後一位真人玩家已離開，房間已清理。")) {
-      return reply?.({ ok: true });
-    }
+      room.players = room.players.filter(p => p.id !== player.id);
+      socket.leave(room.code);
+      if (room.hostId === player.id) {
+        const successor = room.players.find(p => !p.isAI && p.connected);
+        if (successor) {
+          room.hostId = successor.id;
+          room.players.forEach(p => { p.isHost = p.id === successor.id; });
+        }
+      }
+      if (kwDeleteRoomIfNoHumans(room, "最後一位真人玩家已離開，房間已清理。")) {
+        return reply?.({ ok: true });
+      }
       room.log.push(`${player.name} 離開房間。`);
       broadcast(room);
     }
@@ -1125,10 +1035,6 @@ io.on("connection", socket => {
   });
 
   socket.on("singleplayer:start", ({ name }, reply) => {
-    // KW_DETACH_BEFORE_SINGLE_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_SINGLEPLAYER_V1
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1138,6 +1044,7 @@ io.on("connection", socket => {
     const human = {
       id: humanId,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: typeof cleanDisplayName === "function" ? cleanDisplayName(name) : String(name || "玩家").slice(0, 16),
       isHost: true,
       connected: true,
@@ -1182,7 +1089,7 @@ io.on("connection", socket => {
 
     startGame(room);
 
-    reply?.({ ok: true, playerId: humanId, room: viewFor(room, humanId) });
+    reply?.({ ok: true, playerId: humanId, resumeToken: human.resumeToken, room: viewFor(room, humanId) });
     broadcast(room);
     scheduleAITurn(room);
   });
@@ -1191,10 +1098,6 @@ io.on("connection", socket => {
 
 
   socket.on("tutorial:start", ({ name }, reply) => {
-    // KW_DETACH_BEFORE_TUTORIAL_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_TUTORIAL_V1
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1248,6 +1151,7 @@ io.on("connection", socket => {
     const player = {
       id: pid,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: cleanDisplayName(name),
       isHost: true,
       connected: true,
@@ -1313,6 +1217,7 @@ io.on("connection", socket => {
     reply?.({
       ok: true,
       playerId: pid,
+      resumeToken: player.resumeToken,
       room: viewFor(room, pid)
     });
 
@@ -1320,10 +1225,6 @@ io.on("connection", socket => {
   });
 
   socket.on("matchmaking:join", ({ name }, reply) => {
-    // KW_DETACH_BEFORE_MATCH_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_MATCHMAKING_V1
     detachSocketFromOtherRooms(socket.id);
 
     const playerName = cleanDisplayName(name);
@@ -1343,6 +1244,7 @@ io.on("connection", socket => {
       const player = {
         id: pid,
         socketId: socket.id,
+        resumeToken: nanoid(32),
         name: playerName,
         isHost: true,
         connected: true,
@@ -1377,6 +1279,7 @@ io.on("connection", socket => {
       reply?.({
         ok: true,
         playerId: pid,
+        resumeToken: player.resumeToken,
         room: viewFor(room, pid),
         waiting: true
       });
@@ -1388,6 +1291,7 @@ io.on("connection", socket => {
     const player = {
       id: pid,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: playerName,
       isHost: false,
       connected: true,
@@ -1407,6 +1311,7 @@ io.on("connection", socket => {
     reply?.({
       ok: true,
       playerId: pid,
+      resumeToken: player.resumeToken,
       room: viewFor(room, pid),
       waiting: false
     });
@@ -1415,10 +1320,6 @@ io.on("connection", socket => {
   });
 
   socket.on("room:create", ({ name, maxPlayers }, reply) => {
-    // KW_DETACH_BEFORE_CREATE_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_CREATE_V1
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1427,6 +1328,7 @@ io.on("connection", socket => {
     const player = {
       id: pid,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: cleanDisplayName(name),
       isHost: true,
       connected: true,
@@ -1461,25 +1363,35 @@ io.on("connection", socket => {
     reply?.({
       ok: true,
       playerId: pid,
+      resumeToken: player.resumeToken,
       room: viewFor(room, pid)
     });
   });
 
   socket.on("room:join", ({name,code:roomCode}, reply) => {
-    // KW_DETACH_BEFORE_JOIN_MIN_V1
-    kwDetachSocketFromOtherRooms(socket.id);
-
-    // ROOM_CLEANUP_BEFORE_JOIN_V1
     detachSocketFromOtherRooms(socket.id);
 
     const room=rooms.get(String(roomCode||"").trim().toUpperCase());
     if(!room) return reply?.({ok:false,error:"找不到房間。"});
     if(room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始。"});
     if(room.players.length>=room.maxPlayers) return reply?.({ok:false,error:"房間已滿。"});
-    const pid=nanoid(10), p={id:pid,socketId:socket.id,name:cleanDisplayName(name),isHost:false,connected:true,ready:false,hp:30,king:null,hand:[],magic:[],field:[],eliminated:false};
-    room.players.push(p); room.log.push(`${p.name} 加入房間。`); socket.join(room.code); reply?.({ok:true,playerId:pid,room:viewFor(room,pid)}); broadcast(room);
+    const pid=nanoid(10), p={id:pid,socketId:socket.id,resumeToken:nanoid(32),name:cleanDisplayName(name),isHost:false,connected:true,ready:false,hp:30,king:null,hand:[],magic:[],field:[],eliminated:false};
+    room.players.push(p); room.log.push(`${p.name} 加入房間。`); socket.join(room.code); reply?.({ok:true,playerId:pid,resumeToken:p.resumeToken,room:viewFor(room,pid)}); broadcast(room);
   });
 
+
+  socket.on("room:toggleReady", (_, reply) => {
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const { room, player } = found;
+    if (room.status !== "lobby") return reply?.({ ok: false, error: "遊戲開始後不能變更準備狀態。" });
+    if (player.isAI || player.id === room.hostId) return reply?.({ ok: false, error: "此玩家不需要變更準備狀態。" });
+
+    player.ready = !player.ready;
+    room.log.push(`${player.name} ${player.ready ? "已準備" : "取消準備"}。`);
+    reply?.({ ok: true, ready: player.ready });
+    broadcast(room);
+  });
 
   socket.on("game:rematch", (_, reply) => {
     // REMATCH_FULLY_DISABLED_CLEAN_V1
@@ -1612,7 +1524,9 @@ io.on("connection", socket => {
   socket.on("game:start", (_, reply) => {
     const f=findBySocket(socket.id); if(!f) return reply?.({ok:false,error:"你不在房間中。"});
     if(!f.player.isHost) return reply?.({ok:false,error:"只有房主可開始。"});
+    if(f.room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始或已結束。"});
     if(f.room.players.length<2) return reply?.({ok:false,error:"至少需要2位玩家。"});
+    if(f.room.players.some(p=>!p.isAI && !p.connected)) return reply?.({ok:false,error:"有玩家目前不在線上。"});
     if(!allGuestsReady(f.room)) return reply?.({ok:false,error:"還有房客尚未準備完成。"});
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
@@ -1657,113 +1571,40 @@ io.on("connection", socket => {
   });
 
   socket.on("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
-    const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
-    if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    const target=getPlayer(room,targetPlayerId); if(!target || target.id===p.id || target.eliminated) return reply?.({ok:false,error:"目標玩家不合法。"});
-    const ai=p.field.findIndex(u=>u.id===attackerId), di=target.field.findIndex(u=>u.id===defenderId);
-    if(ai<0||di<0) return reply?.({ok:false,error:"找不到攻擊或防守兵種。"});
-    const a=p.field[ai], d=target.field[di]; if(!canAttack(a)) return reply?.({ok:false,error:"這名兵種不能攻擊。"});
-    const ap=power(a), dp=power(d), res=battle(a,d); a.tapped=true;
-    let killed=false, archerSaved=false, archerExtra=false;
-    if(a.type==="弓兵"){ if(dp<ap && !a.archerBonusUsed) archerExtra=true; if(dp>=ap){archerSaved=true; if(dp>ap && !a.status.includes("疲乏")) a.status.push("疲乏");}}
-    if(res==="attacker"){target.field.splice(di,1); killed=true;} else if(res==="defender"){if(!archerSaved)p.field.splice(ai,1);} else {target.field.splice(di,1); killed=true; if(!archerSaved)p.field.splice(ai,1);}
-    const survivor=p.field.find(u=>u.id===a.id); if(survivor && archerExtra){survivor.tapped=false; survivor.archerBonusUsed=true; room.log.push(`${survivor.name} 觸發弓兵額外攻擊。`);}
-    if(killed && p.king?.name==="亞歷山大大帝"){drawUnits(room,p,1); room.log.push(`${p.name} 的亞歷山大效果：抽1張兵種卡。`);}
-    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 的 ${d.name}。`); reply?.({ok:true}); broadcast(room);
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const {room,player} = found;
+    if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = resolveAttackUnit(room, player, getPlayer(room,targetPlayerId), attackerId, defenderId);
+    reply?.(result.ok ? { ok: true } : result);
+    if (result.ok) broadcast(room);
   });
 
   socket.on("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
-    const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
-    if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    const target=getPlayer(room,targetPlayerId); if(!target||target.id===p.id||target.eliminated) return reply?.({ok:false,error:"目標玩家不合法。"});
-    if(target.field.some(u=>u.type==="步兵")) return reply?.({ok:false,error:"目標場上仍有步兵，不能攻擊國王。"});
-    const a=p.field.find(u=>u.id===attackerId); if(!canAttack(a)) return reply?.({ok:false,error:"這名兵種不能攻擊。"});
-    const dmg = effectiveDamage(a); target.hp-=dmg; a.tapped=true; if(target.hp<=0){target.eliminated=true; room.log.push(`${target.name} 出局。`);}
-    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 國王，造成${dmg}傷害。`); if (finishIfGameOver(room)) { reply?.({ok:true}); broadcast(room); return; } reply?.({ok:true}); broadcast(room);
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const {room,player} = found;
+    if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = resolveAttackKing(room, player, getPlayer(room,targetPlayerId), attackerId);
+    reply?.(result.ok ? { ok: true } : result);
+    if (result.ok) broadcast(room);
   });
 
-  socket.on("game:castMagic", ({magicId,casterId,targetPlayerId,targetUnitIds}, reply) => {
-    // 中文 ID 修正：統一魔法相關 ID，避免目標玩家或目標兵種比對失敗。
-    magicId = asId(magicId);
-    casterId = asId(casterId);
-    targetPlayerId = asId(targetPlayerId);
-    targetUnitIds = Array.isArray(targetUnitIds) ? targetUnitIds.map(asId) : [];
-
-    const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
-    if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    const mi=p.magic.findIndex(m=>m.id===magicId), caster=p.field.find(u=>u.id===casterId);
-    if(mi<0)return reply?.({ok:false,error:"找不到魔法卡。"}); const magic=p.magic[mi];
-    if(!mageCanCast(caster,magic)) return reply?.({ok:false,error:"此法師不能施放這張魔法。"});
-    const target=getPlayer(room,targetPlayerId); if(!target)return reply?.({ok:false,error:"找不到目標玩家。"});
-    const ids=Array.isArray(targetUnitIds)?targetUnitIds:[];
-    if(magic.name!=="天殞術"){
-      if(ids.length<1) return reply?.({ok:false,error:"請至少指定1個目標。"});
-      if(ids.length>magic.maxTargets) return reply?.({ok:false,error:`最多只能指定${magic.maxTargets}個目標。`});
-      if(magic.target==="我方" && target.id!==p.id) return reply?.({ok:false,error:"此魔法只能指定我方。"});
-      if(magic.target==="敵方" && target.id===p.id) return reply?.({ok:false,error:"此魔法只能指定敵方。"});
-    } else if(target.id===p.id) return reply?.({ok:false,error:"天殞術只能指定敵方玩家。"});
-    // MAGIC_TARGET_EXISTENCE_CHECK_V2
-    // 消耗魔法卡前，先確認指定目標仍存在，避免「卡被吃掉但沒有生效」。
-    if (magic.name !== "天殞術") {
-      const missingIds = ids.filter((id) => !target.field.some((u) => u.id === id));
-
-      if (missingIds.length > 0) {
-        return reply?.({
-          ok: false,
-          error: "指定的魔法目標已不存在，請重新選擇目標。"
-        });
-      }
-    }
-
-    p.magic.splice(mi,1); caster.tapped=true; room.magicDeck.push(magic);
-    if(magic.name==="天殞術"){
-      const before=target.field.length; target.field=target.field.filter(u=>{ if(u.rank!=="高級") return false; freeze(u); return true; });
-      room.log.push(`${p.name} 施放天殞術：${target.name} 低於高級死亡${before-target.field.length}名，高級暫停。`);
-    } else {
-      ids.forEach(id=>{
-        const i=target.field.findIndex(u=>u.id===id); if(i<0)return; const u=target.field[i];
-        if(magic.name==="火球術") fireball(target,id);
-        if(magic.name==="冰凍術"){ if(u.rank==="高級") u.status.push("階級-1"); else freeze(u); }
-        if(magic.name==="力量術"){u.status.push("力量術+1");}
-        if(magic.name==="虛弱術"){u.status.push("階級-1"); if(u.rank==="初級") freeze(u);}
-        if(magic.name==="增強術"){u.status.push("階級+1"); if(!u.tapped) u.status.push("傷害+1");}
-        if(magic.name==="毒藥瓶") u.status.push("下回合死亡");
-        if(magic.name==="燃血術"){
-          p.hp-=3;
-          if(p.hp<=0){
-            p.eliminated=true;
-            room.log.push(`${p.name} 因燃血術失去過多 HP，出局。`);
-            finishIfGameOver(room);
-          }
-          u.status.push("階級+1");
-          u.status.push("燃血+1傷害");
-          u.tapped=false;
-        }
-        if(magic.name==="流星雨") fireball(target,id);
-      });
-      room.log.push(`${p.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
-    }
-    if(p.king?.name==="路易十四" && !p.magicDrawUsed){
-  drawUnits(room,p,1);
-  p.magicDrawUsed=true;
-  room.log.push(`${p.name} 的路易十四效果：抽1張兵種卡。`);
-}
-
-// 修正：法師使用魔法視為一次攻擊。
-// 如果力量術 / 燃血術指定到施法者自己，
-// 前面的 u.tapped=false 會把法師重新解鎖，所以這裡要再鎖回去。
-const usedCaster = p.field.find(u => u.id === casterId);
-if (usedCaster) usedCaster.tapped = true;
-
-reply?.({ok:true}); broadcast(room);
+  socket.on("game:castMagic", (payload = {}, reply) => {
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const { room, player } = found;
+    if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = resolveMagic(room, player, payload);
+    reply?.(result);
+    if (result.ok) broadcast(room);
   });
 
   socket.on("game:endTurn", (_, reply) => {
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    clearEndOfTurnBuffs(p); clearEndTurnControl(p); advanceFatigue(p); p.field=p.field.filter(u=>!u.status.includes("下回合死亡")); trimHand(room,p); applyOct(room,p);
-    const a=alive(room); if(a.length<=1){room.status="ended"; room.log.push(`${a[0]?.name||"無人"} 獲勝！`); reply?.({ok:true}); broadcast(room); return;}
-    const n=nextAlive(room,p.id); room.currentPlayerId=n.id; room.log.push(`${p.name} 結束回合。`); startTurn(room,n); reply?.({ok:true}); broadcast(room); scheduleAITurn(room);
+    finishTurn(room, p);
+    reply?.({ ok: true });
   });
 
   socket.on("disconnect", () => {
