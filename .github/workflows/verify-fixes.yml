@@ -50,7 +50,7 @@ jobs:
           done
 
       - name: Commit regenerated Vite 8 lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/test/vite8-upgrade-20261112'
+        if: github.event_name == 'pull_request' && github.head_ref == 'test/vite8-upgrade-20261112'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
