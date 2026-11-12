@@ -82,6 +82,33 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
       playerId: created.playerId
     });
     assert.equal(hostResume.ok, true, "the same connected socket can resume");
+
+    // Verify lobby host transfer and cleanup when the final human exits.
+    const lobbyHost = await connect(port);
+    sockets.push(lobbyHost);
+    const lobbyCreated = await request(lobbyHost, "room:create", { name: "LobbyHost", maxPlayers: 2 });
+    const lobbyGuest = await connect(port);
+    sockets.push(lobbyGuest);
+    const lobbyJoined = await request(lobbyGuest, "room:join", {
+      name: "LobbyGuest", code: lobbyCreated.room.roomCode
+    });
+    assert.equal(lobbyJoined.ok, true);
+    assert.equal((await request(lobbyHost, "room:leave")).ok, true);
+    const transferred = await request(lobbyGuest, "room:resume", {
+      roomCode: lobbyCreated.room.roomCode,
+      playerId: lobbyJoined.playerId
+    });
+    assert.equal(transferred.ok, true);
+    assert.equal(transferred.room.hostId, lobbyJoined.playerId, "remaining guest inherits host role");
+    assert.equal(transferred.room.players.length, 1, "departing lobby player is removed");
+    assert.equal((await request(lobbyGuest, "room:leave")).ok, true);
+
+    const checkDeleted = await connect(port);
+    sockets.push(checkDeleted);
+    const nonexistent = await request(checkDeleted, "room:join", {
+      name: "Late", code: lobbyCreated.room.roomCode
+    });
+    assert.equal(nonexistent.ok, false, "empty lobby should be deleted");
   } finally {
     sockets.forEach(socket => socket.disconnect());
     child.kill("SIGTERM");
