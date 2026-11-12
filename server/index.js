@@ -358,41 +358,35 @@ function scheduleDisconnectGrace(room, player, seconds = 60) {
   disconnectGraceTimers.set(key, timer);
 }
 
-function finishTimedOutTurn(room, player) {
-  if (!room || !player) return;
-  if (room.status !== "playing") return;
-  if (room.currentPlayerId !== player.id) return;
-  if (player.eliminated) return;
+// One end-of-turn path for humans, AI and countdown expiry.
+function finishTurn(room, player, reason = "結束回合") {
+  if (!room || !player || room.status !== "playing" ||
+      room.currentPlayerId !== player.id || player.eliminated) return false;
 
   clearTurnTimer(room);
-
   clearEndOfTurnBuffs(player);
-
-  if (typeof clearEndTurnControl === "function") {
-    clearEndTurnControl(player);
-  }
-
-  if (typeof advanceFatigue === "function") {
-    advanceFatigue(player);
-  }
-
-  player.field = player.field.filter((u) => !u.status.includes("下回合死亡"));
-
+  clearEndTurnControl(player);
+  advanceFatigue(player);
+  player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   trimHand(room, player);
   applyOct(room, player);
 
   if (finishIfGameOver(room)) {
     broadcast(room);
-    return;
+    return true;
   }
 
   const next = nextAlive(room, player.id);
   room.currentPlayerId = next.id;
-  room.log.push(`${player.name} 時間到，系統自動結束回合。`);
-
+  room.log.push(`${player.name} ${reason}。`);
   startTurn(room, next);
   broadcast(room);
   scheduleAITurn(room);
+  return true;
+}
+
+function finishTimedOutTurn(room, player) {
+  finishTurn(room, player, "時間到，系統自動結束回合");
 }
 
 function scheduleTurnTimer(room, player) {
@@ -873,27 +867,7 @@ function advanceFatigue(player) {
 }
 
 function aiEndTurn(room, ai) {
-  clearEndOfTurnBuffs(ai);
-  clearEndTurnControl(ai);
-  advanceFatigue(ai);
-  ai.field = ai.field.filter((u) => !u.status.includes("下回合死亡"));
-  trimHand(room, ai);
-  applyOct(room, ai);
-
-  const living = alive(room);
-  if (living.length <= 1) {
-    room.status = "ended";
-    room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
-    broadcast(room);
-    return;
-  }
-
-  const next = nextAlive(room, ai.id);
-  room.currentPlayerId = next.id;
-  room.log.push(`${ai.name} 結束回合。`);
-  startTurn(room, next);
-  broadcast(room);
-  scheduleAITurn(room);
+  return finishTurn(room, ai);
 }
 
 function isStillAITurn(room, ai) {
@@ -1602,9 +1576,8 @@ io.on("connection", socket => {
   socket.on("game:endTurn", (_, reply) => {
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    clearEndOfTurnBuffs(p); clearEndTurnControl(p); advanceFatigue(p); p.field=p.field.filter(u=>!u.status.includes("下回合死亡")); trimHand(room,p); applyOct(room,p);
-    const a=alive(room); if(a.length<=1){room.status="ended"; room.log.push(`${a[0]?.name||"無人"} 獲勝！`); reply?.({ok:true}); broadcast(room); return;}
-    const n=nextAlive(room,p.id); room.currentPlayerId=n.id; room.log.push(`${p.name} 結束回合。`); startTurn(room,n); reply?.({ok:true}); broadcast(room); scheduleAITurn(room);
+    finishTurn(room, p);
+    reply?.({ ok: true });
   });
 
   socket.on("disconnect", () => {
