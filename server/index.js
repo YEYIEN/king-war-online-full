@@ -1075,7 +1075,13 @@ io.on("connection", socket => {
 
     const player = room.players.find((p) => p.id === pid);
     if (!player) return reply?.({ ok: false, error: "找不到原本玩家。" });
+    if (room.status === "ended") return reply?.({ ok: false, error: "對局已結束，無法重新加入。" });
+    if (player.isAI || player.eliminated) return reply?.({ ok: false, error: "此玩家無法重新加入。" });
+    if (player.connected && player.socketId !== socket.id && io.sockets.sockets.has(player.socketId)) {
+      return reply?.({ ok: false, error: "此玩家目前仍在線上。" });
+    }
 
+    kwDetachSocketFromOtherRooms(socket.id, room.code);
     player.socketId = socket.id;
     player.connected = true;
     socket.join(room.code);
@@ -1481,6 +1487,19 @@ io.on("connection", socket => {
   });
 
 
+  socket.on("room:toggleReady", (_, reply) => {
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const { room, player } = found;
+    if (room.status !== "lobby") return reply?.({ ok: false, error: "遊戲開始後不能變更準備狀態。" });
+    if (player.isAI || player.id === room.hostId) return reply?.({ ok: false, error: "此玩家不需要變更準備狀態。" });
+
+    player.ready = !player.ready;
+    room.log.push(`${player.name} ${player.ready ? "已準備" : "取消準備"}。`);
+    reply?.({ ok: true, ready: player.ready });
+    broadcast(room);
+  });
+
   socket.on("game:rematch", (_, reply) => {
     // REMATCH_FULLY_DISABLED_CLEAN_V1
     return reply?.({
@@ -1612,7 +1631,9 @@ io.on("connection", socket => {
   socket.on("game:start", (_, reply) => {
     const f=findBySocket(socket.id); if(!f) return reply?.({ok:false,error:"你不在房間中。"});
     if(!f.player.isHost) return reply?.({ok:false,error:"只有房主可開始。"});
+    if(f.room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始或已結束。"});
     if(f.room.players.length<2) return reply?.({ok:false,error:"至少需要2位玩家。"});
+    if(f.room.players.some(p=>!p.isAI && !p.connected)) return reply?.({ok:false,error:"有玩家目前不在線上。"});
     if(!allGuestsReady(f.room)) return reply?.({ok:false,error:"還有房客尚未準備完成。"});
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
