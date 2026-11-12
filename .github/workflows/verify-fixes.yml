@@ -5,9 +5,6 @@ on:
     branches:
       - fix/lobby-readiness-start-resume-20261112
 
-permissions:
-  contents: write
-
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
@@ -18,13 +15,9 @@ jobs:
         with:
           node-version: '24'
       - name: Install server dependencies
-        run: npm install
+        run: npm ci
       - name: Install client dependencies
-        run: npm --prefix client install
-      - name: Apply nonbreaking npm advisory fixes
-        run: |
-          npm audit fix || echo "Root audit still has unresolved advisories"
-          (cd client && npm audit fix) || echo "Client audit still has unresolved advisories"
+        run: npm --prefix client ci
       - name: Run Socket.IO regression tests
         run: npm test
       - name: Build frontend
@@ -52,13 +45,3 @@ jobs:
             done
           done
 
-      - name: Persist regenerated dependency lockfiles
-        if: github.event_name == 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json client/package-lock.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Refresh patched dependency lockfiles"
-            git push origin HEAD:fix/lobby-readiness-start-resume-20261112
-          fi
