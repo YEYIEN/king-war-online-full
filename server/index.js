@@ -3,6 +3,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
+import { applyMagicFieldEffect } from "./magic-effects.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -204,19 +205,6 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
-function addStatus(unit, status) {
-  if (!unit.status.includes(status)) unit.status.push(status);
-}
-function freeze(u) { addStatus(u, "不能攻擊"); }
-function fireball(owner, id) {
-  const i = owner.field.findIndex(u => u.id === id);
-  if (i < 0) return;
-  const unit = owner.field[i];
-  if (unit.rank === "初級") owner.field.splice(i, 1);
-  else addStatus(unit, "階級-1");
-}
-
-
 function publicPlayer(p, viewer) {
   const isMe = p.id === viewer;
   return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
@@ -786,61 +774,18 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
     return { ok: false, error: "此魔法只能指定敵方。" };
   }
 
-  if (magic.name === "天殞術") {
-    if (ids.length > 0) return { ok: false, error: "天殞術不需要指定個別兵種。" };
-  } else {
-    if (!ids.length) return { ok: false, error: "請至少指定1個目標。" };
-    if (ids.length > magic.maxTargets) return { ok: false, error: `最多只能指定${magic.maxTargets}個目標。` };
-    if (new Set(ids).size !== ids.length) return { ok: false, error: "不能重複指定同一兵種。" };
-    if (ids.some(id => !target.field.some(u => u.id === id))) {
-      return { ok: false, error: "指定的魔法目標已不存在，請重新選擇目標。" };
+  const { destroyed } = applyMagicFieldEffect(magic.name, target, ids);
+  if (magic.name === "燃血術") {
+    player.hp -= 3;
+    if (player.hp <= 0) {
+      player.eliminated = true;
+      room.log.push(`${player.name} 因燃血術失去過多 HP，出局。`);
+      finishIfGameOver(room);
     }
   }
-
-  // Consume resources only after all checks succeed.
-  player.magic.splice(index, 1);
-  room.magicDeck.push(magic);
-  caster.tapped = true;
-
   if (magic.name === "天殞術") {
-    const before = target.field.length;
-    target.field = target.field.filter(u => {
-      if (u.rank !== "高級") return false;
-      freeze(u);
-      return true;
-    });
-    room.log.push(`${player.name} 施放天殞術：${target.name} 低於高級死亡${before - target.field.length}名，高級暫停。`);
+    room.log.push(`${player.name} 施放天殞術：${target.name} 低於高級死亡${destroyed}名，高級暫停。`);
   } else {
-    for (const id of ids) {
-      const unit = target.field.find(u => u.id === id);
-      if (!unit) continue;
-      if (magic.name === "火球術" || magic.name === "流星雨") fireball(target, id);
-      if (magic.name === "冰凍術") {
-        if (unit.rank === "高級") addStatus(unit, "階級-1");
-        else freeze(unit);
-      }
-      if (magic.name === "力量術") addStatus(unit, "力量術+1");
-      if (magic.name === "虛弱術") {
-        addStatus(unit, "階級-1");
-        if (unit.rank === "初級") freeze(unit);
-      }
-      if (magic.name === "增強術") {
-        addStatus(unit, "階級+1");
-        if (!unit.tapped) addStatus(unit, "傷害+1");
-      }
-      if (magic.name === "毒藥瓶") addStatus(unit, "下回合死亡");
-      if (magic.name === "燃血術") {
-        player.hp -= 3;
-        addStatus(unit, "階級+1");
-        addStatus(unit, "燃血+1傷害");
-        unit.tapped = false;
-        if (player.hp <= 0) {
-          player.eliminated = true;
-          room.log.push(`${player.name} 因燃血術失去過多 HP，出局。`);
-          finishIfGameOver(room);
-        }
-      }
-    }
     room.log.push(`${player.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
   }
 
