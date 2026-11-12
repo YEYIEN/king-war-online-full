@@ -968,7 +968,7 @@ async function performAITurn(roomCode) {
 io.on("connection", socket => {
 
 
-  socket.on("room:resume", ({ roomCode, playerId }, reply) => {
+  socket.on("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
     // ROOM_RESUME_REJECT_ENDED_V1
     const codeText = String(roomCode || "").trim().toUpperCase();
     const pid = String(playerId || "");
@@ -978,6 +978,7 @@ io.on("connection", socket => {
 
     const player = room.players.find((p) => p.id === pid);
     if (!player) return reply?.({ ok: false, error: "找不到原本玩家。" });
+    if (!player.resumeToken || typeof resumeToken !== "string" || resumeToken !== player.resumeToken) return reply?.({ ok: false, error: "重連憑證無效，請重新加入房間。" });
     if (room.status === "ended") return reply?.({ ok: false, error: "對局已結束，無法重新加入。" });
     if (player.isAI || player.eliminated) return reply?.({ ok: false, error: "此玩家無法重新加入。" });
     if (player.connected && player.socketId !== socket.id && io.sockets.sockets.has(player.socketId)) {
@@ -994,7 +995,7 @@ io.on("connection", socket => {
 
     room.log.push(`${player.name} 已重新連線。`);
 
-    reply?.({ ok: true, playerId: player.id, room: viewFor(room, player.id) });
+    reply?.({ ok: true, playerId: player.id, resumeToken: player.resumeToken, room: viewFor(room, player.id) });
     broadcast(room);
   });
 
@@ -1043,6 +1044,7 @@ io.on("connection", socket => {
     const human = {
       id: humanId,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: typeof cleanDisplayName === "function" ? cleanDisplayName(name) : String(name || "玩家").slice(0, 16),
       isHost: true,
       connected: true,
@@ -1087,7 +1089,7 @@ io.on("connection", socket => {
 
     startGame(room);
 
-    reply?.({ ok: true, playerId: humanId, room: viewFor(room, humanId) });
+    reply?.({ ok: true, playerId: humanId, resumeToken: human.resumeToken, room: viewFor(room, humanId) });
     broadcast(room);
     scheduleAITurn(room);
   });
@@ -1149,6 +1151,7 @@ io.on("connection", socket => {
     const player = {
       id: pid,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: cleanDisplayName(name),
       isHost: true,
       connected: true,
@@ -1214,6 +1217,7 @@ io.on("connection", socket => {
     reply?.({
       ok: true,
       playerId: pid,
+      resumeToken: player.resumeToken,
       room: viewFor(room, pid)
     });
 
@@ -1240,6 +1244,7 @@ io.on("connection", socket => {
       const player = {
         id: pid,
         socketId: socket.id,
+        resumeToken: nanoid(32),
         name: playerName,
         isHost: true,
         connected: true,
@@ -1274,6 +1279,7 @@ io.on("connection", socket => {
       reply?.({
         ok: true,
         playerId: pid,
+        resumeToken: player.resumeToken,
         room: viewFor(room, pid),
         waiting: true
       });
@@ -1285,6 +1291,7 @@ io.on("connection", socket => {
     const player = {
       id: pid,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: playerName,
       isHost: false,
       connected: true,
@@ -1304,6 +1311,7 @@ io.on("connection", socket => {
     reply?.({
       ok: true,
       playerId: pid,
+      resumeToken: player.resumeToken,
       room: viewFor(room, pid),
       waiting: false
     });
@@ -1320,6 +1328,7 @@ io.on("connection", socket => {
     const player = {
       id: pid,
       socketId: socket.id,
+        resumeToken: nanoid(32),
       name: cleanDisplayName(name),
       isHost: true,
       connected: true,
@@ -1354,6 +1363,7 @@ io.on("connection", socket => {
     reply?.({
       ok: true,
       playerId: pid,
+      resumeToken: player.resumeToken,
       room: viewFor(room, pid)
     });
   });
@@ -1365,8 +1375,8 @@ io.on("connection", socket => {
     if(!room) return reply?.({ok:false,error:"找不到房間。"});
     if(room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始。"});
     if(room.players.length>=room.maxPlayers) return reply?.({ok:false,error:"房間已滿。"});
-    const pid=nanoid(10), p={id:pid,socketId:socket.id,name:cleanDisplayName(name),isHost:false,connected:true,ready:false,hp:30,king:null,hand:[],magic:[],field:[],eliminated:false};
-    room.players.push(p); room.log.push(`${p.name} 加入房間。`); socket.join(room.code); reply?.({ok:true,playerId:pid,room:viewFor(room,pid)}); broadcast(room);
+    const pid=nanoid(10), p={id:pid,socketId:socket.id,resumeToken:nanoid(32),name:cleanDisplayName(name),isHost:false,connected:true,ready:false,hp:30,king:null,hand:[],magic:[],field:[],eliminated:false};
+    room.players.push(p); room.log.push(`${p.name} 加入房間。`); socket.join(room.code); reply?.({ok:true,playerId:pid,resumeToken:p.resumeToken,room:viewFor(room,pid)}); broadcast(room);
   });
 
 
