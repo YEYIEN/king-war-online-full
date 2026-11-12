@@ -21,6 +21,10 @@ jobs:
         run: npm install
       - name: Install client dependencies
         run: npm --prefix client install
+      - name: Apply nonbreaking npm advisory fixes
+        run: |
+          npm audit fix || echo "Root audit still has unresolved advisories"
+          (cd client && npm audit fix) || echo "Client audit still has unresolved advisories"
       - name: Run Socket.IO regression tests
         run: npm test
       - name: Build frontend
