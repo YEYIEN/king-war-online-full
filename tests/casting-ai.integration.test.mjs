@@ -42,21 +42,19 @@ async function launch(t, action) {
   let stderr = "";
   child.stderr.on("data", chunk => { stderr += chunk.toString(); });
   t.after(() => { sockets.forEach(s => s.disconnect()); child.kill("SIGTERM"); });
+  let socket;
   for (let i = 0; i < 40; i++) {
     try {
-      const socket = await connect(port);
-      sockets.push(socket);
-      return action(socket, async () => {
-        const extra = await connect(port);
-        sockets.push(extra);
-        return extra;
-      });
+      socket = await connect(port);
+      break;
     } catch (error) {
       if (child.exitCode !== null) throw new Error(`Server exited: ${stderr}`);
       if (i === 39) throw error;
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
+  sockets.push(socket);
+  return action(socket);
 }
 
 test("tutorial magic: failed casts preserve card, successful casts consume exactly once", { timeout: 15000 }, async t => {
