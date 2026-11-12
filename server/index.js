@@ -204,8 +204,18 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
-function freeze(u) { if (!u.status.includes("不能攻擊")) u.status.push("不能攻擊"); }
-function fireball(owner, id) { const i=owner.field.findIndex(u=>u.id===id); if(i<0)return; const u=owner.field[i]; if(u.rank==="初級") owner.field.splice(i,1); else u.status.push("階級-1"); }
+function addStatus(unit, status) {
+  if (!unit.status.includes(status)) unit.status.push(status);
+}
+function freeze(u) { addStatus(u, "不能攻擊"); }
+function fireball(owner, id) {
+  const i = owner.field.findIndex(u => u.id === id);
+  if (i < 0) return;
+  const unit = owner.field[i];
+  if (unit.rank === "初級") owner.field.splice(i, 1);
+  else addStatus(unit, "階級-1");
+}
+
 
 function publicPlayer(p, viewer) {
   const isMe = p.id === viewer;
@@ -752,120 +762,138 @@ async function aiAttackPhase(room, ai, enemy) {
   }
 }
 
-function aiChooseMagic(room, ai, enemy) {
-  const mages = ai.field.filter((u) => u.type === "法師" && !u.tapped && !u.status.includes("不能攻擊"));
-  if (!mages.length || !ai.magic.length) return false;
+// The only place where spell validation and effects are applied.
+// AI chooses an action, while Socket.IO receives one from a human; both use this function.
+function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetUnitIds = [] }) {
+  magicId = asId(magicId);
+  casterId = asId(casterId);
+  targetPlayerId = asId(targetPlayerId);
+  const ids = Array.isArray(targetUnitIds) ? targetUnitIds.map(asId) : [];
 
-  for (const magic of [...ai.magic]) {
-    const caster = mages.find((m) => mageCanCast(m, magic));
-    if (!caster) continue;
+  const index = player.magic.findIndex(m => m.id === magicId);
+  if (index < 0) return { ok: false, error: "找不到魔法卡。" };
+  const magic = player.magic[index];
+  const caster = player.field.find(u => u.id === casterId);
+  if (!mageCanCast(caster, magic)) return { ok: false, error: "此法師不能施放這張魔法。" };
 
-    if (magic.name === "天殞術") {
-      const lowRankTargets = enemy.field.filter((u) => u.rank !== "高級");
-      if (lowRankTargets.length >= 2 || enemy.field.length >= 4) {
-        const idx = ai.magic.findIndex((m) => m.id === magic.id);
-        ai.magic.splice(idx, 1);
-        caster.tapped = true;
-        room.magicDeck.push(magic);
+  const target = getPlayer(room, targetPlayerId);
+  if (!target || target.eliminated) return { ok: false, error: "找不到有效的目標玩家。" };
 
-        const before = enemy.field.length;
-        enemy.field = enemy.field.filter((unit) => {
-          if (unit.rank !== "高級") return false;
-          freeze(unit);
-          return true;
-        });
+  if (magic.target === "我方" && target.id !== player.id) {
+    return { ok: false, error: "此魔法只能指定我方。" };
+  }
+  if (magic.target !== "我方" && target.id === player.id) {
+    return { ok: false, error: "此魔法只能指定敵方。" };
+  }
 
-        room.log.push(`${ai.name} 用 ${caster.name} 施放天殞術，消滅 ${before - enemy.field.length} 名低於高級的兵種。`);
-        return true;
-      }
-    }
-
-    if (["火球術", "流星雨", "冰凍術", "虛弱術", "毒藥瓶"].includes(magic.name)) {
-      let targets = [...enemy.field];
-
-      if (magic.name === "火球術" || magic.name === "流星雨") {
-        targets.sort((a, b) => {
-          const aScore = (a.type === "步兵" ? 20 : 0) + aiRankValue(a.rank) * 8;
-          const bScore = (b.type === "步兵" ? 20 : 0) + aiRankValue(b.rank) * 8;
-          return bScore - aScore;
-        });
-      } else if (magic.name === "冰凍術" || magic.name === "虛弱術" || magic.name === "毒藥瓶") {
-        targets.sort((a, b) => aiRankValue(b.rank) - aiRankValue(a.rank));
-      }
-
-      targets = targets.slice(0, magic.maxTargets || 1);
-      if (!targets.length) continue;
-
-      const idx = ai.magic.findIndex((m) => m.id === magic.id);
-      ai.magic.splice(idx, 1);
-      caster.tapped = true;
-      room.magicDeck.push(magic);
-
-      for (const target of targets) {
-        const id = target.id;
-        if (magic.name === "火球術") fireball(enemy, id);
-        if (magic.name === "流星雨") fireball(enemy, id);
-        if (magic.name === "冰凍術") { if(target.rank === "高級") target.status.push("階級-1"); else freeze(target); }
-        if (magic.name === "虛弱術") {
-          target.status.push("階級-1");
-          if (target.rank === "初級") freeze(target);
-        }
-        if (magic.name === "毒藥瓶") target.status.push("下回合死亡");
-      }
-
-      const usedCaster = ai.field.find((u) => u.id === caster.id);
-      if (usedCaster) usedCaster.tapped = true;
-
-      room.log.push(`${ai.name} 用 ${caster.name} 施放 ${magic.name}。`);
-      return true;
-    }
-
-    if (["力量術", "增強術", "燃血術"].includes(magic.name)) {
-      const candidates = ai.field
-        .filter((u) => !u.status.includes("整備"))
-        .sort((a, b) => aiRankValue(b.rank) - aiRankValue(a.rank));
-
-      const target = candidates[0];
-      if (!target) continue;
-      if (magic.name === "燃血術" && ai.hp <= 10) continue;
-
-      const idx = ai.magic.findIndex((m) => m.id === magic.id);
-      ai.magic.splice(idx, 1);
-      caster.tapped = true;
-      room.magicDeck.push(magic);
-
-      if (magic.name === "燃血術") {
-        ai.hp -= 3;
-        if (ai.hp <= 0) {
-          ai.eliminated = true;
-          room.log.push(`${ai.name} 因燃血術失去過多 HP，出局。`);
-          finishIfGameOver(room);
-          return true;
-        }
-      }
-      if (magic.name === "力量術") {
-        target.status.push("力量術+1");
-      }
-
-      if (magic.name === "增強術") {
-        target.status.push("階級+1");
-        if (!target.tapped) target.status.push("傷害+1");
-      }
-
-      if (magic.name === "燃血術") {
-        target.status.push("階級+1");
-        target.status.push("燃血+1傷害");
-        target.tapped = false;
-      }
-
-      const usedCaster = ai.field.find((u) => u.id === caster.id);
-      if (usedCaster) usedCaster.tapped = true;
-
-      room.log.push(`${ai.name} 用 ${caster.name} 施放 ${magic.name} 強化 ${target.name}。`);
-      return true;
+  if (magic.name === "天殞術") {
+    if (ids.length > 0) return { ok: false, error: "天殞術不需要指定個別兵種。" };
+  } else {
+    if (!ids.length) return { ok: false, error: "請至少指定1個目標。" };
+    if (ids.length > magic.maxTargets) return { ok: false, error: `最多只能指定${magic.maxTargets}個目標。` };
+    if (new Set(ids).size !== ids.length) return { ok: false, error: "不能重複指定同一兵種。" };
+    if (ids.some(id => !target.field.some(u => u.id === id))) {
+      return { ok: false, error: "指定的魔法目標已不存在，請重新選擇目標。" };
     }
   }
 
+  // Consume resources only after all checks succeed.
+  player.magic.splice(index, 1);
+  room.magicDeck.push(magic);
+  caster.tapped = true;
+
+  if (magic.name === "天殞術") {
+    const before = target.field.length;
+    target.field = target.field.filter(u => {
+      if (u.rank !== "高級") return false;
+      freeze(u);
+      return true;
+    });
+    room.log.push(`${player.name} 施放天殞術：${target.name} 低於高級死亡${before - target.field.length}名，高級暫停。`);
+  } else {
+    for (const id of ids) {
+      const unit = target.field.find(u => u.id === id);
+      if (!unit) continue;
+      if (magic.name === "火球術" || magic.name === "流星雨") fireball(target, id);
+      if (magic.name === "冰凍術") {
+        if (unit.rank === "高級") addStatus(unit, "階級-1");
+        else freeze(unit);
+      }
+      if (magic.name === "力量術") addStatus(unit, "力量術+1");
+      if (magic.name === "虛弱術") {
+        addStatus(unit, "階級-1");
+        if (unit.rank === "初級") freeze(unit);
+      }
+      if (magic.name === "增強術") {
+        addStatus(unit, "階級+1");
+        if (!unit.tapped) addStatus(unit, "傷害+1");
+      }
+      if (magic.name === "毒藥瓶") addStatus(unit, "下回合死亡");
+      if (magic.name === "燃血術") {
+        player.hp -= 3;
+        addStatus(unit, "階級+1");
+        addStatus(unit, "燃血+1傷害");
+        unit.tapped = false;
+        if (player.hp <= 0) {
+          player.eliminated = true;
+          room.log.push(`${player.name} 因燃血術失去過多 HP，出局。`);
+          finishIfGameOver(room);
+        }
+      }
+    }
+    room.log.push(`${player.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
+  }
+
+  if (player.king?.name === "路易十四" && !player.magicDrawUsed) {
+    drawUnits(room, player, 1);
+    player.magicDrawUsed = true;
+    room.log.push(`${player.name} 的路易十四效果：抽1張兵種卡。`);
+  }
+  // Casting consumes one attack even when a buff targets the caster.
+  caster.tapped = true;
+  return { ok: true };
+}
+
+function aiChooseMagic(room, ai, enemy) {
+  const mages = ai.field.filter(unit => unit.type === "法師" && canAttack(unit));
+  if (!mages.length || !ai.magic.length) return false;
+
+  for (const magic of [...ai.magic]) {
+    const caster = mages.find(unit => mageCanCast(unit, magic));
+    if (!caster) continue;
+
+    let target = enemy;
+    let targets = [];
+    if (magic.name === "天殞術") {
+      const lowRankCount = enemy.field.filter(unit => unit.rank !== "高級").length;
+      if (lowRankCount < 2 && enemy.field.length < 4) continue;
+    } else if (magic.target === "我方") {
+      target = ai;
+      if (magic.name === "燃血術" && ai.hp <= 10) continue;
+      const choices = [...ai.field].filter(unit => !unit.status.includes("整備"));
+      choices.sort((a,b) => aiRankValue(b.rank) - aiRankValue(a.rank));
+      if (!choices.length) continue;
+      targets = [choices[0].id];
+    } else {
+      const choices = [...enemy.field];
+      if (["火球術","流星雨"].includes(magic.name)) {
+        choices.sort((a,b) => ((b.type === "步兵" ? 20 : 0) + aiRankValue(b.rank) * 8) -
+                               ((a.type === "步兵" ? 20 : 0) + aiRankValue(a.rank) * 8));
+      } else {
+        choices.sort((a,b) => aiRankValue(b.rank) - aiRankValue(a.rank));
+      }
+      targets = choices.slice(0, magic.maxTargets || 1).map(unit => unit.id);
+      if (!targets.length) continue;
+    }
+
+    const result = resolveMagic(room, ai, {
+      magicId: magic.id,
+      casterId: caster.id,
+      targetPlayerId: target.id,
+      targetUnitIds: targets
+    });
+    if (result.ok) return true;
+  }
   return false;
 }
 
@@ -1616,80 +1644,14 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:castMagic", ({magicId,casterId,targetPlayerId,targetUnitIds}, reply) => {
-    // 中文 ID 修正：統一魔法相關 ID，避免目標玩家或目標兵種比對失敗。
-    magicId = asId(magicId);
-    casterId = asId(casterId);
-    targetPlayerId = asId(targetPlayerId);
-    targetUnitIds = Array.isArray(targetUnitIds) ? targetUnitIds.map(asId) : [];
-
-    const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
-    if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    const mi=p.magic.findIndex(m=>m.id===magicId), caster=p.field.find(u=>u.id===casterId);
-    if(mi<0)return reply?.({ok:false,error:"找不到魔法卡。"}); const magic=p.magic[mi];
-    if(!mageCanCast(caster,magic)) return reply?.({ok:false,error:"此法師不能施放這張魔法。"});
-    const target=getPlayer(room,targetPlayerId); if(!target)return reply?.({ok:false,error:"找不到目標玩家。"});
-    const ids=Array.isArray(targetUnitIds)?targetUnitIds:[];
-    if(magic.name!=="天殞術"){
-      if(ids.length<1) return reply?.({ok:false,error:"請至少指定1個目標。"});
-      if(ids.length>magic.maxTargets) return reply?.({ok:false,error:`最多只能指定${magic.maxTargets}個目標。`});
-      if(magic.target==="我方" && target.id!==p.id) return reply?.({ok:false,error:"此魔法只能指定我方。"});
-      if(magic.target==="敵方" && target.id===p.id) return reply?.({ok:false,error:"此魔法只能指定敵方。"});
-    } else if(target.id===p.id) return reply?.({ok:false,error:"天殞術只能指定敵方玩家。"});
-    // MAGIC_TARGET_EXISTENCE_CHECK_V2
-    // 消耗魔法卡前，先確認指定目標仍存在，避免「卡被吃掉但沒有生效」。
-    if (magic.name !== "天殞術") {
-      const missingIds = ids.filter((id) => !target.field.some((u) => u.id === id));
-
-      if (missingIds.length > 0) {
-        return reply?.({
-          ok: false,
-          error: "指定的魔法目標已不存在，請重新選擇目標。"
-        });
-      }
-    }
-
-    p.magic.splice(mi,1); caster.tapped=true; room.magicDeck.push(magic);
-    if(magic.name==="天殞術"){
-      const before=target.field.length; target.field=target.field.filter(u=>{ if(u.rank!=="高級") return false; freeze(u); return true; });
-      room.log.push(`${p.name} 施放天殞術：${target.name} 低於高級死亡${before-target.field.length}名，高級暫停。`);
-    } else {
-      ids.forEach(id=>{
-        const i=target.field.findIndex(u=>u.id===id); if(i<0)return; const u=target.field[i];
-        if(magic.name==="火球術") fireball(target,id);
-        if(magic.name==="冰凍術"){ if(u.rank==="高級") u.status.push("階級-1"); else freeze(u); }
-        if(magic.name==="力量術"){u.status.push("力量術+1");}
-        if(magic.name==="虛弱術"){u.status.push("階級-1"); if(u.rank==="初級") freeze(u);}
-        if(magic.name==="增強術"){u.status.push("階級+1"); if(!u.tapped) u.status.push("傷害+1");}
-        if(magic.name==="毒藥瓶") u.status.push("下回合死亡");
-        if(magic.name==="燃血術"){
-          p.hp-=3;
-          if(p.hp<=0){
-            p.eliminated=true;
-            room.log.push(`${p.name} 因燃血術失去過多 HP，出局。`);
-            finishIfGameOver(room);
-          }
-          u.status.push("階級+1");
-          u.status.push("燃血+1傷害");
-          u.tapped=false;
-        }
-        if(magic.name==="流星雨") fireball(target,id);
-      });
-      room.log.push(`${p.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
-    }
-    if(p.king?.name==="路易十四" && !p.magicDrawUsed){
-  drawUnits(room,p,1);
-  p.magicDrawUsed=true;
-  room.log.push(`${p.name} 的路易十四效果：抽1張兵種卡。`);
-}
-
-// 修正：法師使用魔法視為一次攻擊。
-// 如果力量術 / 燃血術指定到施法者自己，
-// 前面的 u.tapped=false 會把法師重新解鎖，所以這裡要再鎖回去。
-const usedCaster = p.field.find(u => u.id === casterId);
-if (usedCaster) usedCaster.tapped = true;
-
-reply?.({ok:true}); broadcast(room);
+  socket.on("game:castMagic", (payload = {}, reply) => {
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const { room, player } = found;
+    if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = resolveMagic(room, player, payload);
+    reply?.(result);
+    if (result.ok) broadcast(room);
   });
 
   socket.on("game:endTurn", (_, reply) => {
