@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/lobby-readiness-start-resume-20261112
+      - test/vite8-upgrade-20261112
 
 jobs:
   test-and-build:
