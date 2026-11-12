@@ -61,7 +61,7 @@ test("tutorial magic: failed casts preserve card, successful casts consume exact
   await launch(t, async socket => {
     const started = await request(socket, "tutorial:start", { name: "Spell tester" });
     assert.equal(started.ok, true);
-    const { playerId, roomCode } = { playerId: started.playerId, roomCode: started.room.roomCode };
+    const { playerId, roomCode, resumeToken } = { playerId: started.playerId, roomCode: started.room.roomCode, resumeToken: started.resumeToken };
     const self = started.room.players.find(p => p.id === playerId);
     const mage = self.field.find(u => u.type === "法師");
     const spell = self.magic.find(m => m.name === "力量術");
@@ -72,13 +72,13 @@ test("tutorial magic: failed casts preserve card, successful casts consume exact
     assert.equal((await request(socket, "game:castMagic", { ...base, targetUnitIds: [mage.id, mage.id] })).ok, false);
     assert.equal((await request(socket, "game:castMagic", { ...base, targetPlayerId: started.room.players.find(p => p.id !== playerId).id })).ok, false);
 
-    let snapshot = (await request(socket, "room:resume", { playerId, roomCode })).room;
+    let snapshot = (await request(socket, "room:resume", { playerId, roomCode, resumeToken })).room;
     let me = snapshot.players.find(p => p.id === playerId);
     assert.equal(me.magic.length, 1, "invalid casts must not spend a card");
     assert.equal(me.field.find(u => u.id === mage.id).tapped, false, "invalid casts must not tap caster");
 
     assert.equal((await request(socket, "game:castMagic", base)).ok, true);
-    snapshot = (await request(socket, "room:resume", { playerId, roomCode })).room;
+    snapshot = (await request(socket, "room:resume", { playerId, roomCode, resumeToken })).room;
     me = snapshot.players.find(p => p.id === playerId);
     assert.equal(me.magic.length, 0, "successful spell is consumed");
     assert.ok(me.field.find(u => u.id === mage.id).status.includes("力量術+1"), "spell actually applies");
