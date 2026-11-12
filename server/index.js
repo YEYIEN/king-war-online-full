@@ -629,78 +629,79 @@ function aiAttackScore(attacker, enemy, defender) {
   return score;
 }
 
-function aiResolveAttackUnit(room, ai, enemy, attackerId, defenderId) {
-  const aiIdx = ai.field.findIndex((u) => u.id === attackerId);
-  const enemyIdx = enemy.field.findIndex((u) => u.id === defenderId);
-  if (aiIdx < 0 || enemyIdx < 0) return false;
+// Shared combat resolution for both human Socket.IO actions and AI decisions.
+function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, defenderId) {
+  if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
+    return { ok: false, error: "目標玩家不合法。" };
+  }
+  const ai = attackerPlayer.field.findIndex(u => u.id === attackerId);
+  const di = defenderPlayer.field.findIndex(u => u.id === defenderId);
+  if (ai < 0 || di < 0) return { ok: false, error: "找不到攻擊或防守兵種。" };
+  const attacker = attackerPlayer.field[ai];
+  const defender = defenderPlayer.field[di];
+  if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
 
-  const attacker = ai.field[aiIdx];
-  const defender = enemy.field[enemyIdx];
-  if (!aiCanAttack(attacker)) return false;
-
-  const aPower = power(attacker);
-  const dPower = power(defender);
-  const result = aiBattleResult(attacker, defender);
-
+  const attackerPower = power(attacker);
+  const defenderPower = power(defender);
+  const result = battle(attacker, defender);
   attacker.tapped = true;
 
-  let killedEnemy = false;
-  let archerSaved = false;
-  let archerExtra = false;
-
-  if (attacker.type === "弓兵") {
-    if (dPower < aPower && !attacker.archerBonusUsed) archerExtra = true;
-    if (dPower >= aPower) {
-      archerSaved = true;
-      if (dPower > aPower && !attacker.status.includes("疲乏")) attacker.status.push("疲乏");
-    }
+  const archerSaved = attacker.type === "弓兵" && defenderPower >= attackerPower;
+  const archerExtra = attacker.type === "弓兵" && defenderPower < attackerPower && !attacker.archerBonusUsed;
+  if (archerSaved && defenderPower > attackerPower && !attacker.status.includes("疲乏")) {
+    attacker.status.push("疲乏");
   }
 
-  if (result === "attacker") {
-    enemy.field.splice(enemyIdx, 1);
-    killedEnemy = true;
-  } else if (result === "defender") {
-    if (!archerSaved) ai.field.splice(aiIdx, 1);
-  } else {
-    enemy.field.splice(enemyIdx, 1);
-    killedEnemy = true;
-    if (!archerSaved) ai.field.splice(aiIdx, 1);
+  const killedEnemy = result === "attacker" || result === "both";
+  const killedAttacker = (result === "defender" || result === "both") && !archerSaved;
+  if (killedEnemy) defenderPlayer.field.splice(di, 1);
+  if (killedAttacker) attackerPlayer.field.splice(ai, 1);
+
+  const survivor = attackerPlayer.field.find(u => u.id === attacker.id);
+  if (survivor && archerExtra) {
+    survivor.tapped = false;
+    survivor.archerBonusUsed = true;
+    room.log.push(`${survivor.name} 觸發弓兵額外攻擊。`);
   }
 
-  const survivingAttacker = ai.field.find((u) => u.id === attacker.id);
-  if (survivingAttacker && archerExtra) {
-    survivingAttacker.tapped = false;
-    survivingAttacker.archerBonusUsed = true;
-    room.log.push(`${survivingAttacker.name} 觸發弓兵額外攻擊。`);
+  if (killedEnemy && attackerPlayer.king?.name === "亞歷山大大帝") {
+    drawUnits(room, attackerPlayer, 1);
+    room.log.push(`${attackerPlayer.name} 的亞歷山大效果：抽1張兵種卡。`);
   }
 
-  if (killedEnemy && ai.king?.name === "亞歷山大大帝") {
-    drawUnits(room, ai, 1);
-    room.log.push(`${ai.name} 的亞歷山大效果：抽1張兵種卡。`);
-  }
+  room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 的 ${defender.name}。`);
+  return { ok: true, killedEnemy, killedAttacker };
+}
 
-  room.log.push(`${ai.name} 用 ${attacker.name} 攻擊 ${enemy.name} 的 ${defender.name}。`);
-  return true;
+function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
+  if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
+    return { ok: false, error: "目標玩家不合法。" };
+  }
+  if (defenderPlayer.field.some(u => u.type === "步兵")) {
+    return { ok: false, error: "目標場上仍有步兵，不能攻擊國王。" };
+  }
+  const attacker = attackerPlayer.field.find(u => u.id === attackerId);
+  if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
+
+  const damage = effectiveDamage(attacker);
+  defenderPlayer.hp -= damage;
+  attacker.tapped = true;
+  room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 國王，造成${damage}傷害。`);
+
+  if (defenderPlayer.hp <= 0) {
+    defenderPlayer.eliminated = true;
+    room.log.push(`${defenderPlayer.name} 出局。`);
+    finishIfGameOver(room);
+  }
+  return { ok: true, damage };
+}
+
+function aiResolveAttackUnit(room, ai, enemy, attackerId, defenderId) {
+  return resolveAttackUnit(room, ai, enemy, attackerId, defenderId).ok;
 }
 
 function aiResolveAttackKing(room, ai, enemy, attackerId) {
-  const attacker = ai.field.find((u) => u.id === attackerId);
-  if (!attacker || !aiCanAttack(attacker)) return false;
-  if (enemy.field.some((u) => u.type === "步兵")) return false;
-
-  const dmg = effectiveDamage(attacker);
-  enemy.hp -= dmg;
-  attacker.tapped = true;
-
-  room.log.push(`${ai.name} 用 ${attacker.name} 攻擊 ${enemy.name} 國王，造成${dmg}傷害。`);
-
-  if (enemy.hp <= 0) {
-    enemy.eliminated = true;
-    room.log.push(`${enemy.name} 出局。`);
-    finishIfGameOver(room);
-  }
-
-  return true;
+  return resolveAttackKing(room, ai, enemy, attackerId).ok;
 }
 
 async function aiAttackPhase(room, ai, enemy) {
@@ -1596,29 +1597,23 @@ io.on("connection", socket => {
   });
 
   socket.on("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
-    const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
-    if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    const target=getPlayer(room,targetPlayerId); if(!target || target.id===p.id || target.eliminated) return reply?.({ok:false,error:"目標玩家不合法。"});
-    const ai=p.field.findIndex(u=>u.id===attackerId), di=target.field.findIndex(u=>u.id===defenderId);
-    if(ai<0||di<0) return reply?.({ok:false,error:"找不到攻擊或防守兵種。"});
-    const a=p.field[ai], d=target.field[di]; if(!canAttack(a)) return reply?.({ok:false,error:"這名兵種不能攻擊。"});
-    const ap=power(a), dp=power(d), res=battle(a,d); a.tapped=true;
-    let killed=false, archerSaved=false, archerExtra=false;
-    if(a.type==="弓兵"){ if(dp<ap && !a.archerBonusUsed) archerExtra=true; if(dp>=ap){archerSaved=true; if(dp>ap && !a.status.includes("疲乏")) a.status.push("疲乏");}}
-    if(res==="attacker"){target.field.splice(di,1); killed=true;} else if(res==="defender"){if(!archerSaved)p.field.splice(ai,1);} else {target.field.splice(di,1); killed=true; if(!archerSaved)p.field.splice(ai,1);}
-    const survivor=p.field.find(u=>u.id===a.id); if(survivor && archerExtra){survivor.tapped=false; survivor.archerBonusUsed=true; room.log.push(`${survivor.name} 觸發弓兵額外攻擊。`);}
-    if(killed && p.king?.name==="亞歷山大大帝"){drawUnits(room,p,1); room.log.push(`${p.name} 的亞歷山大效果：抽1張兵種卡。`);}
-    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 的 ${d.name}。`); reply?.({ok:true}); broadcast(room);
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const {room,player} = found;
+    if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = resolveAttackUnit(room, player, getPlayer(room,targetPlayerId), attackerId, defenderId);
+    reply?.(result.ok ? { ok: true } : result);
+    if (result.ok) broadcast(room);
   });
 
   socket.on("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
-    const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
-    if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    const target=getPlayer(room,targetPlayerId); if(!target||target.id===p.id||target.eliminated) return reply?.({ok:false,error:"目標玩家不合法。"});
-    if(target.field.some(u=>u.type==="步兵")) return reply?.({ok:false,error:"目標場上仍有步兵，不能攻擊國王。"});
-    const a=p.field.find(u=>u.id===attackerId); if(!canAttack(a)) return reply?.({ok:false,error:"這名兵種不能攻擊。"});
-    const dmg = effectiveDamage(a); target.hp-=dmg; a.tapped=true; if(target.hp<=0){target.eliminated=true; room.log.push(`${target.name} 出局。`);}
-    room.log.push(`${p.name} 用 ${a.name} 攻擊 ${target.name} 國王，造成${dmg}傷害。`); if (finishIfGameOver(room)) { reply?.({ok:true}); broadcast(room); return; } reply?.({ok:true}); broadcast(room);
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const {room,player} = found;
+    if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = resolveAttackKing(room, player, getPlayer(room,targetPlayerId), attackerId);
+    reply?.(result.ok ? { ok: true } : result);
+    if (result.ok) broadcast(room);
   });
 
   socket.on("game:castMagic", ({magicId,casterId,targetPlayerId,targetUnitIds}, reply) => {
