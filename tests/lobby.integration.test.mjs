@@ -136,6 +136,31 @@ test("private room readiness, repeated start, and resume safeguards", { timeout:
       name: "Late", code: lobbyCreated.room.roomCode
     });
     assert.equal(nonexistent.ok, false, "empty lobby should be deleted");
+
+    // Three-player live game: if the active player concedes, advance clockwise.
+    const threeSockets = [await connect(port), await connect(port), await connect(port)];
+    sockets.push(...threeSockets);
+    const threeHost = await request(threeSockets[0], "room:create", { name: "One", maxPlayers: 3 });
+    const second = await request(threeSockets[1], "room:join", { name: "Two", code: threeHost.room.roomCode });
+    const third = await request(threeSockets[2], "room:join", { name: "Three", code: threeHost.room.roomCode });
+    await request(threeSockets[1], "room:toggleReady");
+    await request(threeSockets[2], "room:toggleReady");
+    assert.equal((await request(threeSockets[0], "game:start")).ok, true);
+    const threeStarted = (await request(threeSockets[0], "room:resume", {
+      roomCode: threeHost.room.roomCode, playerId: threeHost.playerId
+    })).room;
+    const ids = [threeHost.playerId, second.playerId, third.playerId];
+    const socketFor = new Map(ids.map((id, i) => [id, threeSockets[i]]));
+    const currentId = threeStarted.currentPlayerId;
+    const seatOrder = threeStarted.players.map(p => p.id);
+    const nextExpected = seatOrder[(seatOrder.indexOf(currentId) + 1) % seatOrder.length];
+    assert.equal((await request(socketFor.get(currentId), "room:leave")).ok, true);
+    const survivor = ids.find(id => id !== currentId);
+    const updated = (await request(socketFor.get(survivor), "room:resume", {
+      roomCode: threeHost.room.roomCode, playerId: survivor
+    })).room;
+    assert.equal(updated.status, "playing", "two survivors should continue playing");
+    assert.equal(updated.currentPlayerId, nextExpected, "next living seat must take its turn");
   } finally {
     sockets.forEach(socket => socket.disconnect());
     child.kill("SIGTERM");
