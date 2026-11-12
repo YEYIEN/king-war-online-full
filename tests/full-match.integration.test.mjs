@@ -105,11 +105,15 @@ test("full two-human match reaches winner, blocks invalid actions, and consumes 
       })).room;
       me = afterDeploy.players.find(p => p.id === attackerId);
       for (const unit of me.field) {
+        if (latest.get(attackerSocket)?.status === "ended") break;
         if (unit.tapped || (unit.status || []).some(s => ["整備","不能攻擊","疲乏","疲乏待解"].includes(s))) continue;
         const hit = await emit(attackerSocket, "game:attackKing", {
           attackerId: unit.id, targetPlayerId: opponentId
         });
-        assert.equal(hit.ok, true);
+        // A victory broadcast can arrive just after an attack acknowledgement.
+        await new Promise(r => setTimeout(r, 8));
+        if (!hit.ok && latest.get(attackerSocket)?.status === "ended") break;
+        assert.equal(hit.ok, true, hit.error || "king attack should succeed");
         attacks++;
         if (latest.get(attackerSocket)?.status === "ended") break;
       }
