@@ -22,3 +22,26 @@ jobs:
         run: npm test
       - name: Build frontend
         run: npm run build
+      - name: Report dependency advisories
+        shell: bash
+        run: |
+          for scope in root client; do
+            if [ "$scope" = "root" ]; then cd "$GITHUB_WORKSPACE"; else cd "$GITHUB_WORKSPACE/client"; fi
+            for mode in production all; do
+              if [ "$mode" = "production" ]; then
+                npm audit --json --omit=dev > "$RUNNER_TEMP/$scope-$mode.json" || true
+              else
+                npm audit --json > "$RUNNER_TEMP/$scope-$mode.json" || true
+              fi
+              node -e '
+                const fs = require("fs");
+                const [scope, mode, file] = process.argv.slice(1);
+                const report = JSON.parse(fs.readFileSync(file, "utf8"));
+                console.log("AUDIT " + scope + " " + mode + " counts " + JSON.stringify(report.metadata?.vulnerabilities));
+                for (const [name, v] of Object.entries(report.vulnerabilities || {})) {
+                  console.log("PACKAGE " + name + " severity=" + v.severity + " direct=" + v.isDirect + " affected=" + v.range + " fix=" + JSON.stringify(v.fixAvailable) + " via=" + JSON.stringify(v.via));
+                }
+              ' "$scope" "$mode" "$RUNNER_TEMP/$scope-$mode.json"
+            done
+          done
+
