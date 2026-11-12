@@ -4,6 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
+import { nextLivingPlayer } from "./turn-order.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -115,7 +116,7 @@ function finishIfGameOver(room) {
 
   return false;
 }
-function nextAlive(room, id) { const a=alive(room); const i=a.findIndex(p=>p.id===id); return a[(i+1)%a.length] || a[0]; }
+function nextAlive(room, id) { return nextLivingPlayer(room.players, id); }
 function clearOct(p) { p.field.forEach(u => u.status = u.status.filter(s => s !== "屋大維+1")); }
 function applyOct(room, p) {
   if (p.king?.name !== "屋大維奧古斯都") return;
