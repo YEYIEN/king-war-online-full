@@ -418,6 +418,20 @@ function allGuestsReady(room) {
     .every((p) => p.ready);
 }
 
+// When self-damage eliminates the current player, do not leave the turn on a dead player.
+function advanceAfterElimination(room, player) {
+  if (finishIfGameOver(room)) return;
+  if (room.currentPlayerId !== player.id) return;
+  clearTurnTimer(room);
+  const next = nextAlive(room, player.id);
+  if (!next) return;
+  room.currentPlayerId = next.id;
+  room.log.push(`輪到 ${next.name} 行動。`);
+  startTurn(room, next);
+  broadcast(room);
+  scheduleAITurn(room);
+}
+
 function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降。") {
   if (!room || !player || room.status !== "playing" || player.eliminated) return false;
 
@@ -427,24 +441,8 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
   player.socketId = null;
   room.log.push(`${player.name} ${reason}`);
 
-  if (finishIfGameOver(room)) {
-    broadcast(room);
-    return true;
-  }
-
-  if (room.currentPlayerId === player.id) {
-    const next = nextAlive(room, player.id);
-    if (next) {
-      room.currentPlayerId = next.id;
-      room.log.push(`輪到 ${next.name} 行動。`);
-      startTurn(room, next);
-      broadcast(room);
-      scheduleAITurn(room);
-    }
-  } else {
-    broadcast(room);
-  }
-
+  advanceAfterElimination(room, player);
+  broadcast(room);
   return true;
 }
 
@@ -768,6 +766,22 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
     return { ok: false, error: "此魔法只能指定敵方。" };
   }
 
+  // Validate all targets before consuming a card or the caster's action.
+  if (magic.name === "天殞術") {
+    if (ids.length !== 0) return { ok: false, error: "天殞術不需要指定個別兵種。" };
+  } else {
+    if (ids.length === 0) return { ok: false, error: "請至少指定1個目標。" };
+    if (ids.length > magic.maxTargets) return { ok: false, error: `最多只能指定${magic.maxTargets}個目標。` };
+    if (new Set(ids).size !== ids.length) return { ok: false, error: "不能重複指定同一兵種。" };
+    if (ids.some(id => !target.field.some(unit => unit.id === id))) {
+      return { ok: false, error: "指定的魔法目標已不存在，請重新選擇目標。" };
+    }
+  }
+
+  player.magic.splice(index, 1);
+  room.magicDeck.push(magic);
+  caster.tapped = true;
+
   const { destroyed } = applyMagicFieldEffect(magic.name, target, ids);
   if (magic.name === "燃血術") {
     player.hp -= 3;
@@ -790,6 +804,9 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
   }
   // Casting consumes one attack even when a buff targets the caster.
   caster.tapped = true;
+  if (player.eliminated) {
+    advanceAfterElimination(room, player);
+  }
   return { ok: true };
 }
 
@@ -890,8 +907,7 @@ async function performAITurn(roomCode) {
   const enemy = enemies[0];
 
   if (!enemy) {
-    room.status = "ended";
-    room.log.push(`${ai.name} 獲勝！`);
+    finishIfGameOver(room);
     broadcast(room);
     return;
   }
