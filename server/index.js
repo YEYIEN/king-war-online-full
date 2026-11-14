@@ -1887,6 +1887,32 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
+  const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
+    kingDamage: 0, damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
+    comebackUses: { assault: 0, defense: 0 } };
+  const turnsHistogram = { "0-9": 0, "10-19": 0, "20-39": 0, "40-79": 0, "80+": 0 };
+  const violations = {};
+  function checkInvariants(room) {
+    const violation = name => { violations[name] = (violations[name] || 0) + 1; };
+    const ids = new Set();
+    const allCards = [...room.unitDeck, ...room.magicDeck,
+      ...room.players.flatMap(p => [...p.hand, ...p.magic, ...p.field])];
+    for (const card of allCards) {
+      if (!card.id || ids.has(card.id)) violation("duplicateOrMissingCardId");
+      ids.add(card.id);
+    }
+    for (const p of room.players) {
+      if (!Number.isFinite(p.hp)) violation("nonfiniteHp");
+      if (p.field.length > 5 + (p.fieldBonus || 0)) violation("overfilledField");
+      if (p.hand.length > maxHand(p)) violation("oversizedHand");
+      if (p.magic.length > 3) violation("oversizedMagicHand");
+      if (p.hp <= 0 && !p.eliminated) violation("zeroHpNotEliminated");
+    }
+    if (room.status === "playing") {
+      const current = room.players.find(p => p.id === room.currentPlayerId);
+      if (!current || current.eliminated || current.hp <= 0) violation("invalidCurrentPlayer");
+    }
+  }
   const originalRandom = Math.random;
   let state = seed >>> 0 || 1;
   Math.random = () => {
@@ -1908,8 +1934,12 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
           hp: 30, field: [], magic: [], hand: [], eliminated: false
         }))
       };
+      room.simMetrics = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0, kingDamage: 0,
+        damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
+        comebackUses: { assault: 0, defense: 0 } };
       rooms.set(room.code, room);
       startGame(room);
+      checkInvariants(room);
       const seatIndex = Object.fromEntries(room.players.map((p, i) => [p.id, i + 1]));
       for (const p of room.players) { counts[p.king.name].games++; seats[seatIndex[p.id]].games++; }
       let turns = 0;
@@ -1917,6 +1947,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         const before = room.currentPlayerId;
         await performAITurn(room.code);
         turns++;
+        checkInvariants(room);
         if (room.currentPlayerId === before && room.status === "playing") {
           // A stalled AI action must not make this a falsely completed game.
           break;
@@ -1924,6 +1955,14 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         if (room.log.length > 80) room.log.splice(0, room.log.length - 80);
       }
       totalTurns += turns;
+      const bucket = turns < 10 ? "0-9" : turns < 20 ? "10-19" : turns < 40 ? "20-39" : turns < 80 ? "40-79" : "80+";
+      turnsHistogram[bucket]++;
+      const m = room.simMetrics;
+      for (const name of ["unitAttacks","mutualKills","failedTrades","kingAttacks","kingDamage","aiDeployments","mongolRecalls"]) telemetry[name] += m[name];
+      for (const name of ["damageByKing","spells","turnsByKing"]) {
+        for (const [key, value] of Object.entries(m[name])) telemetry[name][key] = (telemetry[name][key] || 0) + value;
+      }
+      for (const mode of ["assault","defense"]) telemetry.comebackUses[mode] += m.comebackUses[mode];
       if (room.lastStandCount > 0) comebackGames++;
       for (const [mode, count] of Object.entries(room.lastStandModes || {})) comebackUse[mode] += count;
       const survivors = alive(room);
@@ -1949,7 +1988,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
     seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
-    comebackGames, comebackWins, comebackUse, comebackWinsByMode,
+    comebackGames, comebackWins, comebackUse, comebackWinsByMode, telemetry, turnsHistogram, invariantViolations: violations,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
     seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
