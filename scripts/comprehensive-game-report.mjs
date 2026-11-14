@@ -80,6 +80,11 @@ for(const setting of settings){
       p90Central:+(quantile(turns,.9)*60/60).toFixed(1)
     },
     comeback:{
+      criticalQualifiedGames:sum(r=>r.resultMetrics.completedMatchesWithCriticalPlayer),
+      criticalComebackWins:sum(r=>r.resultMetrics.criticalComebackWins),
+      criticalComebackRateConditional:pct(sum(r=>r.resultMetrics.criticalComebackWins),sum(r=>r.resultMetrics.completedMatchesWithCriticalPlayer)),
+      criticalPlayerInstances:sum(r=>r.resultMetrics.criticalPlayerInstances),
+      criticalPlayerWinConversion:pct(sum(r=>r.resultMetrics.criticalComebackWins),sum(r=>r.resultMetrics.criticalPlayerInstances)),
       qualifyingCompletedGames:trailingGames,
       eligibleShareOfCompletedMatches:pct(trailingGames,finished),
       realComebackWins:comebackWins,
@@ -105,4 +110,4 @@ for(const setting of settings){
   output.push(row);
   console.error(`OK ${row.name}: ${row.completed}/${total} finished; comeback ${row.comeback.realComebackRateConditional}%`);
 }
-console.log(JSON.stringify({version:1,methodology:"Actual server rules + AI-only seeded simulations; severe deficit observed at start of own turn after first full rotation: HP<=20 and >=8 HP behind max opponent OR >=3 HP and >=3 field units behind; actual comeback is subsequently winning; 60s per player action turn is an assumption, not observed human gameplay time.",seeds, maxTurns,settings:{mainMatches,easyMatches,abMatches},scenarioCount:output.length,scenarios:output},null,2));
+console.log(JSON.stringify({version:1,methodology:"Actual server rules + AI-only seeded simulations; severe deficit observed at start of own turn after first full rotation: HP<=20 and >=8 HP behind max opponent OR >=3 HP and >=3 field units behind; critical deficit observed after TWO full rotations: HP<=12, opponent at least 12 HP higher and at least 1 more field unit; only a final victory after the recorded deficit counts as comeback; 60s per player action turn is an assumption, not observed human gameplay time.",seeds, maxTurns,settings:{mainMatches,easyMatches,abMatches},scenarioCount:output.length,scenarios:output},null,2));
