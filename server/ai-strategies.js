@@ -84,6 +84,27 @@ export function scoreKingPlanDeployment(card, self, enemy, difficulty="hard") {
 /** Research policy: Conqueror identifies threats in the ENEMY king's public
  * ability without guessing unrevealed cards or hidden deck order.
  */
+/** Own-king battlefield priorities, distinct from generic deployment. */
+export function scoreKingPlanAttack({self,enemy,attacker,defender}) {
+  if(!self?.king||!enemy||!attacker)return 0;
+  const prediction=defender?previewUnitAttack(attacker,defender):null;
+  switch(self.king.name) {
+    case "亞歷山大大帝":
+      return defender && prediction?.killedEnemy ? (prediction.killedAttacker?5:22) : 0;
+    case "屋大維奧古斯都":
+      return defender && prediction?.killedAttacker ? -32 :
+        attacker.type==="步兵" && self.field.filter(u=>u.type==="步兵").length===1 ? -24 : 0;
+    case "成吉思汗":
+      return attacker.type==="騎兵" && !prediction?.killedAttacker ? 12 : 0;
+    case "秦始皇":
+      return defender && prediction?.killedEnemy ? 14 : !defender ? 10 : 0;
+    case "路易十四":
+      return defender?.type==="步兵" && prediction?.killedEnemy ? 14 :
+        attacker.type==="法師" && self.field.filter(u=>u.type==="法師").length===1 ? -35 : 0;
+    default:return 0;
+  }
+}
+
 export function counterKingThreat(enemy, self=null) {
   const king=enemy?.king?.name;
   const field=enemy?.field||[];
@@ -261,15 +282,23 @@ function chooseConquerorAttack(actions, ctx) {
     const continuation=branches.length?branches[0]:first;
     const guards=continuation.state.own.filter(u=>u.type==="步兵").length;
     const exposed=guards===0&&ctx.self.hp<=15?initialThreat*5:0;
-    const total=continuation.score-exposed;
+    const counterBonus=ctx.counterKingPlan?scoreKingCounterAttack({
+      enemy:move.enemy,attacker:ctx.self.field.find(u=>u.id===move.attackerId),
+      defender:move.defenderId?move.enemy.field.find(u=>u.id===move.defenderId):null
+    }):0;
+    const ownPlanBonus=ctx.ownKingPlan?scoreKingPlanAttack({
+      self:ctx.self,enemy:move.enemy,attacker:ctx.self.field.find(u=>u.id===move.attackerId),
+      defender:move.defenderId?move.enemy.field.find(u=>u.id===move.defenderId):null
+    }):0;
+    const total=continuation.score-exposed+counterBonus+ownPlanBonus;
     if(total>score){score=total;best={...move,expectedScore:total};}
   }
   return best;
 }
 
-export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true, conquerorProfile = "balanced" }) {
+export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true, conquerorProfile = "balanced", counterKingPlan = false, ownKingPlan = false }) {
   if (difficulty === "conqueror" && conquerorSearch && enemies.length === 1) {
-    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage,conquerorProfile});
+    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage,conquerorProfile,counterKingPlan,ownKingPlan});
   }
   if (!actions.length) return null;
   const valued = actions.map(action => {
