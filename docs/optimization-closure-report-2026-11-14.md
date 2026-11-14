@@ -26,7 +26,7 @@
 
 ## 2. 技術驗證證據
 
-- GitHub Actions `Verify King War fixes` run `43605996336`：**44/44 項 Node/Socket.IO測試通過**，Chromium桌面、手機、新手教學、AI操作 smoke 通過；手機橫向溢出0px；根目錄與前端 `npm audit` 所回報的已知漏洞計數均為0。後續新增房間上限整合測試，需以**最新 commit 的 CI 作最終確定**。
+- GitHub Actions `Verify King War fixes` run `43606933983`：**45/45 項 Node/Socket.IO測試通過**，Chromium桌面、手機、新手教學、AI操作 smoke 通過；手機橫向溢出0px；根目錄與前端 `npm audit` 所回報的已知漏洞計數均為0。該驗證已包含房間上限整合測試。更新文件後的最終 commit 仍應另以對應 CI 驗證。
 - GitHub Actions `Socket.IO multiplayer load validation` run `43606194051`：三種本機 loopback 合成負載均完成、無測試錯誤：
   - 10個房間／20個連線：P95 **6.58ms**。
   - 25個房間／50個連線：P95 **10.86ms**。
