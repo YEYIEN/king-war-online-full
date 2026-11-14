@@ -168,6 +168,7 @@ function startTurn(room, p) {
   if (louisBonus) room.log.push(`${p.name} 的太陽王權：額外補充1張魔法卡。`);
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
   observeTurnStart(room, p);
+  if (room.matchMetrics) room.matchMetrics.turnsStarted++;
   scheduleTurnTimer(room, p);
 
   // DISCONNECT_GRACE_STARTTURN_V1
@@ -460,7 +461,7 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
 
   player.hp = 0;
   player.eliminated = true;
-  if (room.matchMetrics) room.matchMetrics.finishReason = "player-surrender-or-disconnect";
+  if (room.matchMetrics) room.matchMetrics.finishReason = "forfeit-involved";
   player.connected = false;
   player.socketId = null;
   room.log.push(`${player.name} ${reason}`);
