@@ -25,6 +25,8 @@ const scenarios=[
   {id:"p5-conqueror-no-laststand",playerCount:5,difficulty:"conqueror",comebackEnabled:false},
   {id:"p5-hard-defense-rally-experiment",playerCount:5,difficulty:"hard",defenseRallyEnabled:true},
   {id:"p5-conqueror-defense-rally-experiment",playerCount:5,difficulty:"conqueror",defenseRallyEnabled:true},
+  {id:"p2-hard-vs-conqueror-challenger",playerCount:2,difficulty:"hard",challenger:"conqueror"},
+  {id:"p3-hard-vs-conqueror-challenger",playerCount:3,difficulty:"hard",challenger:"conqueror"},
   {id:"p4-hard-vs-conqueror-challenger",playerCount:4,difficulty:"hard",challenger:"conqueror"},
   {id:"p5-hard-vs-conqueror-challenger",playerCount:5,difficulty:"hard",challenger:"conqueror"}
 ];
