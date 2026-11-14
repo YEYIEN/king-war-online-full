@@ -133,7 +133,7 @@ function finishIfGameOver(room) {
 
     // ROOM_CLEANUP_ON_GAME_OVER_V1
     // 結束後保留一段時間讓玩家看結果，之後刪除房間，避免舊房間污染新局。
-    if (process.env.KW_SIMULATION !== "1") scheduleRoomCleanup(room, room.singleplayer || room.tutorial ? 45 : 180);
+    if (process.env.KW_SIMULATION !== "1") scheduleRoomCleanup(room, 180); // allow a readable result review in all modes
 
     return true;
   }
