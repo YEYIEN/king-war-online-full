@@ -71,3 +71,56 @@ test("encrypted match recovers across an actual server restart", {timeout:25000}
  assert.ok(rival.handCount>=0);
  assert.equal((await ask(rejoined,"room:resume",{roomCode,playerId:started.playerId,resumeToken:"invalid"})).ok,false);
 });
+
+test("two human players recover regardless of rejoin order without seeing each other's hand",{timeout:25000},async t=>{
+ const port=await freePort(),dir=await mkdtemp(join(tmpdir(),"kw-recovery-multi-"));
+ const env={...process.env,PORT:String(port),NODE_ENV:"development",KW_RECOVERY_DIR:dir,
+  KW_RECOVERY_KEY:randomBytes(32).toString("hex")};
+ let child;const sockets=[];
+ function start(){child=spawn(process.execPath,["server/index.js"],{cwd,env,stdio:["ignore","pipe","pipe"]});}
+ async function joinServer(){
+  for(let i=0;i<40;i++){
+   try{const socket=await connect(port);sockets.push(socket);return socket;}
+   catch{if(child.exitCode!==null)throw Error("Server not running");await pause(100);}
+  }
+  throw Error("Server timeout");
+ }
+ t.after(async()=>{sockets.forEach(s=>s.disconnect());child?.kill("SIGTERM");await rm(dir,{recursive:true,force:true})});
+ start();
+ const a=await joinServer(),b=await joinServer();
+ const hosted=await ask(a,"room:create",{name:"First",maxPlayers:2});
+ assert.equal(hosted.ok,true);
+ const guest=await ask(b,"room:join",{name:"Second",code:hosted.room.roomCode});
+ assert.equal(guest.ok,true);
+ assert.equal((await ask(b,"room:toggleReady")).ok,true);
+ assert.equal((await ask(a,"game:start")).ok,true);
+ const roomCode=hosted.room.roomCode;
+ const state=(await ask(a,"room:resume",{roomCode,playerId:hosted.playerId,resumeToken:hosted.resumeToken})).room;
+ for(let i=0;i<60;i++){
+  if((await readdir(dir)).includes(`${roomCode}.kwroom`))break;
+  await pause(50);
+ }
+ assert.ok((await readdir(dir)).includes(`${roomCode}.kwroom`));
+ const previous=child;
+ previous.kill("SIGTERM");
+ await new Promise(r=>previous.once("exit",r));
+ start();
+ const users=[
+  {id:hosted.playerId,token:hosted.resumeToken},
+  {id:guest.playerId,token:guest.resumeToken}
+ ];
+ const active=users.find(u=>u.id===state.currentPlayerId);
+ const inactive=users.find(u=>u.id!==state.currentPlayerId);
+ const inactiveSocket=await joinServer();
+ const inactiveResume=await ask(inactiveSocket,"room:resume",{roomCode,playerId:inactive.id,resumeToken:inactive.token});
+ assert.equal(inactiveResume.ok,true);
+ assert.equal(inactiveResume.room.status,"playing");
+ assert.ok(inactiveResume.room.players.find(p=>p.id===active.id).handCount>0);
+ assert.equal(inactiveResume.room.players.find(p=>p.id===active.id).hand.length,0);
+ const activeSocket=await joinServer();
+ const activeResume=await ask(activeSocket,"room:resume",{roomCode,playerId:active.id,resumeToken:active.token});
+ assert.equal(activeResume.ok,true);
+ assert.ok(activeResume.room.players.find(p=>p.id===active.id).hand.length>0);
+ assert.equal(activeResume.room.players.find(p=>p.id===inactive.id).hand.length,0);
+ assert.equal((await ask(activeSocket,"game:endTurn")).ok,true);
+});
