@@ -4,6 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
+import { rankValue, power, effectiveDamage, canAttack, battle } from "./combat-primitives.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
@@ -190,46 +191,6 @@ function startTurn(room, p) {
     room.log.push(`${p.name} 目前斷線，開始 60 秒重連倒數。`);
     scheduleDisconnectGrace(room, p, 60);
   }
-}
-function rankValue(rank) {
-  if (rank === "高級") return 3;
-  if (rank === "中級") return 2;
-  return 1;
-}
-
-function power(u) {
-  let v = rankValue(u.rank);
-
-  if (u.status.includes("整備")) v--;
-  if (u.status.includes("階級-1")) v--;
-  if (u.status.includes("階級+1")) v++;
-  if (u.status.includes("力量術+1")) v++;
-  if (u.status.includes("屋大維+1")) v++;
-
-  return Math.max(1, v);
-}
-function effectiveDamage(unit) {
-  let dmg = unit?.damage || 0;
-
-  if (unit?.status?.includes("傷害+1")) dmg += 1;
-  if (unit?.status?.includes("燃血+1傷害")) dmg += 1;
-
-  return dmg;
-}
-
-function canAttack(u) {
-  return !!u &&
-    !u.tapped &&
-    !u.status.includes("整備") &&
-    !u.status.includes("不能攻擊") &&
-    !u.status.includes("疲乏") &&
-    !u.status.includes("疲乏待解");
-}
-function battle(a,d) {
-  let av=power(a), dv=power(d);
-  if (a.counterTarget === d.type) av++;
-  if (d.counterTarget === a.type) dv++;
-  if (av>dv) return "attacker"; if (dv>av) return "defender"; return "both";
 }
 function mageCanCast(m, magic) {
   if (!m || m.type !== "法師" || !canAttack(m)) return false;
