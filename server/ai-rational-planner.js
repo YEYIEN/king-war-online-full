@@ -119,6 +119,23 @@ function opponentResponse(state,heroId,meta,counters,opts){
         bestHeroState=candidate.after;
       }
     }
+    // Opponents may be able to attack twice (or use an archer follow-up).
+    // Explore the strongest visible continuations, rather than assuming
+    // they stop after a single rational strike.
+    for(const candidate of replyCandidates.slice(0,Math.min(4,opts.responseWidth))){
+      if(counters.nodes>=counters.maxNodes)break;
+      const followups=actionsFor(candidate.after);
+      for(const nextMove of followups){
+        if(counters.nodes>=counters.maxNodes)break;
+        const after=transition(candidate.after,nextMove,counters);
+        if(!after)continue;
+        const gain=firstPlaceUtility(after,adversary.id,meta)-before;
+        if(gain>bestOwnGain){
+          bestOwnGain=gain;
+          bestHeroState=after;
+        }
+      }
+    }
     if(!bestHeroState)continue;
     const resultPlayers=participants(bestHeroState);
     const reconstructed={
