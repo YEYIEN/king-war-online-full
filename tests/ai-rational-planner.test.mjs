@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {chooseRationalAttack,firstPlaceUtility} from "../server/ai-rational-planner.js";
+import {chooseRationalAttack,firstPlaceUtility,nextRationalActorId} from "../server/ai-rational-planner.js";
 import {listPublicAttackCandidates} from "../server/ai-legal-actions.js";
 const ctr={步兵:"弓兵",弓兵:"法師",法師:"騎兵",騎兵:"步兵"};
 const u=(id,type="騎兵",rank="中級",extra={})=>({
@@ -70,4 +70,17 @@ test("seat-order rollout works even when the immediate next rival is already eli
  const candidates=eligible(self,enemies);
  const move=chooseRationalAttack(candidates,{self,enemies,turnOrder:["p3","me","p2","p4"],maxNodes:260});
  assert.ok(move===null||candidates.some(x=>x.enemy.id===move.enemy.id&&x.attackerId===move.attackerId));
+});
+
+test("next rational actor follows the real turn order, skipping eliminated seats",()=>{
+ const living=[
+  {id:"a",hp:22,eliminated:false},
+  {id:"b",hp:0,eliminated:true},
+  {id:"c",hp:12,eliminated:false},
+  {id:"d",hp:14,eliminated:false}
+ ];
+ assert.equal(nextRationalActorId(living,"a",["a","b","c","d"]),"c");
+ assert.equal(nextRationalActorId(living,"d",["a","b","c","d"]),"a");
+ assert.equal(nextRationalActorId(living,"a",["a","b","d","c"]),"d");
+ assert.equal(nextRationalActorId(living,"a",["other","a"]),null);
 });
