@@ -86,11 +86,16 @@ test("Mongol recall never overflows hand after many full round passes", {timeout
       if(current.playerId===mongol.id){
         const me=room.players.find(p=>p.id===mongol.id);
         if(!deployedId){
-          const troop=me.hand.find(u=>u.type!=="騎兵"&&u.rank!=="高級") || me.hand.find(u=>u.type!=="騎兵");
+          const troop=me.hand.find(u=>u.type!=="騎兵"&&u.rank!=="高級") || me.hand.find(u=>u.type!=="騎兵") || me.hand[0];
           assert.ok(troop);
           assert.equal((await request(current.socket,"game:deploy",{cardId:troop.id})).ok,true);
           deployedId=troop.id;
         }else if(me.hand.length===7){
+          const rejected=await request(current.socket,"game:recall",{unitId:deployedId});
+          assert.equal(rejected.ok,false,"full hand cannot recall and discard the same unit");
+          assert.match(rejected.error,/手牌已滿/);
+          const freeSlotCard=me.hand.find(u=>u.rank!=="高級") || me.hand[0];
+          assert.equal((await request(current.socket,"game:deploy",{cardId:freeSlotCard.id})).ok,true);
           const out=await request(current.socket,"game:recall",{unitId:deployedId});
           assert.equal(out.ok,true,JSON.stringify(out));
           const after=await view();
