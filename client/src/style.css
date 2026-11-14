@@ -2855,23 +2855,55 @@
 }
 
 
-/* Guided tactical training: show cause, action and consequence together. */
-.guidedLesson { margin: 12px 0 20px; border: 2px solid #b6c9e5; border-radius: 18px;
-  padding: clamp(14px, 3vw, 24px); background: #f2f6fd; color: #17243a; }
-.guidedLessonTop { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
-  font-size: .9rem; color:#304e79; margin-bottom:10px; }
-.guidedLesson h2 { margin: 8px 0 12px; font-size: clamp(1.12rem, 3vw, 1.5rem); color:#102949; }
-.guidedLesson p { line-height:1.6; margin:7px 0; }
-.guidedLesson .lessonTask { background: #e1edfe; border-left:4px solid #4a78c3; padding:11px; border-radius:6px; }
-.guidedLesson .lessonWarning { color:#634721; background:#fff4d8; padding:10px; border-radius:6px; }
-.guidedLesson .lessonCorrect { color:#24663a; font-weight:700; }
-.guidedLesson .lessonWrong { color:#9c3b32; }
-.lessonChoiceGroup { display:grid; gap:8px; margin:12px 0; }
-.lessonChoiceGroup button { text-align:left; padding:11px; color:#1d324c; border:1px solid #9db4d7; border-radius:8px; background:white; cursor:pointer; }
-.lessonChoiceGroup button.selected { border:2px solid #3574d6; background:#e6f0ff; }
-.lessonProgress { display:flex; gap:6px; margin-top:12px; }
-.lessonProgress span { height:7px; flex:1; border-radius:6px; background:#d2d8e4; }
-.lessonProgress span.active { background:#3a78bd; }
+/* Design-system foundation: one dark tactical visual language for match and tutorial. */
+:root {
+  color-scheme: dark;
+  --kw-bg: #020617;
+  --kw-surface: #0f172a;
+  --kw-surface-raised: #172334;
+  --kw-border: #475569;
+  --kw-text: #f8fafc;
+  --kw-muted: #cbd5e1;
+  --kw-focus: #facc15;
+  --kw-primary: #168454;
+  --kw-attack: #bb373d;
+  --kw-magic: #814fc1;
+  --kw-warning: #c97e27;
+}
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+.gameCard:focus-visible, .settingChoice:focus-visible {
+  outline: 3px solid var(--kw-focus);
+  outline-offset: 3px;
+}
+button.primaryBtn, .primaryBtn { background: var(--kw-primary); }
+.endTurnBtn { background: var(--kw-warning); }
+.gameCard.magic { border-color: var(--kw-magic); }
+.enemyZone .actionLabel { background: var(--kw-attack); }
+.gameCard.selected { outline: 3px solid var(--kw-focus); outline-offset: 1px; }
+.guidedLesson {
+  margin: 12px 0 20px;
+  border: 1px solid #61738a;
+  border-radius: 18px;
+  padding: clamp(14px, 3vw, 24px);
+  background: linear-gradient(140deg,var(--kw-surface-raised),var(--kw-surface));
+  color: var(--kw-text);
+}
+.guidedLessonTop {display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.9rem;color:var(--kw-muted);margin-bottom:10px;}
+.guidedLesson h2 {margin:8px 0 12px;font-size:clamp(1.12rem,3vw,1.5rem);color:var(--kw-text);}
+.guidedLesson p {line-height:1.6;margin:7px 0;color:var(--kw-muted);}
+.guidedLesson .lessonTask {background:#203350;border-left:4px solid #779cdd;padding:11px;border-radius:6px;color:var(--kw-text);}
+.guidedLesson .lessonWarning {background:#453620;color:#ffdfab;padding:10px;border-radius:6px;}
+.guidedLesson .lessonCorrect {color:#9be3ba;font-weight:700;}
+.guidedLesson .lessonWrong {color:#ffb0ab;}
+.lessonChoiceGroup {display:grid;gap:8px;margin:12px 0;}
+.lessonChoiceGroup button {text-align:left;padding:11px;color:var(--kw-text);border:1px solid #607188;border-radius:8px;background:#233248;cursor:pointer;}
+.lessonChoiceGroup button.selected {border:2px solid var(--kw-focus);background:#33415b;}
+.lessonProgress {display:flex;gap:6px;margin-top:12px;}
+.lessonProgress span {height:7px;flex:1;border-radius:6px;background:#516075;}
+.lessonProgress span.active {background:#9ab5f0;}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after {animation-duration:.01ms !important;transition-duration:.01ms !important;scroll-behavior:auto !important;}
+}
 .aiStartBox .settingButtonGroup { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px; }
 @media (max-width:600px) {
   .guidedLesson { padding:12px; }
