@@ -45,11 +45,17 @@ for(const scenario of scenarios){
   playerCount:scenario.playerCount,arm:scenario.name,games:n,wins,rate:pc(wins,n),
   finished:sum(r=>r.finished),unfinished:sum(r=>r.unfinished),
   meanSimulationMsPerGame:+(results.reduce((t,x)=>t+x.ms,0)/n).toFixed(2),
+  rational:{
+   calls:sum(r=>r.telemetry.rationalCalls||0),
+   passes:sum(r=>r.telemetry.rationalPasses||0),
+   decisionsDifferingFromLegacy:sum(r=>r.telemetry.rationalChanged||0),
+   exploredNodes:sum(r=>r.telemetry.rationalNodes||0)
+  },
   seedElapsedMs:results.map(x=>({seed:x.seed,elapsed:+x.ms.toFixed(2)})),
   kingStats,seatStats
  };
  reports.push(row);
- console.error("RATIONAL_AB",JSON.stringify({players:row.playerCount,arm:row.arm,n:row.games,wins:row.wins,rate:row.rate,msPerGame:row.meanSimulationMsPerGame}));
+ console.error("RATIONAL_AB",JSON.stringify({players:row.playerCount,arm:row.arm,n:row.games,wins:row.wins,rate:row.rate,msPerGame:row.meanSimulationMsPerGame,rational:row.rational}));
 }
 const out={
  purpose:"Conqueror rational rollout feasibility and win-rate regression screening; no balance changes",
