@@ -1253,10 +1253,18 @@ io.on("connection", socket => {
     // DISCONNECT_GRACE_RESUME_V1
     clearDisconnectGrace(room, player);
     if (room.recovered) {
-      clearRoomCleanup(room);
-      if (room.currentPlayerId === player.id) scheduleTurnTimer(room,player);
-      if (room.currentPlayerId && room.players.find(p=>p.id===room.currentPlayerId)?.isAI) scheduleAITurn(room);
-      room.recovered=false;
+      const current = room.players.find(p=>p.id===room.currentPlayerId);
+      if (current?.isAI || current?.connected) {
+        clearRoomCleanup(room);
+        if (current && !current.isAI) scheduleTurnTimer(room,current);
+        if (current?.isAI) scheduleAITurn(room);
+        for (const absent of room.players.filter(p=>!p.isAI&&!p.eliminated&&!p.connected))
+          scheduleDisconnectGrace(room,absent,60);
+        room.recovered=false;
+      } else {
+        // Keep a finite recovery window if another player rejoins first.
+        scheduleRoomCleanup(room,300);
+      }
     }
 
     room.log.push(`${player.name} 已重新連線。`);
