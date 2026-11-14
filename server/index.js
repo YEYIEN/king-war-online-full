@@ -11,7 +11,7 @@ import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeM
 import { createSocketEventGuard } from "./socket-guard.js";
 import { originPolicy } from "./origin-policy.js";
 import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
-import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -927,7 +927,8 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
           score: aiStrategicAttackScore(room, ai, attacker, enemy, defender) });
       }
     }
-    const chosen = selectAttackChoice(actions, { difficulty, self: ai, enemies,
+    const publicEnemies = enemies.map(publicOpponentForAI);
+    const chosen = selectAttackChoice(actions, { difficulty, self: ai, enemies: publicEnemies,
       battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
       conquerorProfile: room.settings?.conquerorProfile || "resource" });
     if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
