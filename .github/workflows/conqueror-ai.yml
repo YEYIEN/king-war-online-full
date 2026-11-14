@@ -14,6 +14,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+      - run: npm --prefix client ci
       - name: Unit and integration regression
         run: npm test
       - name: Benchmark AI challenger by opponent and number of players
