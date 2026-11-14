@@ -66,17 +66,18 @@ export function scoreKingPlanDeployment(card, self, enemy, difficulty="hard") {
       return card.type==="步兵" && guards===0 ? 24 :
         card.rank==="高級" && guards>0 ? 10 : 0;
     case "成吉思汗":
-      // Mobility matters only if recall can still create meaningful advantage.
-      return card.type==="騎兵" && (self.recallDrawCount||0)<2 && self.hand.length<=5 ? 22 : 0;
+      // Mobility is already handled by the live recall policy; avoid crowding out guards.
+      return card.type==="騎兵" && !self.field.some(u=>u.type==="騎兵") &&
+        (self.recallDrawCount||0)<2 ? 6 : 0;
     case "秦始皇":
       // Protect the initial board, then convert the 9-card-capacity economy.
       return card.type==="步兵" && guards===0 ? 16 :
         self.hand.length>=6 && card.rank!=="高級" ? 18 : 0;
     case "路易十四":
-      // A surviving mage produces spells even with no spell yet in hand.
-      return card.type==="法師" && mages===0 ? (guards>0?34:24) :
-        card.type==="步兵" && guards===0 && mages>0 ? 24 :
-        card.type==="法師" && mages>0 && attackers===0 ? 9 : 0;
+      // The mage economy needs a protected setup; exposed first-turn mages are fragile.
+      return card.type==="步兵" && guards===0 ? 28 :
+        card.type==="法師" && mages===0 ? (guards>0?18:-6) :
+        card.type==="法師" && mages>0 && attackers===0 ? 5 : 0;
     default:return 0;
   }
 }
@@ -99,7 +100,7 @@ export function scoreKingPlanAttack({self,enemy,attacker,defender}) {
     case "秦始皇":
       return defender && prediction?.killedEnemy ? 14 : !defender ? 10 : 0;
     case "路易十四":
-      return attacker.type==="法師" && self.field.filter(u=>u.type==="法師").length===1 ? -35 :
+      return attacker.type==="法師" && self.field.filter(u=>u.type==="法師").length===1 ? -12 :
         defender?.type==="步兵" && prediction?.killedEnemy ? 14 : 0;
     default:return 0;
   }
@@ -290,7 +291,11 @@ function chooseConquerorAttack(actions, ctx) {
       self:ctx.self,enemy:move.enemy,attacker:ctx.self.field.find(u=>u.id===move.attackerId),
       defender:move.defenderId?move.enemy.field.find(u=>u.id===move.defenderId):null
     }):0;
-    const total=continuation.score-exposed+counterBonus+ownPlanBonus;
+    // Conqueror's existing search remains authoritative. King preferences
+    // break near-ties instead of overruling a superior tactical continuation.
+    const total=continuation.score-exposed+
+      Math.min(3,Math.max(-3,counterBonus))+
+      Math.min(3,Math.max(-3,ownPlanBonus));
     if(total>score){score=total;best={...move,expectedScore:total};}
   }
   return best;
