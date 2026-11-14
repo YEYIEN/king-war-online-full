@@ -1,4 +1,8 @@
 import { test } from "node:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, buildMatchSummary,
   finalizeMatchMetrics, persistMatchSummary } from "../server/game-metrics.js";
@@ -45,4 +49,33 @@ test("turn duration validates inputs and trims outliers",()=>{
  assert.equal(summary.turnDuration.samples,1);
  assert.equal(summary.turnDuration.meanMs,3600000);
  assert.equal(summary.winnerSeat,null);
+});
+
+test("live opt-in JSONL records persist and aggregate with safe completed denominators",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"kingwar-metrics-test-"));
+ try{
+  const filename=join(dir,"sessions.match-metrics.jsonl");
+  const good=room();good.matchMetrics=createMatchMetrics(good,1000);
+  recordTurnDuration(good,30000,{ai:false});
+  recordTurnDuration(good,900,{ai:true});
+  const completed=buildMatchSummary(good,{winnerId:"SECRET_A",now:61000,
+   comeback:{trailingPlayers:1,criticalPlayers:1,comebackWin:true,criticalWin:true}});
+  await persistMatchSummary(completed,{filePath:filename,simulation:false});
+  const abandoned=buildMatchSummary(good,{winnerId:null,reason:"abandoned",now:62000});
+  await persistMatchSummary(abandoned,{filePath:filename,simulation:false});
+  const rows=(await readFile(filename,"utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(rows.length,2);
+  assert.ok(!JSON.stringify(rows).includes("SECRET_A"));
+  const cli=spawnSync(process.execPath,[new URL("../scripts/aggregate-match-metrics.mjs",import.meta.url).pathname,filename],{encoding:"utf8"});
+  assert.equal(cli.status,0,cli.stderr);
+  const report=JSON.parse(cli.stdout);
+  assert.equal(report.groups.length,1);
+  const group=report.groups[0];
+  assert.equal(group.games,2);
+  assert.equal(group.completed,1);
+  assert.equal(group.king["亞歷山大大帝"].winRate,100);
+  assert.equal(group.observedHumanTurnSeconds,30);
+  assert.equal(group.observedAiTurnSeconds,0.9);
+  assert.equal(group.comebackRate.critical,100);
+ }finally{await rm(dir,{recursive:true,force:true})}
 });
