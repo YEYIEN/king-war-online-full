@@ -109,7 +109,7 @@ function finishIfGameOver(room) {
 
     // ROOM_CLEANUP_ON_GAME_OVER_V1
     // 結束後保留一段時間讓玩家看結果，之後刪除房間，避免舊房間污染新局。
-    scheduleRoomCleanup(room, room.singleplayer || room.tutorial ? 45 : 180);
+    if (process.env.KW_SIMULATION !== "1") scheduleRoomCleanup(room, room.singleplayer || room.tutorial ? 45 : 180);
 
     return true;
   }
@@ -496,10 +496,12 @@ function isAIPlayer(player) {
 }
 
 function sleep(ms) {
+  if (process.env.KW_SIMULATION === "1") return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function scheduleAITurn(room) {
+  if (process.env.KW_SIMULATION === "1") return;
   if (!room || room.status !== "playing") return;
 
   const current = room.players.find((p) => p.id === room.currentPlayerId);
@@ -1635,4 +1637,80 @@ if (process.env.NODE_ENV === "production") {
   app.use(express.static(dist));
   app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
-server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}`));
+if (process.env.KW_SIMULATION !== "1") {
+  server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}`));
+}
+
+
+/**
+ * Headless benchmark using the ACTUAL game rules, decks, king triggers and existing AI policy.
+ * It measures performance under this policy, NOT unbiased king power or human win rates.
+ * Simulation-only; never exposed to Socket.IO clients.
+ */
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729 } = {}) {
+  if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
+  if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
+  if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
+  const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
+  const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
+  let unfinished = 0, totalTurns = 0;
+  const originalRandom = Math.random;
+  let state = seed >>> 0 || 1;
+  Math.random = () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 4294967296;
+  };
+  try {
+    for (let n = 0; n < matches; n++) {
+      const room = {
+        code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
+        settings: { turnTimeLimit: 0 }, log: [], unitDeck: [], magicDeck: [],
+        players: Array.from({ length: playerCount }, (_, seat) => ({
+          id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
+          isAI: true, isHost: seat === 0, connected: true, ready: true,
+          hp: 30, field: [], magic: [], hand: [], eliminated: false
+        }))
+      };
+      rooms.set(room.code, room);
+      startGame(room);
+      const seatIndex = Object.fromEntries(room.players.map((p, i) => [p.id, i + 1]));
+      for (const p of room.players) { counts[p.king.name].games++; seats[seatIndex[p.id]].games++; }
+      let turns = 0;
+      while (room.status === "playing" && turns < maxTurns) {
+        const before = room.currentPlayerId;
+        await performAITurn(room.code);
+        turns++;
+        if (room.currentPlayerId === before && room.status === "playing") {
+          // A stalled AI action must not make this a falsely completed game.
+          break;
+        }
+        if (room.log.length > 80) room.log.splice(0, room.log.length - 80);
+      }
+      totalTurns += turns;
+      const survivors = alive(room);
+      if (room.status === "ended" && survivors.length === 1) {
+        const winner = survivors[0];
+        counts[winner.king.name].wins++;
+        seats[seatIndex[winner.id]].wins++;
+      } else {
+        unfinished++;
+        for (const p of room.players) counts[p.king.name].unfinished++;
+      }
+      rooms.delete(room.code);
+    }
+  } finally {
+    Math.random = originalRandom;
+    rooms.clear();
+  }
+  return {
+    methodology: "actual game server rules + original baseline AI policy, randomly assigned kings/seats; unfinished matches count as no win",
+    seed, matches, playerCount, maxTurns,
+    finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
+    kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
+      [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
+    seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
+      [seat, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }]))
+  };
+}
