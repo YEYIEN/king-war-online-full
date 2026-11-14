@@ -962,7 +962,10 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
   const { destroyed } = applyMagicFieldEffect(magic.name, target, ids);
   const effective = destroyed > 0 || beforeField !== JSON.stringify(target.field.map(u=>({id:u.id,status:u.status,tapped:u.tapped})));
   incrementMatchMetric(room,"spellCast",1,{playerId:player.id,spell:magic.name,effective});
-  if (effective) incrementMatchMetric(room,"spellImpact",1,{playerId:player.id});
+  if (effective) {
+    incrementMatchMetric(room,"spellImpact",1,{playerId:player.id});
+    if (room.simMetrics) room.simMetrics.spellsEffective[magic.name] = (room.simMetrics.spellsEffective[magic.name] || 0) + 1;
+  }
   if (magic.name === "燃血術") {
     player.hp -= 3;
     if (player.hp <= 0) {
@@ -1961,7 +1964,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const unfinishedReasons = { turnLimit: 0, stalledAITurn: 0, unexpected: 0 };
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
   const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
-    kingDamage: 0, damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
+    kingDamage: 0, damageByKing: {}, spells: {}, spellsEffective: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
     comebackUses: { assault: 0, defense: 0 } };
   const turnsHistogram = { "0-9": 0, "10-19": 0, "20-39": 0, "40-79": 0, "80+": 0 };
   const turnSamples = includeTurnSamples ? [] : null;
@@ -2045,7 +2048,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       turnsHistogram[bucket]++;
       const m = room.simMetrics;
       for (const name of ["unitAttacks","mutualKills","failedTrades","kingAttacks","kingDamage","aiDeployments","mongolRecalls"]) telemetry[name] += m[name];
-      for (const name of ["damageByKing","spells","turnsByKing"]) {
+      for (const name of ["damageByKing","spells","spellsEffective","turnsByKing"]) {
         for (const [key, value] of Object.entries(m[name])) telemetry[name][key] = (telemetry[name][key] || 0) + value;
       }
       for (const mode of ["assault","defense"]) telemetry.comebackUses[mode] += m.comebackUses[mode];
