@@ -1,0 +1,26 @@
+name: AI learning tier evaluation
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  teaching:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Evaluate teaching opponents against novice-to-expert proxy bots
+        env:
+          KW_SIMULATION: '1'
+          MATCHES_PER_SEED: '200'
+        run: node scripts/ai-curriculum-evaluation.mjs | tee ai-learning-tier-results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-learning-tier-results
+          path: ai-learning-tier-results.json
+          retention-days: 30

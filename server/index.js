@@ -5,6 +5,13 @@ import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
+import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
+import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
+import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
+import { createSocketEventGuard } from "./socket-guard.js";
+import { originPolicy } from "./origin-policy.js";
+import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -13,8 +20,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const socketOriginPolicy=originPolicy();
+const io = new Server(server, {
+  cors:{origin:socketOriginPolicy.corsOrigins},
+  allowRequest:socketOriginPolicy.allowRequest,
+  maxHttpBufferSize:32*1024
+});
 const rooms = new Map();
+const MAX_LIVE_ROOMS = Math.max(1,Math.min(10000,Number(process.env.KW_MAX_ROOMS)||200));
+function atRoomCapacity(){return process.env.KW_SIMULATION!=="1" && rooms.size>=MAX_LIVE_ROOMS;}
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
 const disconnectGraceTimers = new Map();
@@ -40,14 +54,16 @@ const RANKS = ["初級", "中級", "高級"];
 const COUNTER = { 步兵: "弓兵", 弓兵: "法師", 法師: "騎兵", 騎兵: "步兵" };
 const RANK_VALUE = { 初級: 1, 中級: 2, 高級: 3 };
 const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
+const AI_DIFFICULTIES = ["easy", "normal", "hard", "conqueror"];
+function getAIDifficulty(room, player) { const value = player?.aiDifficulty ?? room?.settings?.aiDifficulty; return AI_DIFFICULTIES.includes(value) ? value : "normal"; }
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
 const KINGS = [
   { name: "亞歷山大大帝", effectName: "征服遠征", effect: "戰鬥消滅敵方兵種後抽1張兵種卡。" },
   { name: "屋大維奧古斯都", effectName: "羅馬秩序", effect: "非自己回合時，隨機1名我方場上兵種戰力+1。" },
-  { name: "成吉思汗", effectName: "草原機動", effect: "每回合可撤回1名我方兵種；若是騎兵，抽1張兵種卡。" },
+  { name: "成吉思汗", effectName: "草原機動", effect: "開局至少有1張騎兵；每回合可撤回1名我方兵種，前2次撤回騎兵時可額外抽1張兵種卡。" },
   { name: "秦始皇", effectName: "中央集權", effect: "手牌上限9，每回合開始抽2張兵種卡。" },
-  { name: "路易十四", effectName: "太陽王權", effect: "每回合第一次使用魔法卡後，抽1張兵種卡。" }
+  { name: "路易十四", effectName: "太陽王權", effect: "場上有法師時每回合多抽1張魔法；首次施法後抽1張兵種，且施法法師可再行動一次。" }
 ];
 
 const MAGIC_DEFS = [
@@ -95,6 +111,7 @@ function trimHand(room, p) {
 function drawUnits(room, p, n) { for (let i=0;i<n && room.unitDeck.length;i++) p.hand.push(room.unitDeck.shift()); trimHand(room, p); }
 function drawMagic(room, p, n) { let d=0; for (let i=0;i<n && room.magicDeck.length && p.magic.length<3;i++,d++) p.magic.push(room.magicDeck.shift()); return d; }
 function alive(room) { return room.players.filter(p => !p.eliminated && p.hp > 0); }
+function openingTruce(room) { return (!!room?.settings?.openingTruceEnabled && (room.turnsCompleted || 0) < room.players.length) || (!!room?.settings?.firstSeatPeacefulTurn && room.players.length === 2 && (room.turnsCompleted || 0) === 0); }
 
 function finishIfGameOver(room) {
   if (!room || room.status === "ended") return true;
@@ -102,14 +119,21 @@ function finishIfGameOver(room) {
   const living = alive(room);
 
   if (living.length <= 1) {
+    if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
+      const active = room.players.find(p => p.id === room.currentPlayerId);
+      recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI});
+    }
     clearTurnTimer(room);
     room.status = "ended";
     room.currentPlayerId = null;
     room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
+    finalizeMatchMetrics(room, { winnerId:living[0]?.id || null,
+      reason:room.matchMetrics?.finishReason || "last-standing",
+      comeback:room.simProgress ? analyzeFinalOutcome(room,living[0]?.id || null) : null });
 
     // ROOM_CLEANUP_ON_GAME_OVER_V1
     // 結束後保留一段時間讓玩家看結果，之後刪除房間，避免舊房間污染新局。
-    scheduleRoomCleanup(room, room.singleplayer || room.tutorial ? 45 : 180);
+    if (process.env.KW_SIMULATION !== "1") scheduleRoomCleanup(room, room.singleplayer || room.tutorial ? 45 : 180);
 
     return true;
   }
@@ -131,8 +155,11 @@ function startTurn(room, p) {
   clearOct(p);
 
   const hadEmptyFieldAtTurnStart = p.field.length === 0;
-  p.reinforcementAvailable = hadEmptyFieldAtTurnStart;
+  const rally = !!p.pendingDefenseRally;
+  p.reinforcementAvailable = hadEmptyFieldAtTurnStart || rally;
   p.reinforcementUsed = false;
+  p.pendingDefenseRally = false;
+  if (rally) room.log.push(`${p.name} 的固守反擊生效：本回合首張初級或中級部署兵種可立即行動。`);
 
   if (hadEmptyFieldAtTurnStart) {
     room.log.push(`${p.name} 場上沒有兵種，獲得急援：本回合第一張部署的初級或中級兵種可以立刻攻擊。`);
@@ -140,6 +167,7 @@ function startTurn(room, p) {
 
   p.magicDrawUsed = false;
   p.recallUsed = false;
+  p.lastStandShield = 0;
   p.fieldBonus = 0;
   p.field.forEach(u => {
     u.tapped = false; u.justDeployed = false; u.archerBonusUsed = false;
@@ -149,7 +177,12 @@ function startTurn(room, p) {
   drawUnits(room, p, ud);
   const mages = p.field.filter(u => u.type === "法師").length;
   const md = drawMagic(room, p, mages);
+  const louisBonus = p.king?.name === "路易十四" && mages > 0 && room.settings?.louisBonus !== false
+    ? drawMagic(room, p, 1) : 0;
+  if (louisBonus) room.log.push(`${p.name} 的太陽王權：額外補充1張魔法卡。`);
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
+  observeTurnStart(room, p);
+  if (room.matchMetrics) room.matchMetrics.turnsStarted++;
   scheduleTurnTimer(room, p);
 
   // DISCONNECT_GRACE_STARTTURN_V1
@@ -206,13 +239,19 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
-function publicPlayer(p, viewer) {
+function publicPlayer(p, viewer, room) {
   const isMe = p.id === viewer;
-  return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
+  return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, lastStandShield: p.lastStandShield || 0, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
-function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0 }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
-    tutorial: !!room.tutorial, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer)) }; }
-function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
+function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
+    tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
+function persistRoomSnapshot(room) {
+  void saveRoomSnapshot(room).catch(error=>console.error("Room recovery snapshot error:",error.message));
+}
+function broadcast(room) {
+  room.players.forEach(p => { if (!isAIPlayer(p) && p.socketId) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); });
+  persistRoomSnapshot(room);
+}
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
 
 
@@ -224,6 +263,7 @@ function kwConnectedHumans(room) {
 function deleteRoomNow(roomCode, reason = "房間已清理。") {
   const room = rooms.get(roomCode);
   if (!room) return false;
+  if (room.status === "playing") finalizeMatchMetrics(room,{winnerId:null,reason:"abandoned"});
   clearTurnTimer(room);
   clearRoomCleanup(room);
   for (const player of room.players) clearDisconnectGrace(room, player);
@@ -231,6 +271,7 @@ function deleteRoomNow(roomCode, reason = "房間已清理。") {
   io.in(room.code).emit("room:deleted", { reason });
   io.socketsLeave(room.code);
   rooms.delete(room.code);
+  void removeRoomSnapshot(room.code).catch(error=>console.error("Snapshot cleanup failed:",error.message));
   return true;
 }
 
@@ -369,6 +410,10 @@ function finishTurn(room, player, reason = "結束回合") {
   clearEndTurnControl(player);
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
+  if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
+  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt, {ai:!!player.isAI});
+  room.turnsCompleted = (room.turnsCompleted || 0) + 1;
+  if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
   applyOct(room, player);
 
@@ -423,6 +468,9 @@ function allGuestsReady(room) {
 function advanceAfterElimination(room, player) {
   if (finishIfGameOver(room)) return;
   if (room.currentPlayerId !== player.id) return;
+  if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
+    recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI});
+  }
   clearTurnTimer(room);
   const next = nextAlive(room, player.id);
   if (!next) return;
@@ -438,6 +486,7 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
 
   player.hp = 0;
   player.eliminated = true;
+  if (room.matchMetrics) room.matchMetrics.finishReason = "forfeit-involved";
   player.connected = false;
   player.socketId = null;
   room.log.push(`${player.name} ${reason}`);
@@ -447,10 +496,39 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
   return true;
 }
 
+function useLastStand(room, player, mode = "assault") {
+  if (!canUseLastStand(room, player)) return { ok: false, error: "目前尚未符合背水一戰條件，或已經使用過。" };
+  if (!["assault", "defense"].includes(mode)) return { ok: false, error: "不支援的背水一戰策略。" };
+  player.lastStandUsed = true;
+  player.lastStandMode = mode;
+  player.hp -= 2;
+  player.lastStandShield = room.settings?.lastStandShieldEnabled === false ? 0 : (mode === "defense" ? 7 : 3);
+  if (mode === "assault") {
+    drawUnits(room, player, 2);
+    player.reinforcementAvailable = true;
+    player.reinforcementUsed = false;
+  } else {
+    drawUnits(room, player, 1);
+    if (room.settings?.defenseRallyEnabled === true) player.pendingDefenseRally = true;
+  }
+  room.lastStandCount = (room.lastStandCount || 0) + 1;
+  if (!room.lastStandModes) room.lastStandModes = { assault: 0, defense: 0 };
+  room.lastStandModes[mode]++;
+  incrementMatchMetric(room,"lastStand",1,{playerId:player.id});
+  if (room.simMetrics) room.simMetrics.comebackUses[mode]++;
+  room.log.push(mode === "assault"
+    ? `${player.name} 選擇突圍：失去2HP、抽2兵種、獲得一次緊急部署，並獲得3點護盾。`
+    : `${player.name} 選擇固守：失去2HP、抽1兵種、獲得7點護盾，保留資源等待下回合。`);
+  return { ok: true, mode };
+}
+
 function startGame(room) {
   // ROOM_CLEANUP_CLEAR_ON_STARTGAME_V1
   clearRoomCleanup(room);
   room.status = "playing";
+  room.turnsCompleted = 0;
+  room.matchMetrics = createMatchMetrics(room);
+  room.simProgress = { trailingPlayers: new Set(), criticalPlayers: new Set() };
   room.unitDeck = makeUnits();
   room.magicDeck = makeMagic();
 
@@ -474,10 +552,31 @@ function startGame(room) {
     p.eliminated = false;
     p.magicDrawUsed = false;
     p.recallUsed = false;
+    p.recallDrawCount = 0;
     p.fieldBonus = 0;
+    p.lastStandUsed = false;
+    p.lastStandMode = null;
+    p.lastStandShield = 0;
+    p.pendingDefenseRally = false;
 
-    drawUnits(room, p, p.king.name === "秦始皇" ? 6 : 5);
+    drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5);
+    if (p.king.name === "成吉思汗" && room.settings?.genghisGuaranteedCavalry !== false && !p.hand.some(c => c.type === "騎兵")) {
+      const i = room.unitDeck.findIndex(c => c.type === "騎兵");
+      if (i >= 0 && p.hand.length) {
+        const [cavalry] = room.unitDeck.splice(i, 1);
+        const replaced = p.hand.pop();
+        p.hand.push(cavalry);
+        room.unitDeck.push(replaced);
+      }
+    }
   });
+
+  // Experimental two-player seat compensation: one extra opening option for the second player.
+  const secondSeatExtraCards = Math.min(2, Math.max(0, Number(room.settings?.secondSeatExtraCards ?? 0)));
+  if (room.players.length === 2 && secondSeatExtraCards > 0) {
+    drawUnits(room, room.players[1], secondSeatExtraCards);
+    room.log.push(`雙人局後手補償：${room.players[1].name} 額外抽${secondSeatExtraCards}張兵種卡。`);
+  }
 
   const firstPlayer = room.players[0];
   room.currentPlayerId = firstPlayer.id;
@@ -496,10 +595,12 @@ function isAIPlayer(player) {
 }
 
 function sleep(ms) {
+  if (process.env.KW_SIMULATION === "1") return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function scheduleAITurn(room) {
+  if (process.env.KW_SIMULATION === "1") return;
   if (!room || room.status !== "playing") return;
 
   const current = room.players.find((p) => p.id === room.currentPlayerId);
@@ -551,14 +652,15 @@ function aiDeployScore(card, ai, enemy) {
 }
 
 function aiDeployUnits(room, ai, enemy) {
-  let deployLimit = ai.field.length === 0 ? 2 : ai.field.length <= 2 ? 2 : 1;
+  const difficulty = getAIDifficulty(room, ai);
+  let deployLimit = difficulty === "easy" ? 1 : (difficulty === "hard" || difficulty === "conqueror") ? (ai.field.length <= 2 ? 3 : 2) : (ai.field.length <= 2 ? 2 : 1);
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
     const scored = ai.hand
-      .map((card, index) => ({ card, index, score: aiDeployScore(card, ai, enemy) }))
+      .map((card, index) => ({ card, index, score: room.settings?.aiCurriculumPolicy === false ? aiDeployScore(card, ai, enemy) : scoreTeachingDeployment(card, ai, enemy, difficulty, aiDeployScore(card, ai, enemy)) }))
       .sort((a, b) => b.score - a.score);
 
-    const best = scored[0];
+    const best = selectDeployChoice(scored, difficulty);
     if (!best || best.score < 8) break;
 
     const [card] = ai.hand.splice(best.index, 1);
@@ -581,6 +683,7 @@ function aiDeployUnits(room, ai, enemy) {
     }
 
     ai.field.push(card);
+    incrementMatchMetric(room,"deploy",1,{playerId:ai.id});
     room.log.push(`${ai.name} 部署 ${card.name}${card.rank === "高級" ? "，進入整備" : ""}${triggeredReinforcement ? "，觸發急援，本回合可以攻擊" : ""}。`); // AI_VISIBILITY_DEPLOY_LOG
     deployLimit--;
   }
@@ -620,8 +723,98 @@ function aiAttackScore(attacker, enemy, defender) {
   return score;
 }
 
+
+function aiSelectEnemy(room, ai) {
+  const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
+  if (!enemies.length) return null;
+  const difficulty = getAIDifficulty(room, ai);
+  if (difficulty === "easy") return enemies[Math.floor(Math.random() * enemies.length)];
+  if (difficulty === "normal" && room.players.length === 2) return enemies[0];
+  const threat = p =>
+    p.hp * 0.8 +
+    p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
+    p.magic.length * (p.field.some(u => u.type === "法師") ? 3 : 0) -
+    p.field.filter(u => u.type === "步兵").length * 4 +
+    (room.players.length >= 3 && difficulty === "hard" && p.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 2 : 0);
+  return enemies.sort((a, b) => threat(b) - threat(a))[0];
+}
+
+function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
+  const basic = aiAttackScore(attacker, enemy, defender);
+  const difficulty = getAIDifficulty(room, ai);
+  if (difficulty === "easy" || (difficulty === "normal" && room.players.length === 2)) return basic;
+  // In free-for-all games, pressuring the strongest remaining army is generally
+  // more useful than finishing an already-weak opponent just because it is weak.
+  const strategicThreat = room.players.length >= 3
+    ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magic.length * 5 + enemy.hp * 0.35 +
+      (difficulty === "hard" && enemy.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 4 : 0)
+    : 0;
+  if (difficulty === "normal") return basic + strategicThreat;
+  if (!defender) {
+    let result = basic + strategicThreat + (enemy.hp <= effectiveDamage(attacker) ? 200 : 18);
+    if (attacker.type === "步兵" && ai.field.filter(u => u.type === "步兵").length === 1 && ai.hp < 12) result -= 55;
+    return result;
+  }
+  const result = battle(attacker, defender);
+  let value = basic + strategicThreat;
+  if (defender.type === "步兵" && enemy.field.filter(u => u.type === "步兵").length === 1) {
+    value += 55 + ai.field.filter(u => canAttack(u) && u.id !== attacker.id).length * 22;
+  }
+  if (defender.type === "法師" && enemy.magic.length) value += 35;
+  if (defender.type === "騎兵" && canAttack(defender)) value += 16;
+  if (result === "defender" && attacker.type !== "弓兵") value -= 85;
+  if (result === "both" && attacker.rank === "高級" && defender.rank !== "高級") value -= 65;
+  if (attacker.type === "步兵" && ai.field.filter(u => u.type === "步兵").length === 1 && ai.hp < 12 && result !== "attacker") value -= 60;
+  return value;
+}
+
+function returnUnitToHand(room, player, unitId) {
+  if (player.king?.name !== "成吉思汗") return { ok: false, error: "只有成吉思汗可以撤回。" };
+  if (player.recallUsed) return { ok: false, error: "本回合已撤回。" };
+  if (player.hand.length >= maxHand(player)) return { ok: false, error: "手牌已滿，請先部署兵種再撤回，避免遺失卡牌。" };
+  const index = player.field.findIndex(unit => unit.id === unitId);
+  if (index < 0) return { ok: false, error: "找不到兵種。" };
+  const [unit] = player.field.splice(index, 1);
+  unit.tapped = false;
+  unit.justDeployed = false;
+  unit.archerBonusUsed = false;
+  // A returned card must not carry spell buffs, poison or pending combat flags back into hand.
+  unit.status = [];
+  player.hand.push(unit);
+  player.recallUsed = true;
+  incrementMatchMetric(room,"recall",1,{playerId:player.id});
+  const drawBonus = unit.type === "騎兵" && (player.recallDrawCount || 0) < (room.settings?.genghisDrawLimit ?? 2);
+  if (drawBonus) {
+    drawUnits(room, player, 1);
+    player.recallDrawCount = (player.recallDrawCount || 0) + 1;
+  }
+  trimHand(room, player);
+  room.log.push(`${player.name} 撤回 ${unit.name}${drawBonus ? "並抽1張兵種卡" : ""}。`);
+  return { ok: true, unitId, drawBonus };
+}
+
+function aiUseKingAbility(room, ai) {
+  // A/B evidence: the risk-aware recall helps duels (and strong 3-player AI),
+  // but reduces win rate in 4/5-player free-for-all. Keep the better policy by format.
+  const difficulty = getAIDifficulty(room, ai);
+  const useRiskAware = room.players.length===2 || (room.players.length===3 && difficulty!=="normal");
+  if (room.settings?.aiRecallStrategy === false || !useRiskAware) {
+    if (ai.king?.name !== "成吉思汗" || ai.recallUsed || ai.hand.length >= maxHand(ai)) return false;
+    if (difficulty === "easy" && Math.random() > 0.25) return false;
+    const candidates = ai.field.filter(u => u.type === "騎兵" && u.tapped);
+    if (!candidates.length || ai.field.length < 3) return false;
+    if (difficulty === "normal" && Math.random() > 0.35) return false;
+    return returnUnitToHand(room, ai, candidates.sort((a,b)=>rankValue(b.rank)-rankValue(a.rank))[0].id).ok;
+  }
+  const unit = chooseMongolRecall({self:ai,
+    opponents:room.players.filter(p=>p.id!==ai.id),difficulty:getAIDifficulty(room,ai),
+    canAttack,maxHand:maxHand(ai),drawLimit:room.settings?.genghisDrawLimit ?? 2});
+  return unit ? returnUnitToHand(room, ai, unit.id).ok : false;
+}
+
 // Shared combat resolution for both human Socket.IO actions and AI decisions.
 function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, defenderId) {
+  if (openingTruce(room)) return { ok: false, error: "戰前部署期間不可攻擊，請先安排兵種。" };
   if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
     return { ok: false, error: "目標玩家不合法。" };
   }
@@ -635,7 +828,13 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
   const attackerPower = power(attacker);
   const defenderPower = power(defender);
   const result = battle(attacker, defender);
+  if (room.simMetrics) {
+    room.simMetrics.unitAttacks++;
+    if (result === "both") room.simMetrics.mutualKills++;
+    if (result === "defender") room.simMetrics.failedTrades++;
+  }
   attacker.tapped = true;
+  incrementMatchMetric(room,"unitAttack",1,{playerId:attackerPlayer.id});
 
   const archerSaved = attacker.type === "弓兵" && defenderPower >= attackerPower;
   const archerExtra = attacker.type === "弓兵" && defenderPower < attackerPower && !attacker.archerBonusUsed;
@@ -645,7 +844,11 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
 
   const killedEnemy = result === "attacker" || result === "both";
   const killedAttacker = (result === "defender" || result === "both") && !archerSaved;
-  if (killedEnemy) defenderPlayer.field.splice(di, 1);
+  if (killedEnemy) {
+    incrementMatchMetric(room,"unitKill",1,{playerId:attackerPlayer.id});
+    defenderPlayer.field.splice(di, 1);
+  }
+  if (killedEnemy && killedAttacker) incrementMatchMetric(room,"unitTrade",1,{playerId:attackerPlayer.id});
   if (killedAttacker) attackerPlayer.field.splice(ai, 1);
 
   const survivor = attackerPlayer.field.find(u => u.id === attacker.id);
@@ -665,6 +868,7 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
 }
 
 function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
+  if (openingTruce(room)) return { ok: false, error: "戰前部署期間不可攻擊國王。" };
   if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
     return { ok: false, error: "目標玩家不合法。" };
   }
@@ -674,8 +878,15 @@ function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
   const attacker = attackerPlayer.field.find(u => u.id === attackerId);
   if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
 
-  const damage = effectiveDamage(attacker);
+  const damage = mitigateKingDamage(defenderPlayer, effectiveDamage(attacker));
   defenderPlayer.hp -= damage;
+  incrementMatchMetric(room,"kingAttack",1,{playerId:attackerPlayer.id});
+  incrementMatchMetric(room,"kingDamage",damage,{playerId:attackerPlayer.id});
+  if (room.simMetrics) {
+    room.simMetrics.kingAttacks++;
+    room.simMetrics.kingDamage += damage;
+    room.simMetrics.damageByKing[attackerPlayer.king.name] = (room.simMetrics.damageByKing[attackerPlayer.king.name] || 0) + damage;
+  }
   attacker.tapped = true;
   room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 國王，造成${damage}傷害。`);
 
@@ -695,51 +906,38 @@ function aiResolveAttackKing(room, ai, enemy, attackerId) {
   return resolveAttackKing(room, ai, enemy, attackerId).ok;
 }
 
-async function aiAttackPhase(room, ai, enemy) {
+async function aiAttackPhase(room, ai, preferredEnemy) {
+  if (openingTruce(room)) return;
+  const difficulty = getAIDifficulty(room, ai);
   let safety = 0;
-
-  while (safety < 8) {
-    safety++;
-
-    const attackers = ai.field.filter((u) => aiCanAttack(u));
+  while (safety++ < 10 && room.status === "playing") {
+    const attackers = ai.field.filter(u => aiCanAttack(u));
     if (!attackers.length) break;
-
+    const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
+    const targets = (difficulty !== "easy" && room.players.length > 2) || difficulty === "hard" || difficulty === "conqueror"
+      ? enemies : [preferredEnemy].filter(p => p && !p.eliminated);
     const actions = [];
-
-    for (const attacker of attackers) {
-      if (!enemy.field.some((u) => u.type === "步兵")) {
-        actions.push({
-          type: "king",
-          attackerId: attacker.id,
-          score: aiAttackScore(attacker, enemy, null)
-        });
+    for (const enemy of targets) for (const attacker of attackers) {
+      if (!enemy.field.some(u => u.type === "步兵")) {
+        actions.push({ type: "king", enemy, attackerId: attacker.id,
+          score: aiStrategicAttackScore(room, ai, attacker, enemy, null) });
       }
-
       for (const defender of enemy.field) {
-        actions.push({
-          type: "unit",
-          attackerId: attacker.id,
-          defenderId: defender.id,
-          score: aiAttackScore(attacker, enemy, defender)
-        });
+        actions.push({ type: "unit", enemy, attackerId: attacker.id, defenderId: defender.id,
+          score: aiStrategicAttackScore(room, ai, attacker, enemy, defender) });
       }
     }
-
-    actions.sort((a, b) => b.score - a.score);
-    const best = actions[0];
-
-    if (!best || best.score < 5) break;
-
-    if (best.type === "king") {
-      aiResolveAttackKing(room, ai, enemy, best.attackerId);
-    } else {
-      aiResolveAttackUnit(room, ai, enemy, best.attackerId, best.defenderId);
-    }
-
+    const chosen = selectAttackChoice(actions, { difficulty, self: ai, enemies,
+      battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
+      conquerorProfile: room.settings?.conquerorProfile || "resource" });
+    if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
+    const result = chosen.type === "king"
+      ? aiResolveAttackKing(room, ai, chosen.enemy, chosen.attackerId)
+      : aiResolveAttackUnit(room, ai, chosen.enemy, chosen.attackerId, chosen.defenderId);
+    if (!result) break;
     broadcast(room);
     await sleep(1900);
-
-    if (enemy.eliminated) break;
+    if (room.currentPlayerId !== ai.id) break;
   }
 }
 
@@ -758,6 +956,7 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
   if (!mageCanCast(caster, magic)) return { ok: false, error: "此法師不能施放這張魔法。" };
 
   const target = getPlayer(room, targetPlayerId);
+  if (openingTruce(room) && magic.target !== "我方") return { ok: false, error: "戰前部署期間不能對敵人施放魔法。" };
   if (!target || target.eliminated) return { ok: false, error: "找不到有效的目標玩家。" };
 
   if (magic.target === "我方" && target.id !== player.id) {
@@ -779,11 +978,19 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
     }
   }
 
+  if (room.simMetrics) room.simMetrics.spells[magic.name] = (room.simMetrics.spells[magic.name] || 0) + 1;
   player.magic.splice(index, 1);
   room.magicDeck.push(magic);
   caster.tapped = true;
 
+  const beforeField = JSON.stringify(target.field.map(u=>({id:u.id,status:u.status,tapped:u.tapped})));
   const { destroyed } = applyMagicFieldEffect(magic.name, target, ids);
+  const effective = destroyed > 0 || beforeField !== JSON.stringify(target.field.map(u=>({id:u.id,status:u.status,tapped:u.tapped})));
+  incrementMatchMetric(room,"spellCast",1,{playerId:player.id,spell:magic.name,effective});
+  if (effective) {
+    incrementMatchMetric(room,"spellImpact",1,{playerId:player.id});
+    if (room.simMetrics) room.simMetrics.spellsEffective[magic.name] = (room.simMetrics.spellsEffective[magic.name] || 0) + 1;
+  }
   if (magic.name === "燃血術") {
     player.hp -= 3;
     if (player.hp <= 0) {
@@ -798,47 +1005,90 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
     room.log.push(`${player.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
   }
 
-  if (player.king?.name === "路易十四" && !player.magicDrawUsed) {
+  const royalFirstSpell = player.king?.name === "路易十四" && !player.magicDrawUsed;
+  if (royalFirstSpell) {
     drawUnits(room, player, 1);
     player.magicDrawUsed = true;
     room.log.push(`${player.name} 的路易十四效果：抽1張兵種卡。`);
   }
-  // Casting consumes one attack even when a buff targets the caster.
-  caster.tapped = true;
+  // Experimental Louis buff removes the action cost only for the first spell.
+  // This does not grant unlimited consecutive spell casts: the first-spell flag is consumed.
+  caster.tapped = !(royalFirstSpell && room.settings?.louisFreeAction !== false);
+  if (royalFirstSpell && !caster.tapped) room.log.push(`${caster.name} 因太陽王權可再次行動。`);
   if (player.eliminated) {
     advanceAfterElimination(room, player);
   }
   return { ok: true };
 }
 
+function aiMagicTargetValue(magic, unit) {
+  const rank = rankValue(unit.rank);
+  if (magic.name === "火球術" || magic.name === "流星雨") {
+    return (rank === 1 ? 70 : 8 + rank * 4) + (unit.type === "步兵" ? 28 : 0);
+  }
+  if (magic.name === "冰凍術") return (canAttack(unit) ? 28 : 0) + (rank === 2 ? 34 : rank === 1 ? 22 : 8);
+  if (magic.name === "虛弱術") return (canAttack(unit) ? 24 : 0) + rank * 16;
+  if (magic.name === "毒藥瓶") return rank * 20 + (unit.type === "步兵" ? 18 : 0);
+  return rank * 10;
+}
+function aiMagicCardValue(magic, ai, enemy) {
+  const enemyUnits = enemy?.field || [];
+  const attackReady = ai.field.filter(u => canAttack(u)).length;
+  if (magic.name === "天殞術") return enemyUnits.filter(u => u.rank !== "高級").length * 42;
+  if (magic.target === "敵方") {
+    return Math.max(0, ...enemyUnits.map(unit => aiMagicTargetValue(magic, unit)));
+  }
+  if (magic.name === "燃血術" && ai.hp <= 10) return -1000;
+  if (magic.name === "力量術") return attackReady ? 38 : -100;
+  if (magic.name === "增強術") return attackReady ? 42 : -100;
+  if (magic.name === "燃血術") return attackReady ? 48 : 8;
+  return 10;
+}
+
 function aiChooseMagic(room, ai, enemy) {
   const mages = ai.field.filter(unit => unit.type === "法師" && canAttack(unit));
   if (!mages.length || !ai.magic.length) return false;
 
-  for (const magic of [...ai.magic]) {
+  const strategicMagic = ["normal", "hard", "conqueror"].includes(getAIDifficulty(room, ai)) && room.settings?.aiMagicStrategy !== false;
+  const spells = [...ai.magic];
+  const opponents = room.players.filter(p=>p.id!==ai.id && !p.eliminated && p.hp>0);
+  function bestSpellEnemy(magic) {
+    if (!strategicMagic || room.settings?.aiMagicTargeting !== true || magic.target === "我方") return enemy;
+    return [...opponents].sort((a,b)=>aiMagicCardValue(magic,ai,b)-aiMagicCardValue(magic,ai,a))[0] || enemy;
+  }
+  if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, bestSpellEnemy(b)) - aiMagicCardValue(a, ai, bestSpellEnemy(a)));
+  for (const magic of spells) {
+    const spellEnemy=bestSpellEnemy(magic);
+    if (room.settings?.aiCurriculumPolicy !== false && !shouldUseMagicNow({
+      difficulty: getAIDifficulty(room, ai), spell: magic, ai, enemy,
+      value: aiMagicCardValue(magic, ai, spellEnemy),
+      hasReadyAlly: ai.field.some(unit => canAttack(unit) && unit.type !== "法師")
+    })) continue;
+    if (openingTruce(room) && magic.target !== "我方") continue;
     const caster = mages.find(unit => mageCanCast(unit, magic));
     if (!caster) continue;
 
-    let target = enemy;
+    let target = spellEnemy;
     let targets = [];
     if (magic.name === "天殞術") {
-      const lowRankCount = enemy.field.filter(unit => unit.rank !== "高級").length;
-      if (lowRankCount < 2 && enemy.field.length < 4) continue;
+      const lowRankCount = spellEnemy.field.filter(unit => unit.rank !== "高級").length;
+      if (lowRankCount < 2 && spellEnemy.field.length < 4) continue;
     } else if (magic.target === "我方") {
       target = ai;
       if (magic.name === "燃血術" && ai.hp <= 10) continue;
-      const choices = [...ai.field].filter(unit => !unit.status.includes("整備"));
-      choices.sort((a,b) => aiRankValue(b.rank) - aiRankValue(a.rank));
+      const choices = [...ai.field].filter(unit => !unit.status.includes("整備") && (!strategicMagic || canAttack(unit) || magic.name === "燃血術"));
+      choices.sort((a,b) => (strategicMagic ? (canAttack(b) ? 30 : 0) - (canAttack(a) ? 30 : 0) : 0) + aiRankValue(b.rank) - aiRankValue(a.rank));
       if (!choices.length) continue;
       targets = [choices[0].id];
     } else {
-      const choices = [...enemy.field];
+      const choices = [...spellEnemy.field];
       if (["火球術","流星雨"].includes(magic.name)) {
         choices.sort((a,b) => ((b.type === "步兵" ? 20 : 0) + aiRankValue(b.rank) * 8) -
                                ((a.type === "步兵" ? 20 : 0) + aiRankValue(a.rank) * 8));
       } else {
         choices.sort((a,b) => aiRankValue(b.rank) - aiRankValue(a.rank));
       }
+      if (strategicMagic) choices.sort((a, b) => aiMagicTargetValue(magic, b) - aiMagicTargetValue(magic, a));
       targets = choices.slice(0, magic.maxTargets || 1).map(unit => unit.id);
       if (!targets.length) continue;
     }
@@ -904,8 +1154,7 @@ async function performAITurn(roomCode) {
   const ai = room.players.find((p) => p.id === room.currentPlayerId);
   if (!isStillAITurn(room, ai)) return;
 
-  const enemies = room.players.filter((p) => p.id !== ai.id && !p.eliminated);
-  const enemy = enemies[0];
+  const enemy = aiSelectEnemy(room, ai);
 
   if (!enemy) {
     finishIfGameOver(room);
@@ -923,8 +1172,26 @@ async function performAITurn(roomCode) {
   await sleep(1400);
   if (!isStillAITurn(room, ai)) return;
 
+  if (getAIDifficulty(room, ai) !== "easy" && canUseLastStand(room, ai) &&
+      (["hard", "conqueror"].includes(getAIDifficulty(room, ai)) || ai.hand.length < 3)) {
+    const policy = room.settings?.comebackPolicy || "situational";
+    const oldMode = ai.hp <= 8 && (ai.field.length >= 1 || ai.hand.length >= 3) ? "defense" : "assault";
+    const enemyAttack = room.players.filter(p => p.id !== ai.id && !p.eliminated).reduce((best,p) =>
+      Math.max(best, p.field.filter(u => canAttack(u)).reduce((sum,u) => sum + effectiveDamage(u),0)),0);
+    // Preserve the once-per-match counterattack until it is genuinely needed.
+    const inDanger = ai.hp <= 8 || (ai.hp <= 12 && enemyAttack >= ai.hp - 2);
+    const lowResources = ai.hand.length <= 2 && ai.field.length <= 1;
+    const shouldUse = policy === "legacy" || inDanger || lowResources;
+    if (shouldUse) {
+      const newMode = (ai.hp <= 7 && (enemyAttack >= 4 || ai.field.length >= 1) && ai.hand.length >= 2)
+        ? "defense" : "assault";
+      useLastStand(room, ai, policy === "legacy" ? oldMode : newMode);
+      broadcast(room);
+    }
+  }
   const beforeDeployCount = ai.field.length;
   aiDeployUnits(room, ai, enemy);
+  if (room.simMetrics) room.simMetrics.aiDeployments += Math.max(0, ai.field.length - beforeDeployCount);
   if (ai.field.length !== beforeDeployCount) {
     broadcast(room);
     await sleep(2100);
@@ -933,7 +1200,11 @@ async function performAITurn(roomCode) {
 
   if (!isStillAITurn(room, ai)) return;
 
-  const usedMagic = aiChooseMagic(room, ai, enemy);
+  let usedMagic = aiChooseMagic(room, ai, enemy);
+  if (["hard", "conqueror"].includes(getAIDifficulty(room, ai)) && isStillAITurn(room, ai)) {
+    let casts = 0;
+    while (casts++ < 2 && aiSelectEnemy(room, ai) && aiChooseMagic(room, ai, aiSelectEnemy(room, ai))) usedMagic = true;
+  }
   if (usedMagic) {
     broadcast(room);
     await sleep(2100);
@@ -956,6 +1227,10 @@ async function performAITurn(roomCode) {
 
   if (!isStillAITurn(room, ai)) return;
 
+  if (aiUseKingAbility(room, ai)) {
+    if (room.simMetrics) room.simMetrics.mongolRecalls++;
+    broadcast(room);
+  }
   room.log.push(`${ai.name} 準備結束回合。`);
   broadcast(room);
   await sleep(1600);
@@ -966,9 +1241,25 @@ async function performAITurn(roomCode) {
 
 
 io.on("connection", socket => {
+  const validateClientAction=createSocketEventGuard();
+  // socket.use runs before Socket.IO materializes the acknowledgement callback.
+  // Register explicit guarded handlers instead so rejected actions receive an
+  // immediate {ok:false} acknowledgement and cannot reach game state.
+  function guardedOn(event,handler) {
+    socket.on(event,(...args)=>{
+      const reply=typeof args.at(-1)==="function"?args.at(-1):null;
+      const payload=args.length && typeof args[0]!=="function"?args[0]:undefined;
+      let accepted=false;
+      validateClientAction([event,payload,reply],()=>{accepted=true;});
+      if(accepted) {
+        if(payload===undefined && reply && args.length===1) handler({},reply);
+        else handler(...args);
+      }
+    });
+  }
 
 
-  socket.on("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
+  guardedOn("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
     // ROOM_RESUME_REJECT_ENDED_V1
     const codeText = String(roomCode || "").trim().toUpperCase();
     const pid = String(playerId || "");
@@ -1000,7 +1291,7 @@ io.on("connection", socket => {
   });
 
 
-  socket.on("room:leave", (_, reply) => {
+  guardedOn("room:leave", (_, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: true });
 
@@ -1034,8 +1325,9 @@ io.on("connection", socket => {
     reply?.({ ok: true });
   });
 
-  socket.on("singleplayer:start", ({ name }, reply) => {
+  guardedOn("singleplayer:start", ({ name, difficulty = "normal" }, reply) => {
     detachSocketFromOtherRooms(socket.id);
+    if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
 
     const roomCode = code();
     const humanId = nanoid(10);
@@ -1059,7 +1351,7 @@ io.on("connection", socket => {
     const ai = {
       id: aiId,
       socketId: "AI_" + aiId,
-      name: "訓練騎士",
+      name: difficulty === "conqueror" ? "征服者" : difficulty === "hard" ? "戰術大師" : difficulty === "normal" ? "實戰教官" : "訓練騎士",
       isHost: false,
       isAI: true,
       connected: true,
@@ -1077,14 +1369,16 @@ io.on("connection", socket => {
       maxPlayers: 2,
       status: "lobby",
       singleplayer: true,
+      settings: { turnTimeLimit: 0, aiDifficulty: AI_DIFFICULTIES.includes(difficulty) ? difficulty : "normal" },
       players: [human, ai],
       unitDeck: [],
       magicDeck: [],
       currentPlayerId: null,
-      log: [`${human.name} 開始單人模式，AI 對手：訓練騎士。`]
+      log: [`${human.name} 開始單人模式，對手為 ${ai.name}。`]
     };
 
     rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
     socket.join(roomCode);
 
     startGame(room);
@@ -1097,8 +1391,9 @@ io.on("connection", socket => {
 
 
 
-  socket.on("tutorial:start", ({ name }, reply) => {
+  guardedOn("tutorial:start", ({ name }, reply) => {
     detachSocketFromOtherRooms(socket.id);
+    if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
 
     const roomCode = code();
     const pid = nanoid(10);
@@ -1181,7 +1476,7 @@ io.on("connection", socket => {
       king: KINGS.find((k) => k.name === "凱撒") || KINGS[1] || KINGS[0],
       hand: [],
       magic: [],
-      field: [takeCard(unitDeck, "初級弓兵")],
+      field: [takeCard(unitDeck, "中級弓兵")],
       eliminated: false,
       magicDrawUsed: false,
       recallUsed: false,
@@ -1197,9 +1492,10 @@ io.on("connection", socket => {
       status: "playing",
       isPublic: false,
       tutorial: true,
+      tutorialProgress: 0,
       matchmaking: false,
       singleplayer: false,
-      settings: { turnTimeLimit: 0 },
+      settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
       players: [player, ai],
       unitDeck,
       magicDeck,
@@ -1207,11 +1503,12 @@ io.on("connection", socket => {
       turnStartedAt: Date.now(),
       log: [
         "操作教學開始：這是一個固定教學房，請照正式對戰畫面完成部署、攻擊、施法與結束回合。",
-        "教學提示：先部署手牌中的初級騎兵。"
+        "教學提示：先部署中級騎兵，再用力量術強化它，才能安全擊敗中級弓兵。"
       ]
     };
 
     rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
     socket.join(roomCode);
 
     reply?.({
@@ -1224,7 +1521,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("matchmaking:join", ({ name }, reply) => {
+  guardedOn("matchmaking:join", ({ name }, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const playerName = cleanDisplayName(name);
@@ -1239,6 +1536,7 @@ io.on("connection", socket => {
     const pid = nanoid(10);
 
     if (!room) {
+      if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
       const roomCode = code();
 
       const player = {
@@ -1262,7 +1560,7 @@ io.on("connection", socket => {
         hostId: pid,
         maxPlayers: 2,
         status: "lobby",
-        settings: { turnTimeLimit: 0 },
+        settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
         isPublic: true,
         matchmaking: true,
         singleplayer: false,
@@ -1274,6 +1572,7 @@ io.on("connection", socket => {
       };
 
       rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
       socket.join(roomCode);
 
       reply?.({
@@ -1319,8 +1618,9 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("room:create", ({ name, maxPlayers }, reply) => {
+  guardedOn("room:create", ({ name, maxPlayers }, reply) => {
     detachSocketFromOtherRooms(socket.id);
+    if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
 
     const roomCode = code();
     const pid = nanoid(10);
@@ -1346,7 +1646,7 @@ io.on("connection", socket => {
       hostId: pid,
       maxPlayers: Math.min(5, Math.max(2, Number(maxPlayers) || 2)),
       status: "lobby",
-      settings: { turnTimeLimit: 0 },
+      settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
       isPublic: false,
       matchmaking: false,
       singleplayer: false,
@@ -1358,6 +1658,7 @@ io.on("connection", socket => {
     };
 
     rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
     socket.join(roomCode);
 
     reply?.({
@@ -1368,7 +1669,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:join", ({name,code:roomCode}, reply) => {
+  guardedOn("room:join", ({name,code:roomCode}, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const room=rooms.get(String(roomCode||"").trim().toUpperCase());
@@ -1380,7 +1681,7 @@ io.on("connection", socket => {
   });
 
 
-  socket.on("room:toggleReady", (_, reply) => {
+  guardedOn("room:toggleReady", (_, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
@@ -1393,7 +1694,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("game:rematch", (_, reply) => {
+  guardedOn("game:rematch", (_, reply) => {
     // REMATCH_FULLY_DISABLED_CLEAN_V1
     return reply?.({
       ok: false,
@@ -1401,7 +1702,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit }, reply) => {
+  guardedOn("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled, openingTruceEnabled, fairOpening2P }, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1430,6 +1731,27 @@ io.on("connection", socket => {
       room.maxPlayers = nextMax;
     }
 
+    if (aiDifficulty !== undefined) {
+      if (!AI_DIFFICULTIES.includes(aiDifficulty)) return reply?.({ ok: false, error: "不支援的 AI 難度。" });
+      room.settings.aiDifficulty = aiDifficulty;
+    }
+
+    if (fairOpening2P !== undefined) {
+      if (typeof fairOpening2P !== "boolean") return reply?.({ ok: false, error: "雙人公平開局設定無效。" });
+      room.settings.firstSeatPeacefulTurn = fairOpening2P;
+      room.settings.secondSeatExtraCards = fairOpening2P ? 1 : 0;
+    }
+
+    if (openingTruceEnabled !== undefined) {
+      if (typeof openingTruceEnabled !== "boolean") return reply?.({ ok: false, error: "戰前部署設定必須為布林值。" });
+      room.settings.openingTruceEnabled = openingTruceEnabled;
+    }
+
+    if (comebackEnabled !== undefined) {
+      if (typeof comebackEnabled !== "boolean") return reply?.({ ok: false, error: "逆轉機制設定必須為布林值。" });
+      room.settings.comebackEnabled = comebackEnabled;
+    }
+
     if (turnTimeLimit !== undefined) {
       const allowed = [0, 30, 60, 120];
       const nextLimit = Number(turnTimeLimit);
@@ -1447,7 +1769,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("room:addAI", (_, reply) => {
+  guardedOn("room:addAI", (_, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1491,7 +1813,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("room:removeAI", (_, reply) => {
+  guardedOn("room:removeAI", (_, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1521,7 +1843,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("game:start", (_, reply) => {
+  guardedOn("game:start", (_, reply) => {
     const f=findBySocket(socket.id); if(!f) return reply?.({ok:false,error:"你不在房間中。"});
     if(!f.player.isHost) return reply?.({ok:false,error:"只有房主可開始。"});
     if(f.room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始或已結束。"});
@@ -1531,10 +1853,21 @@ io.on("connection", socket => {
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
 
-  socket.on("game:deploy", ({cardId}, reply) => {
+  guardedOn("game:lastStand", ({ mode = "assault" } = {}, reply) => {
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const { room, player } = found;
+    if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = useLastStand(room, player, mode);
+    reply?.(result);
+    if (result.ok) broadcast(room);
+  });
+
+  guardedOn("game:deploy", ({cardId}, reply) => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const i=p.hand.findIndex(c=>c.id===cardId); if(i<0) return reply?.({ok:false,error:"找不到手牌。"});
+    if (room.tutorial && (room.tutorialProgress !== 0 || p.hand[i].name !== "中級騎兵")) return reply?.({ ok: false, error: "教學任務：請先部署中級騎兵。" });
     if(p.field.length>=5+(p.fieldBonus||0)) return reply?.({ok:false,error:"場上已滿。"});
     const [c]=p.hand.splice(i,1); c.justDeployed=true;
 
@@ -1555,54 +1888,81 @@ io.on("connection", socket => {
     }
 
     p.field.push(c);
+    incrementMatchMetric(room,"deploy",1,{playerId:p.id});
+    if (room.tutorial) room.tutorialProgress = 1;
     room.log.push(`${p.name} 部署 ${c.name}${c.rank==="高級"?"，進入整備":""}${triggeredReinforcement ? "，觸發急援，本回合可以攻擊" : ""}。`);
     reply?.({ok:true}); broadcast(room);
   });
 
-  socket.on("game:recall", ({unitId}, reply) => {
+  guardedOn("game:recall", ({unitId}, reply) => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    if(p.king?.name!=="成吉思汗") return reply?.({ok:false,error:"只有成吉思汗可以撤回。"});
-    if(p.recallUsed) return reply?.({ok:false,error:"本回合已撤回。"});
-    const i=p.field.findIndex(u=>u.id===unitId); if(i<0)return reply?.({ok:false,error:"找不到兵種。"});
-    const [u]=p.field.splice(i,1); u.tapped=false; u.justDeployed=false; p.hand.push(u); p.recallUsed=true;
-    if(u.type==="騎兵") drawUnits(room,p,1);
-    room.log.push(`${p.name} 撤回 ${u.name}${u.type==="騎兵"?"並抽1張兵種卡":""}。`); reply?.({ok:true}); broadcast(room);
+    const result = returnUnitToHand(room, p, unitId);
+    reply?.(result);
+    if (result.ok) broadcast(room);
   });
 
-  socket.on("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
+  guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
     if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    if (room.tutorial) {
+      const a = player.field.find(u => u.id === attackerId);
+      const d = getPlayer(room, targetPlayerId)?.field.find(u => u.id === defenderId);
+      if (room.tutorialProgress !== 2 || a?.name !== "中級騎兵" || d?.name !== "中級弓兵") return reply?.({ ok: false, error: "教學任務：請使用已強化的騎兵攻擊中級弓兵。" });
+    }
     const result = resolveAttackUnit(room, player, getPlayer(room,targetPlayerId), attackerId, defenderId);
+    if (room.tutorial && result.ok) room.tutorialProgress = 3;
     reply?.(result.ok ? { ok: true } : result);
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
+  guardedOn("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
+    if (room.tutorial) return reply?.({ ok: false, error: "這一關先學會用魔法調整戰力，並擊敗敵方兵種。" });
     if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
     const result = resolveAttackKing(room, player, getPlayer(room,targetPlayerId), attackerId);
     reply?.(result.ok ? { ok: true } : result);
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:castMagic", (payload = {}, reply) => {
+  guardedOn("game:castMagic", (payload = {}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
     if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    if (room.tutorial) {
+      const m = player.magic.find(x => x.id === payload.magicId);
+      const target = player.field.find(u => u.id === payload.targetUnitIds?.[0]);
+      if (room.tutorialProgress !== 1 || m?.name !== "力量術" ||
+          target?.name !== "中級騎兵" || payload.targetPlayerId !== player.id || payload.targetUnitIds?.length !== 1) {
+        return reply?.({ ok: false, error: "教學任務：由初級法師施放力量術，指定我方中級騎兵。" });
+      }
+    }
     const result = resolveMagic(room, player, payload);
+    if (room.tutorial && result.ok) room.tutorialProgress = 2;
     reply?.(result);
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:endTurn", (_, reply) => {
+  guardedOn("game:endTurn", (_, reply) => {
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
+    if (room.tutorial) {
+      if (room.tutorialProgress !== 3) return reply?.({ ok: false, error: "請先完成部署、施法與兵種戰鬥，才能結束教學。" });
+      room.tutorialProgress = 4;
+      room.status = "tutorialComplete";
+      room.currentPlayerId = null;
+      clearTurnTimer(room);
+      room.log.push("實戰教學完成：學會利用魔法改變原本無法獲勝的戰鬥結果。");
+      scheduleRoomCleanup(room, 300);
+      reply?.({ ok: true });
+      broadcast(room);
+      return;
+    }
     finishTurn(room, p);
     reply?.({ ok: true });
   });
@@ -1623,6 +1983,7 @@ io.on("connection", socket => {
     if (f.room.matchmaking && f.room.status === "lobby" && matchmakingRoomCode === f.room.code) {
       matchmakingRoomCode = null;
       rooms.delete(f.room.code);
+      void removeRoomSnapshot(f.room.code).catch(error=>console.error("Snapshot cleanup failed:",error.message));
       return;
     }
 
@@ -1630,9 +1991,198 @@ io.on("connection", socket => {
   });
 });
 
+app.get("/healthz",(_req,res)=>res.status(200).json({ok:true,service:"king-war",uptimeSeconds:Math.floor(process.uptime())}));
+
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "../client/dist");
   app.use(express.static(dist));
   app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
-server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}`));
+if (process.env.KW_SIMULATION !== "1") {
+  // Restore only opt-in encrypted snapshots. A process restart invalidates
+  // existing sockets; resume requires the original secret token on the client.
+  const recovered=await loadRoomSnapshots();
+  for (const warning of recovered.errors) console.warn("Ignored invalid room snapshot:",warning.file,warning.error);
+  for (const room of recovered.rooms) {
+    if (rooms.has(room.code)) continue;
+    for (const player of room.players) {
+      player.connected=!!player.isAI;
+      if (!player.isAI) player.socketId=null;
+    }
+    rooms.set(room.code,room);
+    if(room.status==="playing") {
+      const active=room.players.find(p=>p.id===room.currentPlayerId && !p.eliminated);
+      if(!active) {console.warn("Skipping invalid recovered active room");rooms.delete(room.code);continue;}
+      room.log.push("伺服器已重新啟動，可使用原本重連憑證返回對局。");
+      // Restart the turn timer rather than charging players for server downtime.
+      scheduleTurnTimer(room,active);
+      for(const player of room.players.filter(p=>!p.isAI && !p.eliminated))
+        scheduleDisconnectGrace(room,player,60);
+      scheduleAITurn(room);
+    } else scheduleRoomCleanup(room,180);
+  }
+  server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT} (recovered rooms: ${recovered.rooms.length})`));
+}
+
+
+/**
+ * Headless benchmark using the ACTUAL game rules, decks, king triggers and existing AI policy.
+ * It measures performance under this policy, NOT unbiased king power or human win rates.
+ * Simulation-only; never exposed to Socket.IO clients.
+ */
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+  if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
+  if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
+  if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
+  if (challenger !== null && !AI_DIFFICULTIES.includes(challenger)) throw new Error("invalid challenger difficulty");
+  if (!AI_DIFFICULTIES.includes(difficulty)) throw new Error("invalid baseline difficulty");
+  const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
+  const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
+  let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
+  const challengerStats = { matches: 0, wins: 0, unfinished: 0, winsBySeat: {}, gamesBySeat: {}, winsByKing: {}, gamesByKing: {} };
+  const resultMetrics = { matchesWithTrailingPlayer: 0, completedMatchesWithTrailingPlayer: 0, actualComebackWins: 0, comebackWinsUsingLastStand: 0, comebackWinsWithoutLastStand: 0, playerTurnsObserved: 0, potentialComebackPlayers: 0, completedMatchesWithCriticalPlayer: 0, criticalPlayerInstances: 0, criticalComebackWins: 0 };
+  const unfinishedReasons = { turnLimit: 0, stalledAITurn: 0, unexpected: 0 };
+  const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
+  const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
+    kingDamage: 0, damageByKing: {}, spells: {}, spellsEffective: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
+    comebackUses: { assault: 0, defense: 0 } };
+  const turnsHistogram = { "0-9": 0, "10-19": 0, "20-39": 0, "40-79": 0, "80+": 0 };
+  const turnSamples = includeTurnSamples ? [] : null;
+  const violations = {};
+  function checkInvariants(room) {
+    const violation = name => { violations[name] = (violations[name] || 0) + 1; };
+    const ids = new Set();
+    const allCards = [...room.unitDeck, ...room.magicDeck,
+      ...room.players.flatMap(p => [...p.hand, ...p.magic, ...p.field])];
+    for (const card of allCards) {
+      if (!card.id || ids.has(card.id)) violation("duplicateOrMissingCardId");
+      ids.add(card.id);
+    }
+    for (const p of room.players) {
+      if (!Number.isFinite(p.hp)) violation("nonfiniteHp");
+      if (p.field.length > 5 + (p.fieldBonus || 0)) violation("overfilledField");
+      if (p.hand.length > maxHand(p)) violation("oversizedHand");
+      if (p.magic.length > 3) violation("oversizedMagicHand");
+      if (p.hp <= 0 && !p.eliminated) violation("zeroHpNotEliminated");
+    }
+    if (room.status === "playing") {
+      const current = room.players.find(p => p.id === room.currentPlayerId);
+      if (!current || current.eliminated || current.hp <= 0) violation("invalidCurrentPlayer");
+    }
+  }
+  const originalRandom = Math.random;
+  let state = seed >>> 0 || 1;
+  Math.random = () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 4294967296;
+  };
+  try {
+    for (let n = 0; n < matches; n++) {
+      // Pair variant simulations on the same independently seeded initial king/seat setup.
+      state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
+      const room = {
+        code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, conquerorSearch, conquerorProfile, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, aiMagicTargeting, aiCurriculumPolicy, aiRecallStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        players: Array.from({ length: playerCount }, (_, seat) => ({
+          id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
+          isAI: true, isHost: seat === 0, connected: true, ready: true,
+          hp: 30, field: [], magic: [], hand: [], eliminated: false
+        }))
+      };
+      room.simProgress = { trailingPlayers: new Set(), criticalPlayers: new Set() };
+      room.simMetrics = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0, kingDamage: 0,
+        damageByKing: {}, spells: {}, spellsEffective: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
+        comebackUses: { assault: 0, defense: 0 } };
+      rooms.set(room.code, room);
+      startGame(room);
+      checkInvariants(room);
+      const seatIndex = Object.fromEntries(room.players.map((p, i) => [p.id, i + 1]));
+      const challengerPlayer = challenger ? room.players[n % playerCount] : null;
+      if (challengerPlayer) {
+        challengerPlayer.aiDifficulty = challenger;
+        challengerStats.matches++;
+        const seat = String(seatIndex[challengerPlayer.id]);
+        challengerStats.gamesBySeat[seat] = (challengerStats.gamesBySeat[seat] || 0) + 1;
+        challengerStats.gamesByKing[challengerPlayer.king.name] = (challengerStats.gamesByKing[challengerPlayer.king.name] || 0) + 1;
+      }
+      for (const p of room.players) { counts[p.king.name].games++; seats[seatIndex[p.id]].games++; }
+      let turns = 0;
+      let stalled = false;
+      while (room.status === "playing" && turns < maxTurns) {
+        const before = room.currentPlayerId;
+        await performAITurn(room.code);
+        turns++;
+        checkInvariants(room);
+        if (room.currentPlayerId === before && room.status === "playing") {
+          // A stalled AI action must not make this a falsely completed game.
+          stalled = true;
+          break;
+        }
+        if (room.log.length > 80) room.log.splice(0, room.log.length - 80);
+      }
+      totalTurns += turns;
+      if (turnSamples) turnSamples.push(turns);
+      const bucket = turns < 10 ? "0-9" : turns < 20 ? "10-19" : turns < 40 ? "20-39" : turns < 80 ? "40-79" : "80+";
+      turnsHistogram[bucket]++;
+      const m = room.simMetrics;
+      for (const name of ["unitAttacks","mutualKills","failedTrades","kingAttacks","kingDamage","aiDeployments","mongolRecalls"]) telemetry[name] += m[name];
+      for (const name of ["damageByKing","spells","spellsEffective","turnsByKing"]) {
+        for (const [key, value] of Object.entries(m[name])) telemetry[name][key] = (telemetry[name][key] || 0) + value;
+      }
+      for (const mode of ["assault","defense"]) telemetry.comebackUses[mode] += m.comebackUses[mode];
+      if (room.lastStandCount > 0) comebackGames++;
+      for (const [mode, count] of Object.entries(room.lastStandModes || {})) comebackUse[mode] += count;
+      const survivors = alive(room);
+      const finalized = room.status === "ended" && survivors.length === 1;
+      const outcome = analyzeFinalOutcome(room, finalized ? survivors[0].id : null);
+      if (outcome.trailingPlayers) resultMetrics.matchesWithTrailingPlayer++;
+      resultMetrics.potentialComebackPlayers += outcome.trailingPlayers;
+      resultMetrics.criticalPlayerInstances += outcome.criticalPlayers;
+      if (finalized && outcome.criticalPlayers) resultMetrics.completedMatchesWithCriticalPlayer++;
+      if (outcome.criticalWin) resultMetrics.criticalComebackWins++;
+      if (finalized && outcome.trailingPlayers) resultMetrics.completedMatchesWithTrailingPlayer++;
+      if (outcome.comebackWin) resultMetrics.actualComebackWins++;
+      if (outcome.comebackWin && outcome.comebackUserWin) resultMetrics.comebackWinsUsingLastStand++;
+      if (outcome.noComebackWin) resultMetrics.comebackWinsWithoutLastStand++;
+      if (finalized) {
+        const winner = survivors[0];
+        counts[winner.king.name].wins++;
+        seats[seatIndex[winner.id]].wins++;
+        if (challengerPlayer && winner.id === challengerPlayer.id) {
+          challengerStats.wins++;
+          const seat = String(seatIndex[winner.id]);
+          challengerStats.winsBySeat[seat] = (challengerStats.winsBySeat[seat] || 0) + 1;
+          challengerStats.winsByKing[winner.king.name] = (challengerStats.winsByKing[winner.king.name] || 0) + 1;
+        }
+        if (winner.lastStandUsed) {
+          comebackWins++;
+          if (winner.lastStandMode in comebackWinsByMode) comebackWinsByMode[winner.lastStandMode]++;
+        }
+      } else {
+        unfinished++;
+        if (challengerPlayer) challengerStats.unfinished++;
+        if (stalled) unfinishedReasons.stalledAITurn++;
+        else if (turns >= maxTurns) unfinishedReasons.turnLimit++;
+        else unfinishedReasons.unexpected++;
+        for (const p of room.players) counts[p.king.name].unfinished++;
+      }
+      rooms.delete(room.code);
+    }
+  } finally {
+    Math.random = originalRandom;
+    rooms.clear();
+  }
+  return {
+    methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
+    seed, matches, playerCount, maxTurns, difficulty, challenger, conquerorSearch, conquerorProfile, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, aiCurriculumPolicy, aiRecallStrategy, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
+    finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
+    comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
+    ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
+    kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
+      [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
+    seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
+      [seat, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }]))
+  };
+}

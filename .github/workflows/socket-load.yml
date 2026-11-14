@@ -1,0 +1,31 @@
+name: Socket.IO multiplayer load validation
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  rooms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        count: [10,25,50]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: |
+          npm ci
+          npm --prefix client ci
+      - name: Simulate active rooms and record Socket.IO acknowledgement latencies
+        env:
+          KW_LOAD_ROOMS: ${{ matrix.count }}
+        run: node scripts/socket-load-check.mjs | tee load-${{ matrix.count }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: socket-load-${{ matrix.count }}
+          path: load-${{ matrix.count }}.json
+          retention-days: 30

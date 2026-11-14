@@ -1,0 +1,231 @@
+name: Game balance simulation
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm --prefix client ci
+      - name: Regression tests
+        run: npm test
+      - name: Frontend production build
+        run: npm run build
+      - name: Two-player baseline (current AI)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '300'
+          PLAYERS: '2'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player baseline (current AI)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '150'
+          PLAYERS: '5'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Hard AI no-Louis-buff paired baseline
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_BONUS: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Hard AI with-Louis-buff paired treatment
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_BONUS: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Hard AI five-player stress test
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '500'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          LOUIS_BONUS: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Comeback mechanism enabled on hard AI
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_BONUS: '1'
+          COMEBACK: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player hard AI with fair opening round
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '500'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          LOUIS_BONUS: '1'
+          OPENING_TRUCE: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Louis free-action disabled (hard AI, matched seed)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_FREE_ACTION: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Louis free-action enabled (hard AI, matched seed)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_FREE_ACTION: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Qin extra opening card disabled (hard AI)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          QIN_OPENING_BONUS: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Last stand without shield (matched-seed comparison)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1600'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          COMEBACK: '1'
+          LAST_STAND_SHIELD: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Last stand with temporary shield (matched-seed comparison)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1600'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          COMEBACK: '1'
+          LAST_STAND_SHIELD: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player Mongol baseline original availability
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1500'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          GENGHIS_DRAW_LIMIT: '100'
+          GENGHIS_GUARANTEE: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol baseline unlimited draw
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '500'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_DRAW_LIMIT: '100'
+          GENGHIS_GUARANTEE: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player second seat +1 card trial
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          SECOND_SEAT_CARDS: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player second seat +2 cards trial
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          SECOND_SEAT_CARDS: '2'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player peaceful first turn fairness experiment
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          FIRST_SEAT_PEACE: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player peaceful first turn and second seat extra card
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          FIRST_SEAT_PEACE: '1'
+          SECOND_SEAT_CARDS: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol threat awareness off (control)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol threat awareness on (treatment)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol moderate threat weight 1
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol moderate threat weight 2
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '2'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol moderate threat weight 3
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '3'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player spell strategy legacy (control)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '800'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '2'
+          AI_MAGIC_STRATEGY: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player spell strategy tactical (treatment)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '800'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '2'
+          AI_MAGIC_STRATEGY: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Multi-seed state invariant and risk matrix (2-5 players)
+        env:
+          KW_SIMULATION: '1'
+          SAMPLE_PER_CELL: '120'
+        run: node scripts/simulation-risk-matrix.mjs

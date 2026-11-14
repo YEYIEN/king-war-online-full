@@ -1,0 +1,26 @@
+name: Multiplayer spell targeting A-B
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Compare 3/4/5 player medium and hard spell strategies
+        env:
+          KW_SIMULATION: '1'
+          MATCHES_PER_SEED: '200'
+        run: node scripts/magic-targeting-ab.mjs | tee magic-targeting-results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: multiplayer-magic-ab
+          path: magic-targeting-results.json
+          retention-days: 30

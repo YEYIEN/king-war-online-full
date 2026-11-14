@@ -1,0 +1,48 @@
+name: Release readiness gates
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  security-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install server and client dependencies
+        run: |
+          npm ci
+          npm --prefix client ci
+      - name: Regression suite including security and encrypted recovery
+        run: npm test
+      - name: Build production front end
+        run: npm run build
+      - name: Fail on known high or critical dependency advisories
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm --prefix client audit --omit=dev --audit-level=high
+      - name: Static check no unexpected instructional scripts in active matches
+        run: node --test tests/no-intrusive-ai-coaching.test.mjs
+  game-balance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: 2/4/5-player live-rules AI A-B experiments
+        env:
+          KW_SIMULATION: '1'
+          MATCHES_PER_SEED: '200'
+        run: node scripts/release-balance-sweep.mjs | tee release-balance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-balance-data
+          path: release-balance.json
+          retention-days: 30

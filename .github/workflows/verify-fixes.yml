@@ -29,7 +29,17 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Run production desktop and mobile smoke
+        env:
+          KW_CAPTURE_UI: '1'
         run: node scripts/production-browser-smoke.mjs
+      - name: Retain UI evidence screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-war-ui-review
+          path: test-artifacts/ui/
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Report dependency advisories
         shell: bash
         run: |

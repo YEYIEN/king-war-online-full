@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
 import { spawn } from "node:child_process";
 import net from "node:net";
 import { chromium } from "playwright";
@@ -68,11 +69,35 @@ try {
   await host.getByText("結束回合", { exact: true }).first().waitFor({ timeout: 10000 });
   await guest.getByText("結束回合", { exact: true }).first().waitFor({ timeout: 10000 });
 
+  if(process.env.KW_CAPTURE_UI==="1") {
+    await mkdir("test-artifacts/ui",{recursive:true});
+    await host.screenshot({path:"test-artifacts/ui/desktop-battle.png",fullPage:true});
+    await guest.screenshot({path:"test-artifacts/ui/mobile-battle.png",fullPage:true});
+  }
   const overflow = await guest.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   // A small amount of horizontal scroll is tolerable on mobile; large overflow is not.
   assert.ok(overflow < 100, `Mobile view has ${overflow}px horizontal overflow`);
-  assert.deepEqual(runtimeErrors, [], "no JavaScript exceptions in either browser");
-  console.log(`Production browser smoke passed: room=${roomCode}; desktop + mobile; horizontal overflow=${overflow}px`);
+  // The tutorial now uses actual game actions rather than static click-through slides.
+  const trainee = await mobile.newPage();
+  trainee.on("pageerror", error => runtimeErrors.push(error.message));
+  await trainee.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await trainee.getByRole("button", { name: "開始操作教學" }).click();
+  await trainee.getByRole("heading", { name: /第一關｜先部署可立即行動的騎兵/ }).waitFor({ timeout: 10000 });
+  await trainee.getByText("我方握有中級騎兵", { exact: false }).first().waitFor();
+  if(process.env.KW_CAPTURE_UI==="1") await trainee.screenshot({path:"test-artifacts/ui/mobile-tutorial.png",fullPage:true});
+  await trainee.close();
+
+  const aiMenu = await desktop.newPage();
+  aiMenu.on("pageerror", error => runtimeErrors.push(error.message));
+  await aiMenu.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await aiMenu.getByRole("button", { name: "困難", exact: true }).click();
+  await aiMenu.getByRole("button", { name: "開始單人對戰" }).click();
+  await aiMenu.getByRole("button", { name: "結束回合" }).waitFor({ timeout: 10000 });
+  if(process.env.KW_CAPTURE_UI==="1") await aiMenu.screenshot({path:"test-artifacts/ui/desktop-ai.png",fullPage:true});
+  await aiMenu.close();
+
+  assert.deepEqual(runtimeErrors, [], "no JavaScript exceptions in multiplayer, tutorial or AI");
+  console.log(`Production browser smoke passed: room=${roomCode}; desktop + mobile + tutorial + AI; horizontal overflow=${overflow}px`);
 } finally {
   if (browser) await browser.close();
   child.kill("SIGTERM");
