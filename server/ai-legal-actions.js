@@ -6,10 +6,10 @@
 export function listPublicAttackCandidates(ownUnits, opponents, {truce=false}={}) {
   if(truce) return [];
   const result=[];
-  for(const opponent of opponents) {
-    if(opponent.eliminated || opponent.hp<=0) continue;
-    for(const attacker of ownUnits) {
-      if(!canAttack(attacker)) continue;
+  for(const attacker of ownUnits) {
+    if(!canAttack(attacker)) continue;
+    for(const opponent of opponents) {
+      if(opponent.eliminated || opponent.hp<=0) continue;
       if(!opponent.field.some(unit=>unit.type==="步兵")) {
         result.push({type:"king",enemyId:opponent.id,attackerId:attacker.id});
       }
