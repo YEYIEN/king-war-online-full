@@ -50,3 +50,28 @@ jobs:
           name: release-balance-data
           path: release-balance.json
           retention-days: 30
+
+  factorial-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Run 30 controlled AI balance scenarios
+        env:
+          KW_SIMULATION: '1'
+          BALANCE_MATCHES_PER_SEED: '250'
+        run: node scripts/balance-factorial-research.mjs > balance-factorial-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: balance-factorial-research
+          path: |
+            balance-factorial-raw.json
+            balance-factorial-summary.md
+            balance-factorial-output.json
+          retention-days: 30
+          if-no-files-found: warn
