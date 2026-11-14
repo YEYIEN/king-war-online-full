@@ -7,7 +7,7 @@ import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
-import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
+import { createMatchMetrics, incrementMatchMetric, beginTurnMetrics, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
 import { guardSocket } from "./socket-guard.js";
 import { queueRoomRecovery, listRecoveredRooms, isRecoveryEnabled } from "./match-recovery.js";
@@ -125,7 +125,7 @@ function finishIfGameOver(room) {
   if (living.length <= 1) {
     if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
       const active = room.players.find(p => p.id === room.currentPlayerId);
-      recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI});
+      recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI,playerId:active?.id});
     }
     clearTurnTimer(room);
     room.status = "ended";
@@ -187,6 +187,7 @@ function startTurn(room, p) {
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
   observeTurnStart(room, p);
   if (room.matchMetrics) room.matchMetrics.turnsStarted++;
+  beginTurnMetrics(room,p.id);
   scheduleTurnTimer(room, p);
 
   // DISCONNECT_GRACE_STARTTURN_V1
@@ -412,7 +413,7 @@ function finishTurn(room, player, reason = "結束回合") {
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
-  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt, {ai:!!player.isAI});
+  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt, {ai:!!player.isAI,playerId:player.id});
   room.turnsCompleted = (room.turnsCompleted || 0) + 1;
   if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
@@ -470,7 +471,7 @@ function advanceAfterElimination(room, player) {
   if (finishIfGameOver(room)) return;
   if (room.currentPlayerId !== player.id) return;
   if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
-    recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI});
+    recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI,playerId:player.id});
   }
   clearTurnTimer(room);
   const next = nextAlive(room, player.id);
