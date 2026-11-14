@@ -516,6 +516,13 @@ function startGame(room) {
     }
   });
 
+  // Experimental two-player seat compensation: one extra opening option for the second player.
+  const secondSeatExtraCards = Math.min(2, Math.max(0, Number(room.settings?.secondSeatExtraCards ?? 0)));
+  if (room.players.length === 2 && secondSeatExtraCards > 0) {
+    drawUnits(room, room.players[1], secondSeatExtraCards);
+    room.log.push(`雙人局後手補償：${room.players[1].name} 額外抽${secondSeatExtraCards}張兵種卡。`);
+  }
+
   const firstPlayer = room.players[0];
   room.currentPlayerId = firstPlayer.id;
 
@@ -1809,7 +1816,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, secondSeatExtraCards = 0, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1830,7 +1837,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, secondSeatExtraCards, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
