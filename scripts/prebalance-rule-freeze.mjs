@@ -39,3 +39,10 @@ const primitives=readFileSync("server/combat-primitives.js","utf8");
 for(const fn of ["rankValue","power","effectiveDamage","canAttack","battle"]){
  assert.match(primitives,new RegExp(`export function ${fn}\\(`),`missing extracted primitive ${fn}`);
 }
+const originalCombat=original.slice(original.indexOf("function rankValue(rank) {"),original.indexOf("function mageCanCast("));
+const currentCombat=primitives.slice(primitives.indexOf("export function rankValue(rank) {"),primitives.indexOf("/** Exact, immutable forecast"));
+assert.ok(originalCombat.length>100 && currentCombat.length>100,"combat section extraction failed");
+const normalized=source=>source.replace(/\\bexport\\s+/g,"").replace(/\\/\\*[\\s\\S]*?\\*\\//g,"").replace(/\\/\\/[^\\n]*/g,"").replace(/\\s+/g,"");
+assert.equal(normalized(currentCombat),normalized(originalCombat),
+  "shared combat power, readiness and counter definitions drifted from baseline");
+console.log("Shared deterministic combat primitives match frozen baseline definitions");
