@@ -101,14 +101,22 @@ function opponentResponse(state,heroId,meta,counters,opts){
     const choices=actionsFor(reply);
     const before=firstPlaceUtility(reply,adversary.id,meta);
     let bestOwnGain=0,bestHeroState=null;
-    // Each rival chooses what benefits itself most. Other rivals remain legal targets.
-    for(const action of choices.slice(0,opts.responseWidth)){
+    // A rational opponent considers all visible legal attack candidates,
+    // not just the first target in a loop. The total workload remains capped.
+    // Preserve an explicit no-attack option when every trade is disadvantageous.
+    const replyCandidates=[];
+    for(const action of choices){
+      if(counters.nodes>=counters.maxNodes)break;
       const after=transition(reply,action,counters);
-      if(!after)break;
+      if(!after)continue;
       const gain=firstPlaceUtility(after,adversary.id,meta)-before;
-      if(gain>bestOwnGain){
-        bestOwnGain=gain;
-        bestHeroState=after;
+      replyCandidates.push({gain,after});
+    }
+    replyCandidates.sort((a,b)=>b.gain-a.gain);
+    for(const candidate of replyCandidates.slice(0,opts.responseWidth)){
+      if(candidate.gain>bestOwnGain){
+        bestOwnGain=candidate.gain;
+        bestHeroState=candidate.after;
       }
     }
     if(!bestHeroState)continue;
