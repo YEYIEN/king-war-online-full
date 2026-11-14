@@ -23,10 +23,13 @@ export function applyPublicAttackStep(snapshot, action) {
     return {ok:false,error:"missing defender",state:snapshot};
 
   const cloneUnit=unit=>({...unit,status:[...(unit.status||[])]});
+  // Explicit public schema: never propagate hidden hands, spells, credentials or socket IDs.
   const state={
-    own:{...snapshot.own,field:snapshot.own.field.map(cloneUnit)},
+    own:{id:snapshot.own.id,hp:snapshot.own.hp,field:snapshot.own.field.map(cloneUnit)},
     opponents:snapshot.opponents.map(player=>({
-      ...player, field:player.field.map(cloneUnit)
+      id:player.id,hp:player.hp,eliminated:!!player.eliminated,
+      lastStandShield:player.lastStandShield||0,
+      field:player.field.map(cloneUnit)
     }))
   };
   const attacker=state.own.field.find(unit=>unit.id===attackerId);
