@@ -25,7 +25,90 @@ export function selectDeployChoice(scored, difficulty, random = Math.random) {
  * archers, spell effects and opponent hidden hands are evaluated by the live
  * engine after selection. Models visible board trades and one enemy response.
  */
-export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage }) {
+function scoreTacticalMove(move, state, { battle, power, effectiveDamage }) {
+  const unit = state.own.find(x=>x.id===move.attackerId);
+  const foe = state.opponents.find(x=>x.id===move.enemy.id);
+  if (!unit || unit.tapped || !foe || foe.hp<=0) return null;
+  const next = {
+    own:state.own.map(x=>({...x})),
+    opponents:state.opponents.map(x=>({...x,field:x.field.map(u=>({...u}))}))
+  };
+  const actor=next.own.find(x=>x.id===unit.id);
+  const target=next.opponents.find(x=>x.id===foe.id);
+  if (move.type==="king") {
+    if (target.field.some(x=>x.type==="步兵")) return null;
+    const damage=Math.min(target.hp,effectiveDamage(actor));
+    actor.tapped=true;
+    target.hp-=damage;
+    return { state:next,score:damage*27+(target.hp<=0?1100:0) };
+  }
+  const defender=target.field.find(x=>x.id===move.defenderId);
+  if (!defender) return null;
+  const verdict=battle(actor,defender);
+  const blocked=actor.type==="弓兵" && power(defender)>=power(actor);
+  const killEnemy=verdict==="attacker"||verdict==="both";
+  const killSelf=(verdict==="defender"||verdict==="both")&&!blocked;
+  const lastGuard=defender.type==="步兵"&&target.field.filter(x=>x.type==="步兵").length===1;
+  let gain=0;
+  if(killEnemy)gain+=35+({"初級":1,"中級":2,"高級":3}[defender.rank]||1)*15
+    +(lastGuard?45:0)+(defender.type==="法師"&&target.magic?.length?22:0);
+  if(killSelf)gain-=34+({"初級":1,"中級":2,"高級":3}[actor.rank]||1)*19;
+  if(verdict==="defender"&&!blocked)gain-=14;
+  if(killEnemy)target.field=target.field.filter(x=>x.id!==defender.id);
+  if(killSelf)next.own=next.own.filter(x=>x.id!==actor.id);
+  else {
+    const archerExtra=actor.type==="弓兵"&&power(defender)<power(actor)&&!actor.archerBonusUsed;
+    actor.tapped=!archerExtra;
+    if(archerExtra)actor.archerBonusUsed=true;
+  }
+  return {state:next,score:gain};
+}
+function futureActions(state) {
+  const actions=[];
+  for(const own of state.own.filter(x=>!x.tapped&&!x.status?.includes("整備"))) {
+    for(const enemy of state.opponents.filter(x=>x.hp>0)) {
+      if(!enemy.field.some(x=>x.type==="步兵"))actions.push({type:"king",enemy,attackerId:own.id});
+      for(const foe of enemy.field)actions.push({type:"unit",enemy,attackerId:own.id,defenderId:foe.id});
+    }
+  }
+  return actions;
+}
+function chooseConquerorAttack(actions, ctx) {
+  const root={own:ctx.self.field.map(u=>({...u})),
+    opponents:ctx.enemies.map(p=>({...p,field:p.field.map(u=>({...u}))}))};
+  const initialThreat=ctx.enemies.reduce((a,p)=>a+p.field.reduce((b,u)=>b+(u.tapped?0:ctx.effectiveDamage(u)),0),0);
+  let best=null,score=-Infinity;
+  for(const move of actions){
+    const first=scoreTacticalMove(move,root,ctx);
+    if(!first)continue;
+    let branches=[{...first,score:first.score}];
+    for(let depth=1;depth<3;depth++){
+      const nextBranches=[];
+      for(const branch of branches){
+        const possible=futureActions(branch.state);
+        if(!possible.length){nextBranches.push(branch);continue;}
+        for(const follow of possible){
+          const outcome=scoreTacticalMove(follow,branch.state,ctx);
+          if(outcome)nextBranches.push({state:outcome.state,
+            score:branch.score+outcome.score*(depth===1?0.9:0.75)});
+        }
+      }
+      branches=nextBranches.sort((a,b)=>b.score-a.score).slice(0,6);
+      if(!branches.length)break;
+    }
+    const continuation=branches.length?branches[0]:first;
+    const guards=continuation.state.own.filter(u=>u.type==="步兵").length;
+    const exposed=guards===0&&ctx.self.hp<=15?initialThreat*5:0;
+    const total=continuation.score-exposed;
+    if(total>score){score=total;best={...move,expectedScore:total};}
+  }
+  return best;
+}
+
+export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true }) {
+  if (difficulty === "conqueror" && conquerorSearch) {
+    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage});
+  }
   if (!actions.length) return null;
   const valued = actions.map(action => {
     const target = enemies.find(p => p.id === action.enemy.id) || action.enemy;
