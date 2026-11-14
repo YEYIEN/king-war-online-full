@@ -35,12 +35,15 @@ const disconnectGraceTimers = new Map();
 let matchmakingRoomCode = null;
 
 function cleanDisplayName(name) {
-  const raw = (typeof name === "string" ? name : "")
-    .normalize("NFKC").replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g,"").trim();
+  const raw = (typeof name === "string" ? name : "").normalize("NFKC")
+    .split("").filter(ch => {
+      const code = ch.charCodeAt(0);
+      return !((code <= 31) || (code >= 127 && code <= 159) ||
+        (code >= 8234 && code <= 8238) || (code >= 8294 && code <= 8297));
+    }).join("").trim();
   const fallback = raw || `玩家${Math.floor(1000 + Math.random() * 9000)}`;
   return Array.from(fallback).slice(0,16).join("");
 }
-
 function asId(value) {
   return String(value ?? "");
 }
