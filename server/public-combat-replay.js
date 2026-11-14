@@ -22,7 +22,11 @@ export function applyPublicAttackStep(snapshot, action) {
   if(type==="unit" && !originalEnemy.field.some(unit=>unit.id===defenderId))
     return {ok:false,error:"missing defender",state:snapshot};
 
-  const cloneUnit=unit=>({...unit,status:[...(unit.status||[])]});
+  const cloneUnit=unit=>({
+    id:unit.id,type:unit.type,rank:unit.rank,damage:unit.damage,
+    counterTarget:unit.counterTarget,tapped:!!unit.tapped,
+    archerBonusUsed:!!unit.archerBonusUsed,status:[...(unit.status||[])]
+  });
   // Explicit public schema: never propagate hidden hands, spells, credentials or socket IDs.
   const state={
     own:{id:snapshot.own.id,hp:snapshot.own.hp,field:snapshot.own.field.map(cloneUnit)},
@@ -66,6 +70,7 @@ export function applyPublicAttackStep(snapshot, action) {
 
 export function replayPublicAttackSteps(initial, actions) {
   if(!Array.isArray(actions))return {ok:false,error:"actions must be an array",state:initial,events:[]};
+  if(actions.length>256)return {ok:false,error:"replay exceeds bounded action count",state:initial,events:[]};
   let state=initial;
   const events=[];
   for(let i=0;i<actions.length;i++){
