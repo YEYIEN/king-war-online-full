@@ -20,6 +20,7 @@ if(!filePath) {
    mode:match.mode,playerCount:match.playerCount,aiDifficulty:match.aiDifficulty,
    rulesetId:match.rulesetId||"unversioned",games:0,completed:0,
    turnSum:0,elapsedMsSum:0,durationSamples:0,durationMeanMsSum:0,
+   humanDurationSamples:0,humanDurationMsSum:0,aiDurationSamples:0,aiDurationMsSum:0,
    king:{},seat:{},spells:{},spellImpacts:{},events:{},
    comeback:{severeQualified:0,severeWins:0,criticalQualified:0,criticalWins:0},
    humanGames:0,aiGames:0
@@ -32,17 +33,24 @@ if(!filePath) {
    group.durationSamples+=match.turnDuration.samples||0;
    group.durationMeanMsSum+=(match.turnDuration.meanMs||0)*(match.turnDuration.samples||0);
   }
+  for(const [field,key] of [["humanTurnDuration","human"],["aiTurnDuration","ai"]]) {
+   const value=match[field];
+   if(value?.meanMs!=null){group[`${key}DurationSamples`]+=value.samples||0;
+     group[`${key}DurationMsSum`]+=(value.meanMs||0)*(value.samples||0);}
+  }
   if(match.humanCount>0)group.humanGames++;
   if(match.aiCount>0)group.aiGames++;
   for(const seat of match.seats){
    const name=seat.king||"unknown";
-   group.king[name]??={appearances:0,wins:0,eliminations:0};
+   group.king[name]??={appearances:0,completedAppearances:0,wins:0,eliminations:0};
    group.king[name].appearances++;
+   if(match.winnerSeat!=null)group.king[name].completedAppearances++;
    if(seat.won)group.king[name].wins++;
    if(seat.eliminated)group.king[name].eliminations++;
    const slot=String(seat.seat);
-   group.seat[slot]??={appearances:0,wins:0};
+   group.seat[slot]??={appearances:0,completedAppearances:0,wins:0};
    group.seat[slot].appearances++;
+   if(match.winnerSeat!=null)group.seat[slot].completedAppearances++;
    if(seat.won)group.seat[slot].wins++;
   }
   for(const [name,n] of Object.entries(match.events||{}))group.events[name]=(group.events[name]||0)+n;
@@ -59,7 +67,9 @@ if(!filePath) {
   averageTurns:+(g.turnSum/g.games).toFixed(2),
   averageElapsedMinutes:+(g.elapsedMsSum/g.games/60000).toFixed(2),
   observedAverageTurnSeconds:g.durationSamples?+(g.durationMeanMsSum/g.durationSamples/1000).toFixed(1):null,
-  king:Object.fromEntries(Object.entries(g.king).map(([name,k])=>[name,{...k,winRate:+(100*k.wins/k.appearances).toFixed(2)}])),
+  observedHumanTurnSeconds:g.humanDurationSamples?+(g.humanDurationMsSum/g.humanDurationSamples/1000).toFixed(1):null,
+  observedAiTurnSeconds:g.aiDurationSamples?+(g.aiDurationMsSum/g.aiDurationSamples/1000).toFixed(1):null,
+  king:Object.fromEntries(Object.entries(g.king).map(([name,k])=>[name,{...k,winRate:k.completedAppearances?+(100*k.wins/k.completedAppearances).toFixed(2):null}])),
   seat:Object.fromEntries(Object.entries(g.seat).map(([name,k])=>[name,{...k,winRate:+(100*k.wins/k.appearances).toFixed(2)}])),
   spellImpactRate:Object.fromEntries(Object.entries(g.spells).map(([spell,c])=>[spell,c?+(100*(g.spellImpacts[spell]||0)/c).toFixed(1):0])),
   comebackRate:{
