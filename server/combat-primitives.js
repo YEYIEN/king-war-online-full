@@ -43,3 +43,20 @@ export function battle(a, d) {
   if (dv > av) return "defender";
   return "both";
 }
+
+/** Exact, immutable forecast for one unit-versus-unit attack.
+ * The server consumes this same calculation when applying an attack.
+ * It deliberately does not forecast card draws, king effects or magic.
+ */
+export function previewUnitAttack(attacker, defender) {
+  const attackerPower=power(attacker);
+  const defenderPower=power(defender);
+  const verdict=battle(attacker, defender);
+  const archerSaved=attacker.type==="弓兵" && defenderPower>=attackerPower;
+  const archerExtra=attacker.type==="弓兵" && defenderPower<attackerPower && !attacker.archerBonusUsed;
+  return {
+    verdict,attackerPower,defenderPower,archerSaved,archerExtra,
+    killedEnemy:verdict==="attacker" || verdict==="both",
+    killedAttacker:(verdict==="defender" || verdict==="both") && !archerSaved
+  };
+}
