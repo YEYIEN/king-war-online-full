@@ -50,7 +50,7 @@ const KINGS = [
   { name: "屋大維奧古斯都", effectName: "羅馬秩序", effect: "非自己回合時，隨機1名我方場上兵種戰力+1。" },
   { name: "成吉思汗", effectName: "草原機動", effect: "每回合可撤回1名我方兵種；若是騎兵，抽1張兵種卡。" },
   { name: "秦始皇", effectName: "中央集權", effect: "手牌上限9，每回合開始抽2張兵種卡。" },
-  { name: "路易十四", effectName: "太陽王權", effect: "場上有法師時，每回合開始額外抽1張魔法卡；本回合第一次施法後再抽1張兵種卡。" }
+  { name: "路易十四", effectName: "太陽王權", effect: "場上有法師時每回合多抽1張魔法；首次施法後抽1張兵種，且施法法師可再行動一次。" }
 ];
 
 const MAGIC_DEFS = [
@@ -500,7 +500,7 @@ function startGame(room) {
     p.fieldBonus = 0;
     p.lastStandUsed = false;
 
-    drawUnits(room, p, p.king.name === "秦始皇" ? 6 : 5);
+    drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus !== false ? 6 : 5);
   });
 
   const firstPlayer = room.players[0];
@@ -655,7 +655,7 @@ function aiSelectEnemy(room, ai) {
   if (difficulty === "easy") return enemies[Math.floor(Math.random() * enemies.length)];
   if (difficulty !== "hard") return enemies[0];
   const threat = p =>
-    (30 - p.hp) * 0.8 +
+    p.hp * 0.8 +
     p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
     p.magic.length * (p.field.some(u => u.type === "法師") ? 3 : 0) -
     p.field.filter(u => u.type === "步兵").length * 4;
@@ -665,13 +665,18 @@ function aiSelectEnemy(room, ai) {
 function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   const basic = aiAttackScore(attacker, enemy, defender);
   if (getAIDifficulty(room) !== "hard") return basic;
+  // In free-for-all games, pressuring the strongest remaining army is generally
+  // more useful than finishing an already-weak opponent just because it is weak.
+  const strategicThreat = room.players.length >= 3
+    ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magic.length * 5 + enemy.hp * 0.35
+    : 0;
   if (!defender) {
-    let result = basic + (enemy.hp <= effectiveDamage(attacker) ? 350 : 18);
+    let result = basic + strategicThreat + (enemy.hp <= effectiveDamage(attacker) ? 200 : 18);
     if (attacker.type === "步兵" && ai.field.filter(u => u.type === "步兵").length === 1 && ai.hp < 12) result -= 55;
     return result;
   }
   const result = battle(attacker, defender);
-  let value = basic;
+  let value = basic + strategicThreat;
   if (defender.type === "步兵" && enemy.field.filter(u => u.type === "步兵").length === 1) {
     value += 55 + ai.field.filter(u => canAttack(u) && u.id !== attacker.id).length * 22;
   }
@@ -869,13 +874,16 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
     room.log.push(`${player.name} 用 ${caster.name} 施放 ${magic.name}，指定${ids.length}個目標。`);
   }
 
-  if (player.king?.name === "路易十四" && !player.magicDrawUsed) {
+  const royalFirstSpell = player.king?.name === "路易十四" && !player.magicDrawUsed;
+  if (royalFirstSpell) {
     drawUnits(room, player, 1);
     player.magicDrawUsed = true;
     room.log.push(`${player.name} 的路易十四效果：抽1張兵種卡。`);
   }
-  // Casting consumes one attack even when a buff targets the caster.
-  caster.tapped = true;
+  // Experimental Louis buff removes the action cost only for the first spell.
+  // This does not grant unlimited consecutive spell casts: the first-spell flag is consumed.
+  caster.tapped = !(royalFirstSpell && room.settings?.louisFreeAction !== false);
+  if (royalFirstSpell && !caster.tapped) room.log.push(`${caster.name} 因太陽王權可再次行動。`);
   if (player.eliminated) {
     advanceAfterElimination(room, player);
   }
@@ -1783,7 +1791,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, comebackEnabled = false, openingTruceEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = true, comebackEnabled = false, openingTruceEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1804,7 +1812,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, comebackEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, comebackEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
@@ -1846,7 +1854,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, louisBonus, comebackEnabled, openingTruceEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, comebackEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
