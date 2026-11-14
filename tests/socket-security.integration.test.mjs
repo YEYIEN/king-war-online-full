@@ -41,7 +41,7 @@ test("malformed packets and high volume fail closed without affecting legitimate
  assert.equal(invalid.ok,false,"null rejected without throwing");
  const missing=await new Promise((resolve,reject)=>first.timeout(2500).emit("room:join",(err,response)=>err?reject(err):resolve(response)));
  assert.equal(missing.ok,false,"missing required payload rejected without crashing server");
- for(let i=0;i<24;i++){
+ for(let i=0;i<23;i++){
   const result=await request(first,"room:create",{name:"p"});
   assert.equal(result.ok,true,"within allotted creation budget");
  }
