@@ -776,9 +776,83 @@ function InteractiveTutorial({ onExit }) {
   );
 }
 
+const GUIDED_LESSONS = [
+  {
+    title: "第一關｜先部署可立即行動的騎兵",
+    purpose: "我方握有中級騎兵，敵方有中級弓兵。先觀察雙方戰力：都是 2。",
+    action: "點選下方「中級騎兵」並部署。",
+    why: "一般兵種剛部署不能攻擊；騎兵可以。部署只是建立可用的進攻選項。",
+    warning: "雙方戰力相同時，直接互相攻擊通常會兩敗俱傷。先別急著出手。"
+  },
+  {
+    title: "第二關｜運用魔法改變戰鬥結果",
+    purpose: "剛才的騎兵戰力為 2，敵方弓兵也是 2。此時直接攻擊會犧牲騎兵。",
+    action: "點選「力量術」→ 選初級法師 → 選中級騎兵 → 確認施放。",
+    why: "力量術讓騎兵戰力從 2 變成 3，才能在這次戰鬥中存活並消滅敵人。",
+    warning: "施法會消耗法師一次行動，因此應挑選能真正改變結果的目標。"
+  },
+  {
+    title: "第三關｜檢查剋制與損失再進攻",
+    purpose: "現在騎兵戰力 3、弓兵戰力 2；騎兵並不剋制弓兵，但戰力已足以獲勝。",
+    action: "選擇我方中級騎兵，再選敵方中級弓兵進行攻擊。",
+    why: "戰力相等兩敗俱傷；戰力較高的一方獲勝，部分兵種還有特殊保護效果。",
+    warning: "也要檢查敵方步兵：只要對方有步兵存活，就不能直接攻擊國王。"
+  },
+  {
+    title: "第四關｜決定何時結束回合",
+    purpose: "你已經成功利用資源改變原本勢均力敵的戰局，並消滅對手的兵種。",
+    action: "按上方的「結束回合」。",
+    why: "每一回合要權衡部署、魔法與攻擊的先後，而不是看到可以按就立刻按。",
+    warning: "正式遊戲的目標，是清除敵方步兵防線，再將國王 HP 降到 0。"
+  }
+];
+
+function GuidedTutorialCoach({ progress = 0, onExit }) {
+  const [answer, setAnswer] = React.useState(null);
+  const index = Math.min(progress, GUIDED_LESSONS.length - 1);
+  const lesson = GUIDED_LESSONS[index];
+  const complete = progress >= 4;
+  const choices = [
+    "因為騎兵剛部署完全不能攻擊",
+    "雙方原本戰力相同，先強化可以避免兩敗俱傷",
+    "因為只有魔法才能消滅弓兵"
+  ];
+  return (
+    <section className="guidedLesson" aria-label="互動新手實戰教學">
+      <div className="guidedLessonTop">
+        <strong>實戰教學 · {complete ? "最後驗收" : `任務 ${progress + 1}/4`}</strong>
+        <span>{complete ? "所有操作都已完成" : "請親自操作正式遊戲卡牌"}</span>
+      </div>
+      {complete ? (
+        <>
+          <h2>你已完成一個真正的戰術回合</h2>
+          <p>最後確認：為什麼剛才不能一部署騎兵就直接攻擊中級弓兵？</p>
+          <div className="lessonChoiceGroup">
+            {choices.map((choice, i) => <button type="button" key={choice} className={answer === i ? "selected" : "secondary"} onClick={() => setAnswer(i)}>{choice}</button>)}
+          </div>
+          {answer !== null && <p className={answer === 1 ? "lessonCorrect" : "lessonWrong"}>
+            {answer === 1 ? "正確！戰力 2 對 2 會兩敗俱傷；力量術讓騎兵以 3 對 2 獲勝。" : "再觀察戰力比較：中級騎兵雖能立即攻擊，但不表示攻擊一定划算。"}
+          </p>}
+          {answer === 1 && <button className="primaryBtn" onClick={onExit}>通過驗收，回到主選單</button>}
+        </>
+      ) : (
+        <>
+          <h2>{lesson.title}</h2>
+          <p><strong>局勢：</strong>{lesson.purpose}</p>
+          <p className="lessonTask"><strong>現在請做：</strong>{lesson.action}</p>
+          <p><strong>為什麼：</strong>{lesson.why}</p>
+          <p className="lessonWarning"><strong>策略提醒：</strong>{lesson.warning}</p>
+          <div className="lessonProgress">{GUIDED_LESSONS.map((_, i) => <span key={i} className={i <= progress ? "active" : ""} />)}</div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const socket = useMemo(() => io(SERVER_URL), []);
   const [name, setName] = useState("");
+  const [aiDifficulty, setAiDifficulty] = useState("normal");
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [playerId, setPlayerId] = useState(null);
@@ -1084,7 +1158,7 @@ function App() {
     clearSavedSession();
 
     setMessage("正在建立單人模式...");
-    socket.emit("singleplayer:start", { name: safeName() }, (res) => {
+    socket.emit("singleplayer:start", { name: safeName(), difficulty: aiDifficulty }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "單人模式建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
@@ -1208,6 +1282,17 @@ function App() {
               <button className="primaryBtn" onClick={joinRoom}>加入房間</button>
             </section>
 
+            <section className="startBox aiStartBox">
+              <h2>單人挑戰｜電腦對手</h2>
+              <p>先選擇電腦難度，也可在多人房間加入 AI。</p>
+              <div className="settingButtonGroup">
+                {[["easy","簡單"],["normal","中等"],["hard","困難"]].map(([id,label]) => (
+                  <button type="button" key={id} className={aiDifficulty === id ? "settingChoice active" : "settingChoice"}
+                    onClick={() => setAiDifficulty(id)}>{label}</button>
+                ))}
+              </div>
+              <button className="primaryBtn" onClick={startSinglePlayer}>開始單人對戰</button>
+            </section>
             <section className="startBox matchBox">
               <h2>隨機匹配</h2>
               <p>系統會先尋找公開房間；如果沒有，就建立一個新的公開房間。公開房間也會有房間代碼。</p>
@@ -1337,6 +1422,15 @@ function App() {
                 </div>
               </div>
 
+              <div className="settingBlock">
+                <span className="settingLabel">電腦難度（所有 AI 玩家共用）</span>
+                <div className="settingButtonGroup">
+                  {[["easy","簡單：嘗試出牌"],["normal","中等：評估交換"],["hard","困難：預判局勢"]].map(([id,label]) => (
+                    <button type="button" key={id} className={(room.settings?.aiDifficulty || "normal") === id ? "settingChoice active" : "settingChoice"}
+                      onClick={() => updateRoomSettings({ aiDifficulty: id })}>{label}</button>
+                  ))}
+                </div>
+              </div>
               <div className="aiControlRow">
                 <button
                   className="secondary"
@@ -1834,12 +1928,7 @@ function App() {
         </section>
       )}
 
-      {room?.tutorial && (
-        <div className="formalTutorialNotice">
-          <strong>操作教學：</strong>
-          依序完成：部署中級騎兵 → 選擇中級騎兵 → 攻擊敵方初級弓兵 → 使用力量術 → 選初級法師 → 選我方中級騎兵 → 確認施放 → 結束回合。
-        </div>
-      )}
+      {room?.tutorial && <GuidedTutorialCoach key={room.roomCode} progress={room.tutorialProgress || 0} onExit={returnToMainMenu} />}
 
       {attackFeedback && (
         <div className="attackFeedbackToast">
