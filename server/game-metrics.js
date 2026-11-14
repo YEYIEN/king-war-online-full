@@ -15,7 +15,7 @@ export function createMatchMetrics(room, now = Date.now()) {
     startedAt: now,
     events: Object.fromEntries([...NONNEGATIVE].map(k => [k,0])),
     spells: {}, spellsEffective: {},
-    playerEvents: {}, turnDurationsMs: [],
+    playerEvents: {}, turnDurationsMs: [], turnDurationsHumanMs: [], turnDurationsAiMs: [],
     turnsStarted: 0,
     turnsCompleted: 0,
     finishReason: null
@@ -36,11 +36,12 @@ export function incrementMatchMetric(room, event, amount = 1, extra = {}) {
   }
 }
 
-export function recordTurnDuration(room, ms) {
+export function recordTurnDuration(room, ms, { ai = false } = {}) {
   const m = room?.matchMetrics;
   if (!m || !Number.isFinite(ms) || ms < 0) return;
   m.turnsCompleted++;
   m.turnDurationsMs.push(Math.min(ms, 3600000));
+  (ai ? m.turnDurationsAiMs : m.turnDurationsHumanMs).push(Math.min(ms,3600000));
 }
 function aggregateDuration(values) {
   if (!values.length) return { meanMs: null, medianMs: null, p90Ms: null, samples: 0 };
@@ -65,6 +66,8 @@ export function buildMatchSummary(room, { winnerId = null, reason = "last-standi
     aiDifficulty:room.settings?.aiDifficulty || "normal",
     turnsCompleted:room.turnsCompleted || 0,
     turnDuration:aggregateDuration(m.turnDurationsMs),
+    humanTurnDuration:aggregateDuration(m.turnDurationsHumanMs),
+    aiTurnDuration:aggregateDuration(m.turnDurationsAiMs),
     finishReason:reason,
     winnerSeat:winners.length ? room.players.indexOf(winners[0])+1 : null,
     winnerKing:winners[0]?.king?.name ?? null,
