@@ -1905,7 +1905,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1919,6 +1919,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     kingDamage: 0, damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
     comebackUses: { assault: 0, defense: 0 } };
   const turnsHistogram = { "0-9": 0, "10-19": 0, "20-39": 0, "40-79": 0, "80+": 0 };
+  const turnSamples = includeTurnSamples ? [] : null;
   const violations = {};
   function checkInvariants(room) {
     const violation = name => { violations[name] = (violations[name] || 0) + 1; };
@@ -1986,6 +1987,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         if (room.log.length > 80) room.log.splice(0, room.log.length - 80);
       }
       totalTurns += turns;
+      if (turnSamples) turnSamples.push(turns);
       const bucket = turns < 10 ? "0-9" : turns < 20 ? "10-19" : turns < 40 ? "20-39" : turns < 80 ? "40-79" : "80+";
       turnsHistogram[bucket]++;
       const m = room.simMetrics;
@@ -2030,7 +2032,8 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
     seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, comebackPolicy, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
-    comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram, invariantViolations: violations,
+    comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
+    ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
     seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
