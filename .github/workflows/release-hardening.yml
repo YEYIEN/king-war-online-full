@@ -24,9 +24,26 @@ jobs:
       - name: Ten concurrent real two-player rooms
         env:
           LOAD_ROOMS: '10'
-        run: node scripts/operational-load-test.mjs | tee operational-load.json
+        run: node scripts/operational-load-test.mjs | tee operational-load-10.json
+      - name: Twenty-five concurrent real two-player rooms
+        env:
+          LOAD_ROOMS: '25'
+        run: node scripts/operational-load-test.mjs | tee operational-load-25.json
+      - name: Fifty concurrent real two-player rooms
+        env:
+          LOAD_ROOMS: '50'
+        run: node scripts/operational-load-test.mjs | tee operational-load-50.json
+      - name: Current AI and gameplay balance audit (unseen seeds)
+        env:
+          KW_SIMULATION: '1'
+          BALANCE_MATCHES_PER_SEED: '90'
+        run: node scripts/release-balance-audit.mjs | tee current-balance-audit.json
       - uses: actions/upload-artifact@v4
         with:
-          name: release-operational-load
-          path: operational-load.json
+          name: release-hardening-results
+          path: |
+            operational-load-10.json
+            operational-load-25.json
+            operational-load-50.json
+            current-balance-audit.json
           retention-days: 30
