@@ -724,6 +724,29 @@ function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   return value;
 }
 
+function returnUnitToHand(room, player, unitId) {
+  if (player.king?.name !== "成吉思汗") return { ok: false, error: "只有成吉思汗可以撤回。" };
+  if (player.recallUsed) return { ok: false, error: "本回合已撤回。" };
+  const index = player.field.findIndex(unit => unit.id === unitId);
+  if (index < 0) return { ok: false, error: "找不到兵種。" };
+  const [unit] = player.field.splice(index, 1);
+  unit.tapped = false;
+  unit.justDeployed = false;
+  unit.archerBonusUsed = false;
+  // A returned card must not carry spell buffs, poison or pending combat flags back into hand.
+  unit.status = [];
+  player.hand.push(unit);
+  player.recallUsed = true;
+  const drawBonus = unit.type === "騎兵" && (player.recallDrawCount || 0) < (room.settings?.genghisDrawLimit ?? 2);
+  if (drawBonus) {
+    drawUnits(room, player, 1);
+    player.recallDrawCount = (player.recallDrawCount || 0) + 1;
+  }
+  trimHand(room, player);
+  room.log.push(`${player.name} 撤回 ${unit.name}${drawBonus ? "並抽1張兵種卡" : ""}。`);
+  return { ok: true, unitId, drawBonus };
+}
+
 function aiUseKingAbility(room, ai) {
   if (ai.king?.name !== "成吉思汗" || ai.recallUsed || ai.hand.length >= maxHand(ai)) return false;
   const difficulty = getAIDifficulty(room);
@@ -733,15 +756,7 @@ function aiUseKingAbility(room, ai) {
   if (ai.field.length < 3) return false;
   if (difficulty === "normal" && Math.random() > 0.35) return false;
   const unit = candidates.sort((a, b) => rankValue(b.rank) - rankValue(a.rank))[0];
-  ai.field.splice(ai.field.findIndex(u => u.id === unit.id), 1);
-  unit.tapped = false;
-  unit.justDeployed = false;
-  ai.hand.push(unit);
-  ai.recallUsed = true;
-  const canDraw = ai.recallDrawCount < (room.settings?.genghisDrawLimit ?? 2);
-  if (canDraw) { drawUnits(room, ai, 1); ai.recallDrawCount++; }
-  room.log.push(`${ai.name} 使用草原機動撤回 ${unit.name}${canDraw ? "並抽1張兵種卡" : ""}。`);
-  return true;
+  return returnUnitToHand(room, ai, unit.id).ok;
 }
 
 // Shared combat resolution for both human Socket.IO actions and AI decisions.
@@ -1767,13 +1782,9 @@ io.on("connection", socket => {
   socket.on("game:recall", ({unitId}, reply) => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
-    if(p.king?.name!=="成吉思汗") return reply?.({ok:false,error:"只有成吉思汗可以撤回。"});
-    if(p.recallUsed) return reply?.({ok:false,error:"本回合已撤回。"});
-    const i=p.field.findIndex(u=>u.id===unitId); if(i<0)return reply?.({ok:false,error:"找不到兵種。"});
-    const [u]=p.field.splice(i,1); u.tapped=false; u.justDeployed=false; p.hand.push(u); p.recallUsed=true;
-    const drawBonus = u.type==="騎兵" && (p.recallDrawCount || 0) < (room.settings?.genghisDrawLimit ?? 2);
-    if (drawBonus) { drawUnits(room,p,1); p.recallDrawCount=(p.recallDrawCount||0)+1; }
-    room.log.push(`${p.name} 撤回 ${u.name}${drawBonus?"並抽1張兵種卡":""}。`); reply?.({ok:true}); broadcast(room);
+    const result = returnUnitToHand(room, p, unitId);
+    reply?.(result);
+    if (result.ok) broadcast(room);
   });
 
   socket.on("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
