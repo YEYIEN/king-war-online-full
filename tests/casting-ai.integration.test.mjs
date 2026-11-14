@@ -57,35 +57,50 @@ async function launch(t, action) {
   return action(socket);
 }
 
-test("tutorial magic: failed casts preserve card, successful casts consume exactly once", { timeout: 15000 }, async t => {
+test("guided tutorial: deploy, choose buff, defeat guard, and end turn", { timeout: 15000 }, async t => {
   await launch(t, async socket => {
-    const started = await request(socket, "tutorial:start", { name: "Spell tester" });
+    const started = await request(socket, "tutorial:start", { name: "Strategy learner" });
     assert.equal(started.ok, true);
-    const { playerId, roomCode, resumeToken } = { playerId: started.playerId, roomCode: started.room.roomCode, resumeToken: started.resumeToken };
+    const { playerId, resumeToken } = started;
+    const roomCode = started.room.roomCode;
     const self = started.room.players.find(p => p.id === playerId);
+    const enemy = started.room.players.find(p => p.id !== playerId);
     const mage = self.field.find(u => u.type === "法師");
+    const cavalry = self.hand.find(u => u.name === "中級騎兵");
+    const archer = enemy.field.find(u => u.name === "中級弓兵");
     const spell = self.magic.find(m => m.name === "力量術");
-    assert.ok(mage && spell, "tutorial supplies a caster and power spell");
-
-    const base = { magicId: spell.id, casterId: mage.id, targetPlayerId: playerId, targetUnitIds: [mage.id] };
+    assert.ok(mage && cavalry && archer && spell, "tutorial provides the precise tactical scenario");
+    const state = async () => (await request(socket, "room:resume", { roomCode, playerId, resumeToken })).room;
+    assert.equal((await request(socket, "game:castMagic", {
+      magicId: spell.id, casterId: mage.id, targetPlayerId: playerId, targetUnitIds: [mage.id]
+    })).ok, false, "player must deploy before casting and choose a meaningful target");
+    assert.equal((await request(socket, "game:deploy", { cardId: cavalry.id })).ok, true);
+    assert.equal((await state()).tutorialProgress, 1);
+    const base = { magicId: spell.id, casterId: mage.id, targetPlayerId: playerId, targetUnitIds: [cavalry.id] };
     assert.equal((await request(socket, "game:castMagic", { ...base, targetUnitIds: ["missing"] })).ok, false);
-    assert.equal((await request(socket, "game:castMagic", { ...base, targetUnitIds: [mage.id, mage.id] })).ok, false);
-    assert.equal((await request(socket, "game:castMagic", { ...base, targetPlayerId: started.room.players.find(p => p.id !== playerId).id })).ok, false);
-
-    let snapshot = (await request(socket, "room:resume", { playerId, roomCode, resumeToken })).room;
-    let me = snapshot.players.find(p => p.id === playerId);
-    assert.equal(me.magic.length, 1, "invalid casts must not spend a card");
-    assert.equal(me.field.find(u => u.id === mage.id).tapped, false, "invalid casts must not tap caster");
-
+    assert.equal((await request(socket, "game:castMagic", { ...base, targetUnitIds: [cavalry.id, cavalry.id] })).ok, false);
+    assert.equal((await request(socket, "game:castMagic", { ...base, targetPlayerId: enemy.id })).ok, false);
+    assert.equal((await request(socket, "game:attackUnit", {
+      attackerId: cavalry.id, targetPlayerId: enemy.id, defenderId: archer.id
+    })).ok, false, "tutorial must explain why buff matters before allowing the attack");
+    let room = await state();
+    assert.equal(room.players.find(p => p.id === playerId).magic.length, 1);
+    assert.equal(room.players.find(p => p.id === playerId).field.find(u => u.id === mage.id).tapped, false);
     assert.equal((await request(socket, "game:castMagic", base)).ok, true);
-    snapshot = (await request(socket, "room:resume", { playerId, roomCode, resumeToken })).room;
-    me = snapshot.players.find(p => p.id === playerId);
-    assert.equal(me.magic.length, 0, "successful spell is consumed");
-    assert.ok(me.field.find(u => u.id === mage.id).status.includes("力量術+1"), "spell actually applies");
-    assert.equal(me.field.find(u => u.id === mage.id).tapped, true, "casting uses caster action");
-    assert.equal((await request(socket, "game:castMagic", base)).ok, false, "cannot cast used card again");
-    // Exercise end-of-turn cleanup without triggering the tutorial AI's long animation.
+    room = await state();
+    assert.equal(room.tutorialProgress, 2);
+    assert.ok(room.players.find(p => p.id === playerId).field.find(u => u.id === cavalry.id).status.includes("力量術+1"));
+    assert.equal(room.players.find(p => p.id === playerId).magic.length, 0);
+    assert.equal((await request(socket, "game:castMagic", base)).ok, false);
+    assert.equal((await request(socket, "game:endTurn")).ok, false, "cannot skip the actual battle lesson");
+    assert.equal((await request(socket, "game:attackUnit", {
+      attackerId: cavalry.id, targetPlayerId: enemy.id, defenderId: archer.id
+    })).ok, true);
+    room = await state();
+    assert.equal(room.tutorialProgress, 3);
+    assert.equal(room.players.find(p => p.id === enemy.id).field.length, 0);
     assert.equal((await request(socket, "game:endTurn")).ok, true);
+    // A completed tutorial is intentionally frozen rather than progressing an unseen AI turn.
   });
 });
 
