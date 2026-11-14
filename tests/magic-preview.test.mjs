@@ -7,7 +7,7 @@ test("magic field forecast agrees with real executor without mutating original",
   const owner={field:[make("low"),make("mid","中級"),make("high","高級")],hand:[{secret:"private"}]};
   const before=JSON.stringify(owner);
   const forecast=previewMagicFieldEffect(spell,owner,spell==="天殞術"?[]:["low","mid"]);
-  const live={field:owner.field.map(unit=>({...unit,status:[...unit.status]}))};
+  const live={field:owner.field.map(unit=>({...unit,archerBonusUsed:!!unit.archerBonusUsed,status:[...unit.status]}))};
   const result=applyMagicFieldEffect(spell,live,spell==="天殞術"?[]:["low","mid"]);
   assert.equal(forecast.ok,true);
   assert.deepEqual(forecast.target.field,live.field,`effect mismatch: ${spell}`);
