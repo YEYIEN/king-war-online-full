@@ -85,7 +85,7 @@ function readyOnNextTurn(unit){
   return {
     ...unit,tapped:false,archerBonusUsed:false,
     status:[...(unit.status||[])].filter(s=>
-      !["整備","階級+1","階級-1","傷害+1","燃血+1傷害","急援"].includes(s))
+      !["整備","階級+1","階級-1","傷害+1","燃血+1傷害","急援","屋大維+1"].includes(s))
   };
 }
 function opponentResponse(state,heroId,meta,counters,opts){
@@ -95,7 +95,7 @@ function opponentResponse(state,heroId,meta,counters,opts){
   for(const adversary of current){
     if(adversary.id===heroId||adversary.eliminated||adversary.hp<=0)continue;
     const reply={
-      own:{...strip(adversary),field:adversary.field.map(readyOnNextTurn)},
+      own:{...strip(adversary),lastStandShield:0,field:adversary.field.map(readyOnNextTurn)},
       opponents:current.filter(p=>p.id!==adversary.id).map(strip)
     };
     const choices=actionsFor(reply);
