@@ -6,7 +6,9 @@ const variants=[
  {id:"current",firstSeatPeacefulTurn:false,secondSeatExtraCards:0},
  {id:"peace-only",firstSeatPeacefulTurn:true,secondSeatExtraCards:0},
  {id:"second-card",firstSeatPeacefulTurn:false,secondSeatExtraCards:1},
- {id:"peace-plus-card",firstSeatPeacefulTurn:true,secondSeatExtraCards:1}
+ {id:"peace-plus-card",firstSeatPeacefulTurn:true,secondSeatExtraCards:1},
+ {id:"two-cards",firstSeatPeacefulTurn:false,secondSeatExtraCards:2},
+ {id:"peace-plus-two-cards",firstSeatPeacefulTurn:true,secondSeatExtraCards:2}
 ];
 const rows=[];
 for(const difficulty of ["normal","hard","conqueror"])for(const variant of variants){
