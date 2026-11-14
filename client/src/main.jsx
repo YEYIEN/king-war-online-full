@@ -1058,7 +1058,7 @@ function App() {
           return;
         }
 
-        socket.emit("room:resume", saved, (res) => {
+        requestNow("room:resume", saved, (res) => {
           if (!res?.ok) {
             localStorage.removeItem("kw_session");
             setRoom(null);
@@ -1100,13 +1100,23 @@ function App() {
     }
   }, [room, playerId, targetPlayerId]);
 
+  // Single unbuffered transport path for lobby, room and gameplay commands.
+  function requestNow(event, data, callback) {
+    if (!socket.connected) {
+      setMessage("目前離線，操作未送出。請待連線恢復後重新確認局勢再操作。");
+      return false;
+    }
+    socket.emit(event, data, callback);
+    return true;
+  }
+
   // Socket.IO normally buffers emits while offline; never replay an old game move on reconnect.
   const emit = (event, data = {}) => {
     if (!socket.connected) {
       setMessage("目前離線，操作未送出。請待連線恢復後重新確認局勢再操作。");
       return;
     }
-    socket.emit(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
+    requestNow(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
   };
   function makeGuestName() {
     return `玩家${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1145,7 +1155,7 @@ function App() {
   function createRoom() {
     clearSavedSession();
 
-    socket.emit("room:create", { name: safeName(), maxPlayers }, (res) => {
+    requestNow("room:create", { name: safeName(), maxPlayers }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
@@ -1157,7 +1167,7 @@ function App() {
   function joinRoom() {
     clearSavedSession();
 
-    socket.emit("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
+    requestNow("room:join", { name: safeName(), code: roomCodeInput }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "加入失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
@@ -1171,21 +1181,21 @@ function App() {
   }
 
   function updateRoomSettings(nextSettings) {
-    socket.emit("room:updateSettings", nextSettings, (res) => {
+    requestNow("room:updateSettings", nextSettings, (res) => {
       if (!res?.ok) return setMessage(res?.error || "房間設定更新失敗");
       setMessage("");
     });
   }
 
   function addAIPlayer() {
-    socket.emit("room:addAI", {}, (res) => {
+    requestNow("room:addAI", {}, (res) => {
       if (!res?.ok) return setMessage(res?.error || "添加機器人失敗");
       setMessage("");
     });
   }
 
   function removeAIPlayer() {
-    socket.emit("room:removeAI", {}, (res) => {
+    requestNow("room:removeAI", {}, (res) => {
       if (!res?.ok) return setMessage(res?.error || "刪除機器人失敗");
       setMessage("");
     });
@@ -1195,7 +1205,7 @@ function App() {
     clearSavedSession();
 
     setMessage("正在建立單人模式...");
-    socket.emit("singleplayer:start", { name: safeName(), difficulty: aiDifficulty }, (res) => {
+    requestNow("singleplayer:start", { name: safeName(), difficulty: aiDifficulty }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "單人模式建立失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
@@ -1212,7 +1222,7 @@ function App() {
       if (!ok) return;
     }
 
-    socket.emit("room:leave", {}, () => {});
+    requestNow("room:leave", {}, () => {});
 
     localStorage.removeItem("kw_session");
     setRoom(null);
@@ -1244,7 +1254,7 @@ function App() {
 
     setMessage("正在建立操作教學房...");
 
-    socket.emit("tutorial:start", { name: safeName() }, (res) => {
+    requestNow("tutorial:start", { name: safeName() }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "無法開始操作教學");
 
       setPlayerId(res.playerId);
@@ -1262,7 +1272,7 @@ function App() {
     clearSavedSession();
 
     setMessage("正在尋找公開房間...");
-    socket.emit("matchmaking:join", { name: safeName() }, (res) => {
+    requestNow("matchmaking:join", { name: safeName() }, (res) => {
       if (!res?.ok) return setMessage(res?.error || "隨機匹配失敗");
       setPlayerId(res.playerId);
       setRoom(res.room);
@@ -1682,7 +1692,7 @@ function App() {
 
     setMessage("施法確認中...");
 
-    socket.emit("game:castMagic", {
+    requestNow("game:castMagic", {
       magicId: magicPlan.magic.id,
       casterId: magicPlan.casterId,
       targetPlayerId: magicPlan.targetPlayerId,
