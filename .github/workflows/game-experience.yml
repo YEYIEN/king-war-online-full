@@ -133,3 +133,19 @@ jobs:
           GENGHIS_DRAW_LIMIT: '100'
           GENGHIS_GUARANTEE: '0'
         run: node scripts/king-balance-baseline.mjs
+      - name: Two-player second seat +1 card trial
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          SECOND_SEAT_CARDS: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player second seat +2 cards trial
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          SECOND_SEAT_CARDS: '2'
+        run: node scripts/king-balance-baseline.mjs
