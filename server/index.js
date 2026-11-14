@@ -915,7 +915,10 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
     });
     const chosen = difficulty==="conqueror" && ai.simRationalSearch === true
       ? chooseRationalAttack(publicActions, {self:ai,enemies:publicEnemies,
-          ownDepth:3,rootWidth:11,beamWidth:4,maxNodes:1600,responseWidth:20})
+          // More opponents -> shallower but broader retaliation coverage.
+          ownDepth:publicEnemies.length>2?2:3,
+          rootWidth:publicEnemies.length>2?6:11,
+          beamWidth:4,maxNodes:1600,responseWidth:20})
       : selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
           battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
           conquerorProfile: room.settings?.conquerorProfile || "resource",
