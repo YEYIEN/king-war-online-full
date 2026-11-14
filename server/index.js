@@ -2013,7 +2013,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       };
       room.simProgress = { trailingPlayers: new Set(), criticalPlayers: new Set() };
       room.simMetrics = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0, kingDamage: 0,
-        damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
+        damageByKing: {}, spells: {}, spellsEffective: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
         comebackUses: { assault: 0, defense: 0 } };
       rooms.set(room.code, room);
       startGame(room);
