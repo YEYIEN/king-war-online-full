@@ -1312,7 +1312,7 @@ function App() {
             <strong>遊戲目標：</strong>把其他玩家國王 HP 打到 0。<br />
             <strong>每回合：</strong>部署兵種、攻擊、使用魔法，最後結束回合。<br />
             <strong>急援：</strong>若回合開始時場上沒有兵種，第一張部署的初級或中級兵種可以立刻攻擊。<br />
-            <strong>背水一戰：</strong>嚴重落後時，每局一次，用2HP換2張兵種、緊急部署及3點限時國王護盾。
+            <strong>背水一戰：</strong>嚴重落後時每局一次，耗費2HP，選擇「突圍」（2張兵種＋緊急部署＋3點護盾）或「固守」（1張兵種＋7點護盾）。
           </div>
 
           <button
@@ -1755,9 +1755,18 @@ function App() {
           <button className="secondary" onClick={() => setShowLogModal(true)}>紀錄</button>
           <button className="secondary" onClick={returnToMainMenu}>回到主選單</button>
           {me?.comebackAvailable && isMyTurn && (
-            <button className="secondary lastStandButton" onClick={() => {
-              if (window.confirm("背水一戰僅能每局使用一次：失去 2HP、抽 2 張兵種，下一張初級或中級部署兵種能立即行動，且下次自己的回合開始前可抵擋最多3點國王傷害（每次至少受到1點）。確定使用？")) emit("game:lastStand");
-            }}>背水一戰（-2HP）</button>
+            <div className="lastStandChoices" role="group" aria-label="背水一戰策略">
+              <button className="secondary lastStandButton" onClick={() => {
+                if (window.confirm("突圍：每局一次、消耗2HP，抽2張兵種、緊急部署一次、獲得3點臨時國王護盾。確定嗎？")) {
+                  emit("game:lastStand", { mode: "assault" });
+                }
+              }}>背水突圍（-2HP）</button>
+              <button className="secondary lastStandButton" onClick={() => {
+                if (window.confirm("固守：每局一次、消耗2HP，抽1張兵種、獲得7點臨時國王護盾；不會額外獲得緊急部署。確定嗎？")) {
+                  emit("game:lastStand", { mode: "defense" });
+                }
+              }}>堅守反擊（-2HP）</button>
+            </div>
           )}
           <button className="endTurnBtn" disabled={!isMyTurn} onClick={handleEndTurn}>結束回合</button>
         </div>
@@ -1847,7 +1856,7 @@ function App() {
               <div className="ruleBlock">
                 <h3>回合流程</h3>
                 <p>部署兵種、攻擊與施法可視局勢排序，再結束回合。</p>
-                <p><strong>背水一戰：</strong>HP 不高於 12、場上最多2兵種，而且敵方確實具有明顯優勢時，每局一次可付出2HP，抽2張兵種、獲得一次緊急部署攻擊與3點限時國王護盾；房主可關閉。</p>
+                <p><strong>背水一戰：</strong>HP 不高於 12、場上最多2兵種，而且敵方確實具有明顯優勢時，每局一次可付出2HP，在突圍（多抽牌、立即部署）及固守（較高護盾）間選擇一次，並消耗2HP；房主可關閉。</p>
               </div>
 
               <div className="ruleBlock">
