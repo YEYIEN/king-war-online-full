@@ -500,7 +500,7 @@ function startGame(room) {
     p.fieldBonus = 0;
     p.lastStandUsed = false;
 
-    drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus !== false ? 6 : 5);
+    drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5);
   });
 
   const firstPlayer = room.players[0];
@@ -653,7 +653,7 @@ function aiSelectEnemy(room, ai) {
   if (!enemies.length) return null;
   const difficulty = getAIDifficulty(room);
   if (difficulty === "easy") return enemies[Math.floor(Math.random() * enemies.length)];
-  if (difficulty !== "hard") return enemies[0];
+  if (difficulty === "normal" && room.players.length === 2) return enemies[0];
   const threat = p =>
     p.hp * 0.8 +
     p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
@@ -664,12 +664,14 @@ function aiSelectEnemy(room, ai) {
 
 function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   const basic = aiAttackScore(attacker, enemy, defender);
-  if (getAIDifficulty(room) !== "hard") return basic;
+  const difficulty = getAIDifficulty(room);
+  if (difficulty === "easy" || (difficulty === "normal" && room.players.length === 2)) return basic;
   // In free-for-all games, pressuring the strongest remaining army is generally
   // more useful than finishing an already-weak opponent just because it is weak.
   const strategicThreat = room.players.length >= 3
     ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magic.length * 5 + enemy.hp * 0.35
     : 0;
+  if (difficulty === "normal") return basic + strategicThreat;
   if (!defender) {
     let result = basic + strategicThreat + (enemy.hp <= effectiveDamage(attacker) ? 200 : 18);
     if (attacker.type === "步兵" && ai.field.filter(u => u.type === "步兵").length === 1 && ai.hp < 12) result -= 55;
@@ -792,7 +794,8 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
     const attackers = ai.field.filter(u => aiCanAttack(u));
     if (!attackers.length) break;
     const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
-    const targets = difficulty === "hard" ? enemies : [preferredEnemy].filter(p => p && !p.eliminated);
+    const targets = (difficulty !== "easy" && room.players.length > 2) || difficulty === "hard"
+      ? enemies : [preferredEnemy].filter(p => p && !p.eliminated);
     const actions = [];
     for (const enemy of targets) for (const attacker of attackers) {
       if (!enemy.field.some(u => u.type === "步兵")) {
@@ -1791,7 +1794,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = true, comebackEnabled = false, openingTruceEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, comebackEnabled = false, openingTruceEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
