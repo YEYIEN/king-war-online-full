@@ -40,11 +40,12 @@ for(const scenario of scenarios){
  for(const seed of seeds){
   const {id,...settings}=scenario;
   const run=await simulateKingBaseline({
-    matches,seed,maxTurns:180,comebackEnabled:true,conquerorSearch:true,
+    matches,seed,maxTurns:180,includeMatchRecords:true,comebackEnabled:true,conquerorSearch:true,
     conquerorProfile:"resource",...settings
   });
   assert.deepEqual(run.invariantViolations,{},`invariants ${id}/${seed}`);
   assert.equal(run.finished+run.unfinished,matches);
+  assert.equal(run.matchRecords.length,matches,"missing per-match research records");
   assert.equal(run.unfinishedReasons.stalledAITurn,0,`AI stall ${id}/${seed}`);
   runs.push(run);
  }
@@ -72,6 +73,7 @@ for(const scenario of scenarios){
   unfinishedReasons:{turnLimit:sum(r=>r.unfinishedReasons.turnLimit),stalledAITurn:sum(r=>r.unfinishedReasons.stalledAITurn),unexpected:sum(r=>r.unfinishedReasons.unexpected)},
   averageTurns:+(runs.reduce((a,r)=>a+r.averageTurns,0)/runs.length).toFixed(2),
   byKing,bySeat,
+  matchRecords:runs.flatMap((run,index)=>run.matchRecords.map(record=>({...record,seed:seeds[index]}))),
   crises:{eligibleMatches:crises,wins:crisisWins,winRate:rate(crisisWins,crises),ci95:wilson(crisisWins,crises)},
   behind:{eligibleMatches:behind,wins:behindWins,winRate:rate(behindWins,behind),ci95:wilson(behindWins,behind)},
   comeback:{assaultUses:sum(r=>r.comebackUse.assault),defenseUses:sum(r=>r.comebackUse.defense),winsUsingLastStand:sum(r=>r.resultMetrics.comebackWinsUsingLastStand)},
@@ -91,14 +93,15 @@ for(const scenario of scenarios){
  }));
 }
 const result={
- schema:1,purpose:"Exploratory pre-balance factorial study; no live-game rule changes",
+ schema:2,purpose:"Exploratory pre-balance factorial study; no live-game rule changes",
  rulesRef:"PR #7 feature/prebalance-hardening-ai-20261114",seeds,matchesPerSeed:matches,
  notes:[
   "Every scenario uses identical seed numbers but random consumption can diverge after changed decisions, so these are not necessarily fully paired outcomes.",
   "King denominators include unfinished matches; wins require actual final winner.",
   "Spells changedStatePct means observed field/status change, not strategic effectiveness.",
   "All-hard/all-conqueror configurations are homogeneous AI, not a human player estimate.",
-  "Exploration results are hypothesis-generating; verify candidates on separate holdout seeds before adoption."
+  "Exploration results are hypothesis-generating; verify candidates on separate holdout seeds before adoption.",
+  "Per-game public research data contains king, seat, opening card type/rank counts, result and aggregate event counts, never private card IDs or credentials."
  ],scenarios:records
 };
 writeFileSync("balance-factorial-raw.json",JSON.stringify(result,null,2));
