@@ -12,3 +12,10 @@ test("mobile browser test rejects nontrivial overflow at four widths",()=>{
  assert.match(smoke,/\[320, 375, 390, 430\]/);
  assert.match(smoke,/assert\.ok\(actual <= 1,/);
 });
+
+test("all lobby and gameplay commands use the bounded, deduplicated request path",()=>{
+ assert.equal((ui.match(/socket\\.emit\\(/g)||[]).length,0);
+ assert.match(ui,/socket\\.timeout\\(5000\\)\\.emit\\(event, data,/);
+ assert.match(ui,/pendingRequestsRef\\.current\\.has\\(event\\)/);
+ assert.match(ui,/connectionWarning.*role="status".*aria-live="polite"/s);
+});
