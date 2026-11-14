@@ -7,6 +7,7 @@ import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
+import { selectDeployChoice, selectAttackChoice, AI_PROFILES } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -42,7 +43,7 @@ const RANKS = ["初級", "中級", "高級"];
 const COUNTER = { 步兵: "弓兵", 弓兵: "法師", 法師: "騎兵", 騎兵: "步兵" };
 const RANK_VALUE = { 初級: 1, 中級: 2, 高級: 3 };
 const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
-const AI_DIFFICULTIES = ["easy", "normal", "hard"];
+const AI_DIFFICULTIES = ["easy", "normal", "hard", "conqueror"];
 function getAIDifficulty(room) { return AI_DIFFICULTIES.includes(room?.settings?.aiDifficulty) ? room.settings.aiDifficulty : "normal"; }
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
@@ -617,14 +618,14 @@ function aiDeployScore(card, ai, enemy) {
 
 function aiDeployUnits(room, ai, enemy) {
   const difficulty = getAIDifficulty(room);
-  let deployLimit = difficulty === "easy" ? 1 : difficulty === "hard" ? (ai.field.length <= 2 ? 3 : 2) : (ai.field.length <= 2 ? 2 : 1);
+  let deployLimit = difficulty === "easy" ? 1 : (difficulty === "hard" || difficulty === "conqueror") ? (ai.field.length <= 2 ? 3 : 2) : (ai.field.length <= 2 ? 2 : 1);
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
     const scored = ai.hand
       .map((card, index) => ({ card, index, score: aiDeployScore(card, ai, enemy) }))
       .sort((a, b) => b.score - a.score);
 
-    const best = difficulty === "easy" ? scored[Math.floor(Math.random() * Math.min(3, scored.length))] : scored[0];
+    const best = selectDeployChoice(scored, difficulty);
     if (!best || best.score < 8) break;
 
     const [card] = ai.hand.splice(best.index, 1);
@@ -862,7 +863,7 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
     const attackers = ai.field.filter(u => aiCanAttack(u));
     if (!attackers.length) break;
     const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
-    const targets = (difficulty !== "easy" && room.players.length > 2) || difficulty === "hard"
+    const targets = (difficulty !== "easy" && room.players.length > 2) || difficulty === "hard" || difficulty === "conqueror"
       ? enemies : [preferredEnemy].filter(p => p && !p.eliminated);
     const actions = [];
     for (const enemy of targets) for (const attacker of attackers) {
@@ -875,10 +876,9 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
           score: aiStrategicAttackScore(room, ai, attacker, enemy, defender) });
       }
     }
-    actions.sort((a, b) => b.score - a.score);
-    const options = difficulty === "easy" ? actions.slice(0, Math.min(actions.length, 4)) : actions;
-    const chosen = difficulty === "easy" ? options[Math.floor(Math.random() * options.length)] : options[0];
-    if (!chosen || chosen.score < (difficulty === "hard" ? 32 : difficulty === "easy" ? -15 : 5)) break;
+    const chosen = selectAttackChoice(actions, { difficulty, self: ai, enemies,
+      battle, power, canAttack, effectiveDamage });
+    if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
     const result = chosen.type === "king"
       ? aiResolveAttackKing(room, ai, chosen.enemy, chosen.attackerId)
       : aiResolveAttackUnit(room, ai, chosen.enemy, chosen.attackerId, chosen.defenderId);
@@ -990,7 +990,7 @@ function aiChooseMagic(room, ai, enemy) {
   const mages = ai.field.filter(unit => unit.type === "法師" && canAttack(unit));
   if (!mages.length || !ai.magic.length) return false;
 
-  const strategicMagic = getAIDifficulty(room) === "hard" && room.settings?.aiMagicStrategy !== false;
+  const strategicMagic = ["normal", "hard", "conqueror"].includes(getAIDifficulty(room)) && room.settings?.aiMagicStrategy !== false;
   const spells = [...ai.magic];
   if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, enemy) - aiMagicCardValue(a, ai, enemy));
   for (const magic of spells) {
@@ -1103,7 +1103,7 @@ async function performAITurn(roomCode) {
   if (!isStillAITurn(room, ai)) return;
 
   if (getAIDifficulty(room) !== "easy" && canUseLastStand(room, ai) &&
-      (getAIDifficulty(room) === "hard" || ai.hand.length < 3)) {
+      (["hard", "conqueror"].includes(getAIDifficulty(room)) || ai.hand.length < 3)) {
     const policy = room.settings?.comebackPolicy || "situational";
     const oldMode = ai.hp <= 8 && (ai.field.length >= 1 || ai.hand.length >= 3) ? "defense" : "assault";
     const enemyAttack = room.players.filter(p => p.id !== ai.id && !p.eliminated).reduce((best,p) =>
@@ -1131,7 +1131,7 @@ async function performAITurn(roomCode) {
   if (!isStillAITurn(room, ai)) return;
 
   let usedMagic = aiChooseMagic(room, ai, enemy);
-  if (getAIDifficulty(room) === "hard" && isStillAITurn(room, ai)) {
+  if (["hard", "conqueror"].includes(getAIDifficulty(room)) && isStillAITurn(room, ai)) {
     let casts = 0;
     while (casts++ < 2 && aiSelectEnemy(room, ai) && aiChooseMagic(room, ai, aiSelectEnemy(room, ai))) usedMagic = true;
   }
