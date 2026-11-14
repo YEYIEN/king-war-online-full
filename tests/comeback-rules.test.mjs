@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canUseLastStand } from "../server/comeback-rules.js";
+import { canUseLastStand, mitigateKingDamage } from "../server/comeback-rules.js";
 
 function scenario({ hp = 10, myField = 1, enemyHp = 24, enemyField = 3, turn = "me", enabled = true, used = false, tutorial = false } = {}) {
   const player = { id: "me", hp, field: Array.from({ length: myField }, () => ({})), eliminated: false, lastStandUsed: used };
@@ -27,4 +27,18 @@ test("only a genuinely behind player can use the paid one-time comeback", () => 
   assert.equal(canUseLastStand(room, player), false, "room can disable experimental mechanic");
   ({room, player} = scenario({ tutorial: true }));
   assert.equal(canUseLastStand(room, player), false, "tutorial never introduces comeback before core rules");
+});
+
+test("royal shield absorbs at most three damage, never prevents all king damage", () => {
+  const king = { lastStandShield: 3 };
+  assert.equal(mitigateKingDamage(king, 5), 2);
+  assert.equal(king.lastStandShield, 0);
+  assert.equal(mitigateKingDamage(king, 5), 5);
+  king.lastStandShield = 3;
+  assert.equal(mitigateKingDamage(king, 1), 1);
+  assert.equal(king.lastStandShield, 3);
+  assert.equal(mitigateKingDamage(king, 2), 1);
+  assert.equal(king.lastStandShield, 2);
+  assert.equal(mitigateKingDamage(king, 4), 2);
+  assert.equal(king.lastStandShield, 0);
 });
