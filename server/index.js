@@ -1049,22 +1049,28 @@ function aiChooseMagic(room, ai, enemy) {
 
   const strategicMagic = ["normal", "hard", "conqueror"].includes(getAIDifficulty(room, ai)) && room.settings?.aiMagicStrategy !== false;
   const spells = [...ai.magic];
-  if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, enemy) - aiMagicCardValue(a, ai, enemy));
+  const opponents = room.players.filter(p=>p.id!==ai.id && !p.eliminated && p.hp>0);
+  function bestSpellEnemy(magic) {
+    if (!strategicMagic || room.settings?.aiMagicTargeting === false || magic.target === "我方") return enemy;
+    return [...opponents].sort((a,b)=>aiMagicCardValue(magic,ai,b)-aiMagicCardValue(magic,ai,a))[0] || enemy;
+  }
+  if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, bestSpellEnemy(b)) - aiMagicCardValue(a, ai, bestSpellEnemy(a)));
   for (const magic of spells) {
+    const spellEnemy=bestSpellEnemy(magic);
     if (room.settings?.aiCurriculumPolicy !== false && !shouldUseMagicNow({
       difficulty: getAIDifficulty(room, ai), spell: magic, ai, enemy,
-      value: aiMagicCardValue(magic, ai, enemy),
+      value: aiMagicCardValue(magic, ai, spellEnemy),
       hasReadyAlly: ai.field.some(unit => canAttack(unit) && unit.type !== "法師")
     })) continue;
     if (openingTruce(room) && magic.target !== "我方") continue;
     const caster = mages.find(unit => mageCanCast(unit, magic));
     if (!caster) continue;
 
-    let target = enemy;
+    let target = spellEnemy;
     let targets = [];
     if (magic.name === "天殞術") {
-      const lowRankCount = enemy.field.filter(unit => unit.rank !== "高級").length;
-      if (lowRankCount < 2 && enemy.field.length < 4) continue;
+      const lowRankCount = spellEnemy.field.filter(unit => unit.rank !== "高級").length;
+      if (lowRankCount < 2 && spellEnemy.field.length < 4) continue;
     } else if (magic.target === "我方") {
       target = ai;
       if (magic.name === "燃血術" && ai.hp <= 10) continue;
@@ -1073,7 +1079,7 @@ function aiChooseMagic(room, ai, enemy) {
       if (!choices.length) continue;
       targets = [choices[0].id];
     } else {
-      const choices = [...enemy.field];
+      const choices = [...spellEnemy.field];
       if (["火球術","流星雨"].includes(magic.name)) {
         choices.sort((a,b) => ((b.type === "步兵" ? 20 : 0) + aiRankValue(b.rank) * 8) -
                                ((a.type === "步兵" ? 20 : 0) + aiRankValue(a.rank) * 8));
@@ -2018,7 +2024,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = true, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -2072,7 +2078,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, conquerorSearch, conquerorProfile, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, aiCurriculumPolicy, aiRecallStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, conquerorSearch, conquerorProfile, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, aiMagicTargeting, aiCurriculumPolicy, aiRecallStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
