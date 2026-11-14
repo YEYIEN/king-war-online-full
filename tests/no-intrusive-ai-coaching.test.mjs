@@ -10,7 +10,7 @@ test("normal AI matches do not add instructional scripts or suggested player act
 });
 test("strategy difficulty affects AI decisions, not human event handler rule permissions",()=>{
  const server=readFileSync(new URL("../server/index.js",import.meta.url),"utf8");
- const publicHandlers=server.slice(server.indexOf('socket.on("game:deploy"'),server.indexOf('socket.on("disconnect"'));
+ const publicHandlers=server.slice(server.indexOf('guardedOn("game:deploy"'),server.indexOf('socket.on("disconnect"'));
  assert.ok(publicHandlers.length>500,"confirm gameplay event handler area exists");
  assert.doesNotMatch(publicHandlers,/getAIDifficulty\(/,"normal player actions must not be gated by chosen AI difficulty");
 });
