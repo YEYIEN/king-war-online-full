@@ -82,6 +82,33 @@ export function scoreKingPlanDeployment(card, self, enemy, difficulty="hard") {
   }
 }
 
+/** King-specific strategic spell timing. Adds only a modest preference to
+ * the existing legality, caster-readiness and target selection checks.
+ */
+export function scoreKingPlanMagic({self,enemy,spell}) {
+  if(!self?.king||!spell)return 0;
+  const ready= self.field.filter(canAttackVisible);
+  const enemyGuards=enemy?.field?.filter(u=>u.type==="步兵").length||0;
+  const ownGuards=self.field.filter(u=>u.type==="步兵").length;
+  switch(self.king.name){
+    case "亞歷山大大帝":
+      return ["火球術","流星雨","天殞術"].includes(spell.name)&&enemyGuards>0&&ready.length>0?12:0;
+    case "屋大維奧古斯都":
+      return spell.target==="我方" && self.field.length>=2?10:0;
+    case "成吉思汗":
+      return spell.name==="冰凍術" && ready.some(u=>u.type==="騎兵")?12:
+        spell.name==="燃血術" && self.hp<15?-22:0;
+    case "秦始皇":
+      return ["火球術","流星雨","天殞術"].includes(spell.name) &&
+        self.hand.length>=5 && enemyGuards>0 ? 9 : 0;
+    case "路易十四":
+      // First spell converts to a new unit and renews the caster's action.
+      return !self.magicDrawUsed?16:
+        ["火球術","流星雨"].includes(spell.name)&&enemyGuards>0?8:0;
+    default:return 0;
+  }
+}
+
 /** Research policy: Conqueror identifies threats in the ENEMY king's public
  * ability without guessing unrevealed cards or hidden deck order.
  */
