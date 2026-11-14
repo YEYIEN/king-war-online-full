@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AI_PROFILES, selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow } from "../server/ai-strategies.js";
+import { AI_PROFILES, selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "../server/ai-strategies.js";
 
 const troop=(id,type,rank,damage=3)=>({id,type,rank,damage,tapped:false,status:[]});
 const deps={
@@ -73,4 +73,20 @@ test("conqueror and hard preserve own-card-only deployment inputs",()=>{
  scoreTeachingDeployment(card,self,enemy,"hard",50);
  scoreTeachingDeployment(card,self,enemy,"conqueror",50);
  assert.equal(JSON.stringify({self,enemy,card}),before);
+});
+
+test("Mongol risk assessment chooses low-rank tapped cavalry and preserves defenses in crisis",()=>{
+ const player={king:{name:"成吉思汗"},recallUsed:false,hand:[],recallDrawCount:0,hp:24,
+  field:[{id:"a",type:"騎兵",rank:"高級",tapped:true},
+    {id:"b",type:"騎兵",rank:"初級",tapped:true},
+    {id:"c",type:"步兵",rank:"中級",tapped:false}]};
+ const quiet=[{id:"enemy",hp:30,field:[],eliminated:false}];
+ const options={self:player,opponents:quiet,difficulty:"hard",canAttack:u=>!u.tapped,
+   maxHand:7,random:()=>0};
+ assert.equal(chooseMongolRecall(options)?.id,"b");
+ assert.equal(chooseMongolRecall({...options,self:{...player,hand:Array(7).fill({})}}),null);
+ const crisis={...player,hp:6};
+ const threat=[{id:"enemy",hp:24,eliminated:false,field:[{tapped:false},{tapped:false}]}];
+ assert.equal(chooseMongolRecall({...options,self:crisis,opponents:threat}),null);
+ assert.equal(chooseMongolRecall({...options,self:{...player,recallUsed:true}}),null);
 });
