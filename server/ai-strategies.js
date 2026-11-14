@@ -15,7 +15,7 @@ export const AI_PROFILES = Object.freeze({
  * Normal: recognize spell timing and retain scarce actions until they change an exchange.
  * Hard: guard resources, future threats and immediate conversion opportunities.
  */
-export function scoreTeachingDeployment(card, self, enemy, difficulty, base) {
+export function scoreTeachingDeployment(card, self, enemy, difficulty, base, { louisMageSetup = false } = {}) {
   let score=base;
   const guards=self.field.filter(u=>u.type==="步兵").length;
   const mages=self.field.filter(u=>u.type==="法師").length;
@@ -28,7 +28,7 @@ export function scoreTeachingDeployment(card, self, enemy, difficulty, base) {
     if (!mages && card.type==="法師" && self.magic.length) score+=20;
     // Louis XIV requires a mage on the board to begin generating magic.
     // In normal AI only, prioritize establishing that engine even with an empty magic hand.
-    if (!mages && card.type==="法師" && self.king?.name==="路易十四" && !self.magic.length) score+=18;
+    if (louisMageSetup && !mages && card.type==="法師" && self.king?.name==="路易十四" && !self.magic.length) score+=18;
     if (card.type==="騎兵" && enemy?.field?.some(u=>u.type==="步兵")) score+=12;
     if (card.rank==="高級" && !guards && self.hp<=15) score-=16;
   } else if (difficulty==="hard") {
