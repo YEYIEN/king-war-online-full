@@ -60,20 +60,6 @@ const RANK_VALUE = { 初級: 1, 中級: 2, 高級: 3 };
 const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
 const AI_DIFFICULTIES = ["easy", "normal", "hard", "conqueror"];
 function getAIDifficulty(room, player) { const value = player?.aiDifficulty ?? room?.settings?.aiDifficulty; return AI_DIFFICULTIES.includes(value) ? value : "normal"; }
-function useKingAwarePolicy(room, ai) {
-  return shouldUseKingAwarePolicy({
-    difficulty:getAIDifficulty(room,ai),kingName:ai?.king?.name,
-    playerCount:room?.players?.length||0,settings:room?.settings||{},
-    simulation:process.env.KW_SIMULATION==="1",experimental:ai?.simKingPlan===true
-  });
-}
-function useRationalConquerorPolicy(room, ai) {
-  return shouldUseRationalConqueror({
-    difficulty:getAIDifficulty(room,ai),
-    playerCount:room?.players?.length||0,settings:room?.settings||{},
-    simulation:process.env.KW_SIMULATION==="1",experimental:ai?.simRationalSearch===true
-  });
-}
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
 const KINGS = [
@@ -613,6 +599,21 @@ function aiCanAttack(unit) {
 
 function aiBattleResult(attacker, defender) {
   return battle(attacker, defender);
+}
+
+function useKingAwarePolicy(room, ai) {
+  return shouldUseKingAwarePolicy({
+    difficulty:getAIDifficulty(room,ai),kingName:ai?.king?.name,
+    playerCount:room?.players?.length||0,settings:room?.settings||{},
+    simulation:process.env.KW_SIMULATION==="1",experimental:ai?.simKingPlan===true
+  });
+}
+function useRationalConquerorPolicy(room, ai) {
+  return shouldUseRationalConqueror({
+    difficulty:getAIDifficulty(room,ai),
+    playerCount:room?.players?.length||0,settings:room?.settings||{},
+    simulation:process.env.KW_SIMULATION==="1",experimental:ai?.simRationalSearch===true
+  });
 }
 
 function aiDeployScore(card, ai, enemy) {
