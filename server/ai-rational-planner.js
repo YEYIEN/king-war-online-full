@@ -92,7 +92,11 @@ function opponentResponse(state,heroId,meta,counters,opts){
   let worst={state,utility:firstPlaceUtility(state,heroId,meta),enemyId:null};
   const current=participants(state);
   const initial=worst.utility;
-  for(const adversary of current){
+  // Multi-player FFA is sequential, not a coalition attacking the hero at once.
+  // Only the next *actual* living seat is modelled as an immediate responder.
+  const nextActor=current.find(p=>p.id===opts.nextPlayerId&&!p.eliminated&&p.hp>0);
+  const respondents=nextActor?[nextActor]:current.filter(p=>p.id!==heroId);
+  for(const adversary of respondents){
     if(adversary.id===heroId||adversary.eliminated||adversary.hp<=0)continue;
     const reply={
       own:{...strip(adversary),lastStandShield:0,field:adversary.field.map(readyOnNextTurn)},
@@ -160,7 +164,8 @@ export function chooseRationalAttack(actions,{self,enemies,...settings}={}){
     rootWidth:capped(Math.trunc(settings.rootWidth||11),1,24),
     beamWidth:capped(Math.trunc(settings.beamWidth||4),1,8),
     maxNodes:capped(Math.trunc(settings.maxNodes||1600),60,5000),
-    responseWidth:capped(Math.trunc(settings.responseWidth||20),1,60)
+    responseWidth:capped(Math.trunc(settings.responseWidth||20),1,60),
+    nextPlayerId:settings.nextPlayerId??null
   };
   const meta=Object.fromEntries([self,...enemies].map(p=>[p.id,{
     king:p.king,magicCount:p.magicCount??p.magic?.length??0
