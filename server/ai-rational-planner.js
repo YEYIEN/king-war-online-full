@@ -94,7 +94,12 @@ function opponentResponse(state,heroId,meta,counters,opts){
   const initial=worst.utility;
   // Multi-player FFA is sequential, not a coalition attacking the hero at once.
   // Only the next *actual* living seat is modelled as an immediate responder.
-  const nextActor=current.find(p=>p.id===opts.nextPlayerId&&!p.eliminated&&p.hp>0);
+  const order=Array.isArray(opts.turnOrder)?opts.turnOrder:[];
+  const heroSeat=order.indexOf(heroId);
+  const rotated=heroSeat>=0?order.slice(heroSeat+1).concat(order.slice(0,heroSeat)):[];
+  const nextActor=(rotated.length
+    ? rotated.map(id=>current.find(p=>p.id===id)).find(p=>p&&!p.eliminated&&p.hp>0)
+    : current.find(p=>p.id===opts.nextPlayerId&&!p.eliminated&&p.hp>0));
   const respondents=nextActor?[nextActor]:current.filter(p=>p.id!==heroId);
   for(const adversary of respondents){
     if(adversary.id===heroId||adversary.eliminated||adversary.hp<=0)continue;
@@ -165,7 +170,8 @@ export function chooseRationalAttack(actions,{self,enemies,...settings}={}){
     beamWidth:capped(Math.trunc(settings.beamWidth||4),1,8),
     maxNodes:capped(Math.trunc(settings.maxNodes||1600),60,5000),
     responseWidth:capped(Math.trunc(settings.responseWidth||20),1,60),
-    nextPlayerId:settings.nextPlayerId??null
+    nextPlayerId:settings.nextPlayerId??null,
+    turnOrder:Array.isArray(settings.turnOrder)?settings.turnOrder:[]
   };
   const meta=Object.fromEntries([self,...enemies].map(p=>[p.id,{
     king:p.king,magicCount:p.magicCount??p.magic?.length??0
