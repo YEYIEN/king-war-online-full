@@ -99,8 +99,8 @@ export function scoreKingPlanAttack({self,enemy,attacker,defender}) {
     case "秦始皇":
       return defender && prediction?.killedEnemy ? 14 : !defender ? 10 : 0;
     case "路易十四":
-      return defender?.type==="步兵" && prediction?.killedEnemy ? 14 :
-        attacker.type==="法師" && self.field.filter(u=>u.type==="法師").length===1 ? -35 : 0;
+      return attacker.type==="法師" && self.field.filter(u=>u.type==="法師").length===1 ? -35 :
+        defender?.type==="步兵" && prediction?.killedEnemy ? 14 : 0;
     default:return 0;
   }
 }
