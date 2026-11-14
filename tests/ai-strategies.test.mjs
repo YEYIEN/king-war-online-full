@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AI_PROFILES, selectDeployChoice, selectAttackChoice } from "../server/ai-strategies.js";
+import { AI_PROFILES, selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow } from "../server/ai-strategies.js";
 
 const troop=(id,type,rank,damage=3)=>({id,type,rank,damage,tapped:false,status:[]});
 const deps={
@@ -50,4 +50,27 @@ test("Conqueror values clearing last infantry before other ready attackers finis
   {enemy,attackerId:"a",defenderId:"guard",type:"unit",score:60}
  ],{difficulty:"conqueror",self,enemies:[enemy],...deps});
  assert.equal(decision.defenderId,"guard");
+});
+
+test("learning levels differ only in bot choices, not player actions or legal mechanics", () => {
+ const self={hp:12,field:[],magic:[{name:"力量術"}]};
+ const enemy={field:[{type:"步兵"}]};
+ const low={type:"騎兵",rank:"初級"};
+ const guard={type:"步兵",rank:"初級"};
+ assert.ok(scoreTeachingDeployment(guard,self,enemy,"easy",20)>20);
+ assert.ok(scoreTeachingDeployment(low,self,enemy,"easy",20)>20);
+ assert.ok(scoreTeachingDeployment(guard,self,enemy,"hard",20)>scoreTeachingDeployment(guard,self,enemy,"normal",20));
+ assert.equal(shouldUseMagicNow({difficulty:"normal",spell:{name:"力量術",target:"我方"},ai:self,enemy,value:60,hasReadyAlly:false}),false);
+ assert.equal(shouldUseMagicNow({difficulty:"normal",spell:{name:"力量術",target:"我方"},ai:self,enemy,value:60,hasReadyAlly:true}),true);
+ assert.equal(shouldUseMagicNow({difficulty:"normal",spell:{name:"火球術",target:"敵方"},ai:self,enemy,value:12}),false);
+ assert.equal(shouldUseMagicNow({difficulty:"easy",spell:{name:"火球術",target:"敵方"},ai:self,enemy,value:12}),true);
+});
+test("conqueror and hard preserve own-card-only deployment inputs",()=>{
+ const self={hp:20,field:[{id:"u",type:"步兵"}],magic:[]};
+ const enemy={field:[{type:"步兵"}]};
+ const card={type:"騎兵",rank:"中級"};
+ const before=JSON.stringify({self,enemy,card});
+ scoreTeachingDeployment(card,self,enemy,"hard",50);
+ scoreTeachingDeployment(card,self,enemy,"conqueror",50);
+ assert.equal(JSON.stringify({self,enemy,card}),before);
 });
