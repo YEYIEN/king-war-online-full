@@ -1700,6 +1700,7 @@ io.on("connection", socket => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
+    if (room.tutorial) return reply?.({ ok: false, error: "這一關先學會用魔法調整戰力，並擊敗敵方兵種。" });
     if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
     const result = resolveAttackKing(room, player, getPlayer(room,targetPlayerId), attackerId);
     reply?.(result.ok ? { ok: true } : result);
@@ -1799,6 +1800,8 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   };
   try {
     for (let n = 0; n < matches; n++) {
+      // Pair variant simulations on the same independently seeded initial king/seat setup.
+      state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
         settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, comebackEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
