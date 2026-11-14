@@ -7,6 +7,7 @@ import { applyMagicFieldEffect } from "./magic-effects.js";
 import { rankValue, power, effectiveDamage, canAttack, battle, previewUnitAttack } from "./combat-primitives.js";
 import { listPublicAttackCandidates } from "./ai-legal-actions.js";
 import { chooseRationalAttack } from "./ai-rational-planner.js";
+import {shouldUseKingAwarePolicy,shouldUseRationalConqueror} from "./ai-policy-gates.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
@@ -60,19 +61,18 @@ const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
 const AI_DIFFICULTIES = ["easy", "normal", "hard", "conqueror"];
 function getAIDifficulty(room, player) { const value = player?.aiDifficulty ?? room?.settings?.aiDifficulty; return AI_DIFFICULTIES.includes(value) ? value : "normal"; }
 function useKingAwarePolicy(room, ai) {
-  if(ai?.simKingPlan===true)return true; // isolated research challenger
-  if(process.env.KW_SIMULATION==="1")return false; // preserve historical A/B controls
-  if(getAIDifficulty(room,ai)!=="hard")return false;
-  if(room.settings?.kingAwareHardAI===false)return false;
-  if(room.settings?.kingAwareHardAI===true)return true;
-  // Only the Alexander duel plan has repeated, independent win-rate support.
-  return room.players.length===2 && ai.king?.name==="亞歷山大大帝";
+  return shouldUseKingAwarePolicy({
+    difficulty:getAIDifficulty(room,ai),kingName:ai?.king?.name,
+    playerCount:room?.players?.length||0,settings:room?.settings||{},
+    simulation:process.env.KW_SIMULATION==="1",experimental:ai?.simKingPlan===true
+  });
 }
 function useRationalConquerorPolicy(room, ai) {
-  if(ai?.simRationalSearch===true)return true;
-  if(process.env.KW_SIMULATION==="1")return false; // retain unmodified control AI
-  return room.players.length===2 && getAIDifficulty(room,ai)==="conqueror" &&
-    room.settings?.rationalConquerorDuel!==false;
+  return shouldUseRationalConqueror({
+    difficulty:getAIDifficulty(room,ai),
+    playerCount:room?.players?.length||0,settings:room?.settings||{},
+    simulation:process.env.KW_SIMULATION==="1",experimental:ai?.simRationalSearch===true
+  });
 }
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
