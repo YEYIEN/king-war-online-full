@@ -30,6 +30,7 @@ for (const setting of scenarios) {
   matrix.push({
     scenario: setting.name, matches: total,
     completed: sum(r=>r.finished), unfinished: sum(r=>r.unfinished),
+    unfinishedReasons:Object.fromEntries(Object.keys(runs[0].unfinishedReasons).map(k=>[k,sum(r=>r.unfinishedReasons[k])])),
     avgTurns: +(sum(r=>r.averageTurns)/runs.length).toFixed(2),
     seatWinRates: Object.fromEntries(Object.keys(runs[0].seats).map(k => [k, +(
       100 * sum(r=>r.seats[k].wins)/sum(r=>r.seats[k].games)).toFixed(2)])),
