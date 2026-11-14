@@ -5,7 +5,7 @@ import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
-import { canUseLastStand } from "./comeback-rules.js";
+import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -144,6 +144,7 @@ function startTurn(room, p) {
 
   p.magicDrawUsed = false;
   p.recallUsed = false;
+  p.lastStandShield = 0;
   p.fieldBonus = 0;
   p.field.forEach(u => {
     u.tapped = false; u.justDeployed = false; u.archerBonusUsed = false;
@@ -215,7 +216,7 @@ function mageCanCast(m, magic) {
 }
 function publicPlayer(p, viewer, room) {
   const isMe = p.id === viewer;
-  return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
+  return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, lastStandShield: p.lastStandShield || 0, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
 function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
@@ -460,12 +461,13 @@ function useLastStand(room, player) {
   if (!canUseLastStand(room, player)) return { ok: false, error: "目前尚未符合背水一戰條件，或已經使用過。" };
   player.lastStandUsed = true;
   player.hp -= 2;
+  player.lastStandShield = room.settings?.lastStandShieldEnabled === false ? 0 : 3;
   drawUnits(room, player, 2);
   // Grant a single emergency activation for the next non-high-rank deployment.
   player.reinforcementAvailable = true;
   player.reinforcementUsed = false;
   room.lastStandCount = (room.lastStandCount || 0) + 1;
-  room.log.push(`${player.name} 發動背水一戰：失去2HP、抽2張兵種，下一張初級或中級部署兵種可立即行動。`);
+  room.log.push(`${player.name} 發動背水一戰：失去2HP、抽2張兵種，緊急部署一次${player.lastStandShield ? "，下次自己回合前可抵擋最多3點國王傷害" : ""}。`);
   return { ok: true };
 }
 
@@ -499,6 +501,7 @@ function startGame(room) {
     p.recallUsed = false;
     p.fieldBonus = 0;
     p.lastStandUsed = false;
+    p.lastStandShield = 0;
 
     drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5);
   });
@@ -765,7 +768,7 @@ function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
   const attacker = attackerPlayer.field.find(u => u.id === attackerId);
   if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
 
-  const damage = effectiveDamage(attacker);
+  const damage = mitigateKingDamage(defenderPlayer, effectiveDamage(attacker));
   defenderPlayer.hp -= damage;
   attacker.tapped = true;
   room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 國王，造成${damage}傷害。`);
@@ -1794,7 +1797,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, comebackEnabled = false, openingTruceEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1815,7 +1818,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, comebackEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
@@ -1857,7 +1860,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, comebackEnabled, openingTruceEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
