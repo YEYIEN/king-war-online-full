@@ -927,14 +927,23 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
           score: aiStrategicAttackScore(room, ai, attacker, enemy, defender) });
       }
     }
+    // Never pass the original room player objects through the policy boundary.
+    // The scored actions previously still referenced private player objects.
     const publicEnemies = enemies.map(publicOpponentForAI);
-    const chosen = selectAttackChoice(actions, { difficulty, self: ai, enemies: publicEnemies,
+    const publicEnemyById = new Map(publicEnemies.map(enemy => [enemy.id, enemy]));
+    const publicActions = actions.map(action => ({
+      ...action, enemy: publicEnemyById.get(action.enemy.id)
+    }));
+    const chosen = selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
       battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
       conquerorProfile: room.settings?.conquerorProfile || "resource" });
     if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
+    // Resolve exclusively through the authoritative server with a validated live ID.
+    const liveEnemy = enemies.find(enemy => enemy.id === chosen.enemy.id);
+    if (!liveEnemy) break;
     const result = chosen.type === "king"
-      ? aiResolveAttackKing(room, ai, chosen.enemy, chosen.attackerId)
-      : aiResolveAttackUnit(room, ai, chosen.enemy, chosen.attackerId, chosen.defenderId);
+      ? aiResolveAttackKing(room, ai, liveEnemy, chosen.attackerId)
+      : aiResolveAttackUnit(room, ai, liveEnemy, chosen.attackerId, chosen.defenderId);
     if (!result) break;
     broadcast(room);
     await sleep(1900);
