@@ -61,10 +61,17 @@ jobs:
           KW_SIMULATION: '1'
           PREBALANCE_MATCHES_PER_SEED: '30'
         run: node scripts/prebalance-ai-audit.mjs > prebalance-ai-audit.json
+      - name: Pairwise AI difficulty league
+        env:
+          KW_SIMULATION: '1'
+          PREBALANCE_LEAGUE_MATCHES_PER_SEED: '30'
+        run: node scripts/prebalance-policy-league.mjs > prebalance-policy-league.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: prebalance-ai-audit
-          path: prebalance-ai-audit.json
+          path: |
+            prebalance-ai-audit.json
+            prebalance-policy-league.json
           retention-days: 30
           if-no-files-found: warn
