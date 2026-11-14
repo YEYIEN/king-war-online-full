@@ -43,11 +43,11 @@ export function shouldUseMagicNow({difficulty, spell, ai, enemy, value, hasReady
     if (spell.name==="燃血術" && ai.hp<=12) return false;
     if (spell.target==="我方" && !hasReadyAlly && spell.name!=="燃血術") return false;
     if (spell.name==="天殞術" && enemy.field.filter(u=>u.rank!=="高級").length<2) return false;
-    return value>=32;
+    return value>=16;
   }
   if (spell.name==="燃血術" && ai.hp<=13) return false;
   if (spell.target==="我方" && !hasReadyAlly && spell.name!=="燃血術") return false;
-  return value>=28;
+  return value>=12;
 }
 
 export function selectDeployChoice(scored, difficulty, random = Math.random) {
