@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
 import { rankValue, power, effectiveDamage, canAttack, battle, previewUnitAttack } from "./combat-primitives.js";
 import { listPublicAttackCandidates } from "./ai-legal-actions.js";
+import { chooseRationalAttack } from "./ai-rational-planner.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
@@ -912,10 +913,13 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
             ? scoreKingCounterAttack({enemy,defender,attacker})*0.3 : 0)
       };
     });
-    const chosen = selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
-      battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
-      conquerorProfile: room.settings?.conquerorProfile || "resource",
-      ownKingPlan: ai.simKingPlan === true, counterKingPlan: ai.simCounterPlan === true });
+    const chosen = difficulty==="conqueror" && ai.simRationalSearch === true
+      ? chooseRationalAttack(publicActions, {self:ai,enemies:publicEnemies,
+          ownDepth:3,rootWidth:11,beamWidth:4,maxNodes:1600,responseWidth:20})
+      : selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
+          battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
+          conquerorProfile: room.settings?.conquerorProfile || "resource",
+          ownKingPlan: ai.simKingPlan === true, counterKingPlan: ai.simCounterPlan === true });
     if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
     // Resolve exclusively through the authoritative server with a validated live ID.
     const liveEnemy = enemies.find(enemy => enemy.id === chosen.enemy.id);
@@ -2023,7 +2027,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", challengerKingPlan = false, challengerCounterPlan = false, kingPair = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", challengerKingPlan = false, challengerCounterPlan = false, challengerRationalSearch = false, kingPair = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -2035,6 +2039,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     playerCount!==2 || challenger===null)) throw new Error("invalid research king pair");
   if(challengerKingPlan && !["hard","conqueror"].includes(challenger)) throw new Error("king plan requires hard/conqueror challenger");
   if(challengerCounterPlan && challenger!=="conqueror") throw new Error("counter plan requires conqueror challenger");
+  if(challengerRationalSearch && challenger!=="conqueror") throw new Error("rational search requires conqueror challenger");
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
@@ -2108,6 +2113,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         if(challengerStyle!=="balanced")challengerPlayer.simResearchStyle=challengerStyle;
         if(challengerKingPlan)challengerPlayer.simKingPlan=true;
         if(challengerCounterPlan)challengerPlayer.simCounterPlan=true;
+        if(challengerRationalSearch)challengerPlayer.simRationalSearch=true;
         challengerStats.matches++;
         const seat = String(seatIndex[challengerPlayer.id]);
         challengerStats.gamesBySeat[seat] = (challengerStats.gamesBySeat[seat] || 0) + 1;
@@ -2182,7 +2188,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, challenger, challengerStyle, challengerKingPlan, challengerCounterPlan, kingPair, conquerorSearch, conquerorProfile, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, aiCurriculumPolicy, aiRecallStrategy, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, challenger, challengerStyle, challengerKingPlan, challengerCounterPlan, challengerRationalSearch, kingPair, conquerorSearch, conquerorProfile, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, aiCurriculumPolicy, aiRecallStrategy, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
     ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
