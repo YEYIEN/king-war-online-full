@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
+import { canUseLastStand } from "./comeback-rules.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -211,12 +212,12 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
-function publicPlayer(p, viewer) {
+function publicPlayer(p, viewer, room) {
   const isMe = p.id === viewer;
-  return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
+  return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
-function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal" }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
-    tutorial: !!room.tutorial, tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer)) }; }
+function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
+    tutorial: !!room.tutorial, tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
 function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
 
@@ -452,6 +453,19 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
   return true;
 }
 
+function useLastStand(room, player) {
+  if (!canUseLastStand(room, player)) return { ok: false, error: "目前尚未符合背水一戰條件，或已經使用過。" };
+  player.lastStandUsed = true;
+  player.hp -= 2;
+  drawUnits(room, player, 2);
+  // Grant a single emergency activation for the next non-high-rank deployment.
+  player.reinforcementAvailable = true;
+  player.reinforcementUsed = false;
+  room.lastStandCount = (room.lastStandCount || 0) + 1;
+  room.log.push(`${player.name} 發動背水一戰：失去2HP、抽2張兵種，下一張初級或中級部署兵種可立即行動。`);
+  return { ok: true };
+}
+
 function startGame(room) {
   // ROOM_CLEANUP_CLEAR_ON_STARTGAME_V1
   clearRoomCleanup(room);
@@ -480,6 +494,7 @@ function startGame(room) {
     p.magicDrawUsed = false;
     p.recallUsed = false;
     p.fieldBonus = 0;
+    p.lastStandUsed = false;
 
     drawUnits(room, p, p.king.name === "秦始皇" ? 6 : 5);
   });
@@ -970,6 +985,11 @@ async function performAITurn(roomCode) {
   await sleep(1400);
   if (!isStillAITurn(room, ai)) return;
 
+  if (getAIDifficulty(room) !== "easy" && canUseLastStand(room, ai) &&
+      (getAIDifficulty(room) === "hard" || ai.hand.length < 3)) {
+    useLastStand(room, ai);
+    broadcast(room);
+  }
   const beforeDeployCount = ai.field.length;
   aiDeployUnits(room, ai, enemy);
   if (ai.field.length !== beforeDeployCount) {
@@ -1253,7 +1273,7 @@ io.on("connection", socket => {
       tutorialProgress: 0,
       matchmaking: false,
       singleplayer: false,
-      settings: { turnTimeLimit: 0, aiDifficulty: "normal" },
+      settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
       players: [player, ai],
       unitDeck,
       magicDeck,
@@ -1316,7 +1336,7 @@ io.on("connection", socket => {
         hostId: pid,
         maxPlayers: 2,
         status: "lobby",
-        settings: { turnTimeLimit: 0, aiDifficulty: "normal" },
+        settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
         isPublic: true,
         matchmaking: true,
         singleplayer: false,
@@ -1400,7 +1420,7 @@ io.on("connection", socket => {
       hostId: pid,
       maxPlayers: Math.min(5, Math.max(2, Number(maxPlayers) || 2)),
       status: "lobby",
-      settings: { turnTimeLimit: 0, aiDifficulty: "normal" },
+      settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
       isPublic: false,
       matchmaking: false,
       singleplayer: false,
@@ -1590,6 +1610,16 @@ io.on("connection", socket => {
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
 
+  socket.on("game:lastStand", (_, reply) => {
+    const found = findBySocket(socket.id);
+    if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
+    const { room, player } = found;
+    if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
+    const result = useLastStand(room, player);
+    reply?.(result);
+    if (result.ok) broadcast(room);
+  });
+
   socket.on("game:deploy", ({cardId}, reply) => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
@@ -1739,7 +1769,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
-  let unfinished = 0, totalTurns = 0;
+  let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
   const originalRandom = Math.random;
   let state = seed >>> 0 || 1;
   Math.random = () => {
@@ -1775,11 +1805,13 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         if (room.log.length > 80) room.log.splice(0, room.log.length - 80);
       }
       totalTurns += turns;
+      if (room.lastStandCount > 0) comebackGames++;
       const survivors = alive(room);
       if (room.status === "ended" && survivors.length === 1) {
         const winner = survivors[0];
         counts[winner.king.name].wins++;
         seats[seatIndex[winner.id]].wins++;
+        if (winner.lastStandUsed) comebackWins++;
       } else {
         unfinished++;
         for (const p of room.players) counts[p.king.name].unfinished++;
@@ -1794,6 +1826,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
     seed, matches, playerCount, maxTurns, difficulty, louisBonus, comebackEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
+    comebackGames, comebackWins,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
     seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
