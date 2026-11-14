@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - feature/game-experience-redesign-20261114
+      - feature/prebalance-hardening-ai-20261114
 jobs:
   security-and-tests:
     runs-on: ubuntu-latest
