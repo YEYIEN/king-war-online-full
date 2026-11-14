@@ -10,10 +10,10 @@
   --kw-ink:#F4F7FC;
   --kw-muted:#C1CFDC;
   --kw-gold:#D8B477;
-  --kw-attack:#B95858;
-  --kw-magic:#9070C4;
-  --kw-confirm:#3F9679;
-  --kw-warn:#D1914F;
+  --kw-attack:#9B3D42;
+  --kw-magic:#604394;
+  --kw-confirm:#256D53;
+  --kw-warn:#95501B;
   --kw-focus:#F7D590;
 }
 body {background:var(--kw-bg);color:var(--kw-ink);}
@@ -76,3 +76,8 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
     transition-duration:.01ms !important;
   }
 }
+
+.primaryBtn{background:var(--kw-confirm);}
+.endTurnBtn{background:var(--kw-warn);}
+.dangerBtn{background:var(--kw-attack);}
+.matchBtn{background:var(--kw-magic);}
