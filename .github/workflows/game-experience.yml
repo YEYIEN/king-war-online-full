@@ -73,3 +73,27 @@ jobs:
           LOUIS_BONUS: '1'
           OPENING_TRUCE: '1'
         run: node scripts/king-balance-baseline.mjs
+      - name: Louis free-action disabled (hard AI, matched seed)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_FREE_ACTION: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Louis free-action enabled (hard AI, matched seed)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          LOUIS_FREE_ACTION: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Qin extra opening card disabled (hard AI)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          QIN_OPENING_BONUS: '0'
+        run: node scripts/king-balance-baseline.mjs
