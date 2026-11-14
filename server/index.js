@@ -13,7 +13,7 @@ import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeM
 import { createSocketEventGuard } from "./socket-guard.js";
 import { originPolicy } from "./origin-policy.js";
 import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
-import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat } from "./ai-strategies.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat, STRATEGY_ARCHETYPES, scoreArchetypeDeployment } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -619,7 +619,8 @@ function aiDeployUnits(room, ai, enemy) {
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
     const scored = ai.hand
-      .map((card, index) => ({ card, index, score: room.settings?.aiCurriculumPolicy === false ? aiDeployScore(card, ai, enemy) : scoreTeachingDeployment(card, ai, enemy, difficulty, aiDeployScore(card, ai, enemy), { louisMageSetup: room.settings?.louisMageSetup === true }) }))
+      .map((card, index) => ({ card, index, score: (room.settings?.aiCurriculumPolicy === false ? aiDeployScore(card, ai, enemy) : scoreTeachingDeployment(card, ai, enemy, difficulty, aiDeployScore(card, ai, enemy), { louisMageSetup: room.settings?.louisMageSetup === true }))
+        + (ai.simResearchStyle ? scoreArchetypeDeployment(card, ai, enemy, ai.simResearchStyle) : 0) }))
       .sort((a, b) => b.score - a.score);
 
     const best = selectDeployChoice(scored, difficulty);
@@ -2003,11 +2004,12 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
   if (challenger !== null && !AI_DIFFICULTIES.includes(challenger)) throw new Error("invalid challenger difficulty");
+  if (!STRATEGY_ARCHETYPES.includes(challengerStyle)) throw new Error("invalid challenger style");
   if (!AI_DIFFICULTIES.includes(difficulty)) throw new Error("invalid baseline difficulty");
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
@@ -2075,6 +2077,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       const challengerPlayer = challenger ? room.players[n % playerCount] : null;
       if (challengerPlayer) {
         challengerPlayer.aiDifficulty = challenger;
+        if(challengerStyle!=="balanced")challengerPlayer.simResearchStyle=challengerStyle;
         challengerStats.matches++;
         const seat = String(seatIndex[challengerPlayer.id]);
         challengerStats.gamesBySeat[seat] = (challengerStats.gamesBySeat[seat] || 0) + 1;
@@ -2149,7 +2152,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, challenger, conquerorSearch, conquerorProfile, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, aiCurriculumPolicy, aiRecallStrategy, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, challenger, challengerStyle, conquerorSearch, conquerorProfile, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, aiCurriculumPolicy, aiRecallStrategy, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
     ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
