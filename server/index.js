@@ -769,9 +769,12 @@ function returnUnitToHand(room, player, unitId) {
 }
 
 function aiUseKingAbility(room, ai) {
-  if (room.settings?.aiRecallStrategy === false) {
+  // A/B evidence: the risk-aware recall helps duels (and strong 3-player AI),
+  // but reduces win rate in 4/5-player free-for-all. Keep the better policy by format.
+  const difficulty = getAIDifficulty(room, ai);
+  const useRiskAware = room.players.length===2 || (room.players.length===3 && difficulty!=="normal");
+  if (room.settings?.aiRecallStrategy === false || !useRiskAware) {
     if (ai.king?.name !== "成吉思汗" || ai.recallUsed || ai.hand.length >= maxHand(ai)) return false;
-    const difficulty = getAIDifficulty(room, ai);
     if (difficulty === "easy" && Math.random() > 0.25) return false;
     const candidates = ai.field.filter(u => u.type === "騎兵" && u.tapped);
     if (!candidates.length || ai.field.length < 3) return false;
