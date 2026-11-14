@@ -114,13 +114,14 @@ jobs:
       - name: Evaluate 20 directed king matchups and policy ablations
         env:
           KW_SIMULATION: '1'
-          KING_MATRIX_MATCHES_PER_SEED: '35'
-          KING_MULTI_MATCHES_PER_SEED: '90'
+          KING_MATRIX_HOLDOUT: '1'
+          KING_MATRIX_MATCHES_PER_SEED: '45'
+          KING_MULTI_MATCHES_PER_SEED: '100'
         run: node scripts/king-matchup-ai-matrix.mjs > king-matchup-ai-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: king-ai-matchup-study
+          name: king-ai-matchup-holdout
           path: |
             king-matchup-ai-matrix.json
             king-matchup-ai-summary.md
