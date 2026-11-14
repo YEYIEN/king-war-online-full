@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
+import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -158,6 +159,7 @@ function startTurn(room, p) {
     ? drawMagic(room, p, 1) : 0;
   if (louisBonus) room.log.push(`${p.name} 的太陽王權：額外補充1張魔法卡。`);
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
+  observeTurnStart(room, p);
   scheduleTurnTimer(room, p);
 
   // DISCONNECT_GRACE_STARTTURN_V1
@@ -1898,6 +1900,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
+  const resultMetrics = { matchesWithTrailingPlayer: 0, completedMatchesWithTrailingPlayer: 0, actualComebackWins: 0, comebackWinsUsingLastStand: 0, comebackWinsWithoutLastStand: 0, playerTurnsObserved: 0, potentialComebackPlayers: 0 };
   const unfinishedReasons = { turnLimit: 0, stalledAITurn: 0, unexpected: 0 };
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
   const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
@@ -1947,6 +1950,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
           hp: 30, field: [], magic: [], hand: [], eliminated: false
         }))
       };
+      room.simProgress = { trailingPlayers: new Set() };
       room.simMetrics = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0, kingDamage: 0,
         damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
         comebackUses: { assault: 0, defense: 0 } };
@@ -1981,7 +1985,15 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       if (room.lastStandCount > 0) comebackGames++;
       for (const [mode, count] of Object.entries(room.lastStandModes || {})) comebackUse[mode] += count;
       const survivors = alive(room);
-      if (room.status === "ended" && survivors.length === 1) {
+      const finalized = room.status === "ended" && survivors.length === 1;
+      const outcome = analyzeFinalOutcome(room, finalized ? survivors[0].id : null);
+      if (outcome.trailingPlayers) resultMetrics.matchesWithTrailingPlayer++;
+      resultMetrics.potentialComebackPlayers += outcome.trailingPlayers;
+      if (finalized && outcome.trailingPlayers) resultMetrics.completedMatchesWithTrailingPlayer++;
+      if (outcome.comebackWin) resultMetrics.actualComebackWins++;
+      if (outcome.comebackWin && outcome.comebackUserWin) resultMetrics.comebackWinsUsingLastStand++;
+      if (outcome.noComebackWin) resultMetrics.comebackWinsWithoutLastStand++;
+      if (finalized) {
         const winner = survivors[0];
         counts[winner.king.name].wins++;
         seats[seatIndex[winner.id]].wins++;
@@ -2006,7 +2018,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
     seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
-    comebackGames, comebackWins, comebackUse, comebackWinsByMode, telemetry, turnsHistogram, invariantViolations: violations,
+    comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram, invariantViolations: violations,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
     seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
