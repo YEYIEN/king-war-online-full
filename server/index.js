@@ -9,6 +9,7 @@ import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
 import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { createSocketEventGuard } from "./socket-guard.js";
+import { originPolicy } from "./origin-policy.js";
 import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
 import path from "path";
@@ -19,7 +20,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" }, maxHttpBufferSize: 32 * 1024 });
+const socketOriginPolicy=originPolicy();
+const io = new Server(server, {
+  cors:{origin:socketOriginPolicy.corsOrigins},
+  allowRequest:socketOriginPolicy.allowRequest,
+  maxHttpBufferSize:32*1024
+});
 const rooms = new Map();
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
