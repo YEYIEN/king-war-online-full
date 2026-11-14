@@ -1,0 +1,66 @@
+name: Prebalance engineering and AI acceptance
+on:
+  push:
+    branches: [feature/prebalance-hardening-ai-20261114]
+  pull_request:
+    branches: [feature/game-experience-redesign-20261114]
+  workflow_dispatch:
+jobs:
+  reliability-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install pinned dependencies
+        run: |
+          npm ci
+          npm --prefix client ci
+      - name: Test rules, security and AI invariants
+        run: npm test
+      - name: Build production UI
+        run: npm run build
+      - name: Check production dependency advisories
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm --prefix client audit --omit=dev --audit-level=high
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Production browser desktop and 320-430px mobile
+        env:
+          KW_CAPTURE_UI: '1'
+        run: node scripts/production-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prebalance-ui-screenshots
+          path: test-artifacts/ui
+          retention-days: 14
+          if-no-files-found: ignore
+  ai-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: AI tier and player count matrix
+        env:
+          KW_SIMULATION: '1'
+          PREBALANCE_MATCHES_PER_SEED: '30'
+        run: node scripts/prebalance-ai-audit.mjs > prebalance-ai-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prebalance-ai-audit
+          path: prebalance-ai-audit.json
+          retention-days: 30
+          if-no-files-found: warn
