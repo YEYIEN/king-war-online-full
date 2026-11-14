@@ -60,6 +60,6 @@ test("safe sockets: room isolation, private hand, rejected forged actions and fl
  const toAct=own.currentPlayerId===created.playerId?guest:host;
  assert.equal((await request(toAct,"game:attackKing",{attackerId:"forged",targetPlayerId:created.playerId})).ok,false);
  let rejected=0;
- for(let i=0;i<110;i++){const reply=await request(outsider,"game:deploy",{cardId:"no-card"});if(reply.ok===false&&reply.error?.includes("頻繁"))rejected++;}
+ for(let i=0;i<25;i++){const reply=await request(outsider,"room:create",{name:"flood",maxPlayers:2});if(reply.ok===false&&reply.error?.includes("頻繁"))rejected++;}
  assert.ok(rejected>0,"rapid synthetic socket flood must get explicit rejections");
 });
