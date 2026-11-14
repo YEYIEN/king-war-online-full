@@ -17,10 +17,17 @@ jobs:
       - run: npm --prefix client ci
       - name: Unit and integration regression
         run: npm test
-      - name: Benchmark AI challenger by opponent and number of players
+      - name: Benchmark original Conqueror (control)
         env:
           KW_SIMULATION: '1'
-          MATCHES_PER_SEED: '300'
+          CONQUEROR_SEARCH: '0'
+          MATCHES_PER_SEED: '180'
+        run: node scripts/conqueror-benchmark.mjs | tee conqueror-control.json
+      - name: Benchmark tactical search Conqueror (treatment)
+        env:
+          KW_SIMULATION: '1'
+          CONQUEROR_SEARCH: '1'
+          MATCHES_PER_SEED: '180'
         run: node scripts/conqueror-benchmark.mjs | tee conqueror-results.json
       - uses: actions/upload-artifact@v4
         with:
