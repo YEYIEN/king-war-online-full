@@ -27,11 +27,17 @@ const comparisons=contrasts.map(([base,candidate,label])=>{
  const a=scenarios.get(base),b=scenarios.get(candidate);
  assert.ok(a&&b,`missing contrast ${base}/${candidate}`);
  const focus=label.includes("Louis")||label.includes("spell target")?"路易十四":null;
+ const aCount=focus?a.byKing[focus]:a.bySeat["1"];
+ const bCount=focus?b.byKing[focus]:b.bySeat["1"];
+ const pa=aCount.wins/aCount.games,pb=bCount.wins/bCount.games;
+ const standardError=Math.sqrt(pa*(1-pa)/aCount.games+pb*(1-pb)/bCount.games)*100;
+ const change=(pb-pa)*100;
+ const ci95ChangePp=[n2(change-1.96*standardError),n2(change+1.96*standardError)];
  const aRate=focus?a.byKing[focus].winRate:a.bySeat["1"].winRate;
  const bRate=focus?b.byKing[focus].winRate:b.bySeat["1"].winRate;
  const aCrisis=a.crises.winRate,bCrisis=b.crises.winRate;
  return {label,baseline:base,candidate,focus:focus||"seat1",baselineWinPct:aRate,candidateWinPct:bRate,
-  changePp:diff(bRate,aRate),changeInCriticalComebackPp:diff(bCrisis,aCrisis),
+  changePp:diff(bRate,aRate),ci95ChangePp,changeInCriticalComebackPp:diff(bCrisis,aCrisis),
   baselineCrisis:`${a.crises.wins}/${a.crises.eligibleMatches}`,
   candidateCrisis:`${b.crises.wins}/${b.crises.eligibleMatches}`,
   turnsChange:n2(b.averageTurns-a.averageTurns),
@@ -108,8 +114,8 @@ writeFileSync("balance-factorial-analysis.json",JSON.stringify(output,null,2));
 const markdown=["# 《國王戰爭》平衡因素多情境研究｜自動分析", "",
  `研究分支：PR #7（Draft）；${total} 局／${data.scenarios.length} 情境，完成 ${wins} 局。`,
  "## 方案對照（差異：百分點）","",
- "| 實驗 | 控制組 | 候選 | 勝率差 | 危機翻盤差 | 局長差 |","|---|---:|---:|---:|---:|---:|"];
-for(const c of comparisons)markdown.push(`| ${c.label} | ${c.baselineWinPct??"—"}% | ${c.candidateWinPct??"—"}% | ${c.changePp??"—"} | ${c.changeInCriticalComebackPp??"—"} | ${c.turnsChange} |`);
+ "| 實驗 | 控制組 | 候選 | 勝率差 | 勝率差 95% CI | 危機翻盤差 | 局長差 |","|---|---:|---:|---:|---|---:|---:|"];
+for(const c of comparisons)markdown.push(`| ${c.label} | ${c.baselineWinPct??"—"}% | ${c.candidateWinPct??"—"}% | ${c.changePp??"—"} | ${c.ci95ChangePp.join(" to ")} | ${c.changeInCriticalComebackPp??"—"} | ${c.turnsChange} |`);
 markdown.push("","## 開局手牌條件關聯（控制模式、國王及座位，仍不代表因果）","","| 條件 | 分層勝率差（百分點） | 有效分層數 |","|---|---:|---:|");
 for(const s of openingSignals)markdown.push(`| ${s.indicator} | ${s.weightedConditionalWinGapPp??"—"} | ${s.eligibleKingSeatScenarioStrata} |`);
 markdown.push("","## 重要限制","","- 這些不是正式採用的平衡數值變更。","- 模擬存在 AI 強度與座位相依性；先/後手與國王分配因數要分開比較。","- 方案篩選後仍需獨立種子測試，不能只憑探索資料決策。","- 缺乏真人樣本，無法直接聲稱真人平衡。");
