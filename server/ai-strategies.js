@@ -3,6 +3,19 @@
  * All policies operate on public board state and the AI's own hand only.
  * Never access hidden cards belonging to an opponent.
  */
+/** Minimum public information allowed to influence AI opponent evaluation.
+ * Do not copy hand, magic cards, resume token or socket identifiers.
+ * The count of magic cards is already displayed to every player.
+ */
+export function publicOpponentForAI(player) {
+  return {
+    id: player.id, hp: player.hp, king: player.king,
+    eliminated: !!player.eliminated,
+    field: player.field.map(unit => ({...unit, status: [...(unit.status || [])]})),
+    magicCount: Number.isInteger(player.magicCount) ? player.magicCount : player.magic?.length ?? 0
+  };
+}
+
 export const AI_PROFILES = Object.freeze({
   easy: { aim: "Learn turn flow: deploy, see combat, end turn", risk: "visible", searchDepth: 0 },
   normal: { aim: "Recognize when buffs, counters and trades matter", risk: "tactical", searchDepth: 0 },
@@ -94,7 +107,7 @@ function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conque
   const lastGuard=defender.type==="步兵"&&target.field.filter(x=>x.type==="步兵").length===1;
   let gain=0;
   if(killEnemy)gain+=(conquerorProfile==="resource"?45:35)+({"初級":1,"中級":2,"高級":3}[defender.rank]||1)*15
-    +(lastGuard?(conquerorProfile==="assault"?60:conquerorProfile==="resource"?30:45):0)+(defender.type==="法師"&&target.magic?.length?22:0);
+    +(lastGuard?(conquerorProfile==="assault"?60:conquerorProfile==="resource"?30:45):0)+(defender.type==="法師"&&target.magicCount>0?22:0);
   if(killSelf)gain-=(conquerorProfile==="resource"?48:34)+({"初級":1,"中級":2,"高級":3}[actor.rank]||1)*(conquerorProfile==="resource"?25:19);
   if(verdict==="defender"&&!blocked)gain-=14;
   if(killEnemy)target.field=target.field.filter(x=>x.id!==defender.id);
