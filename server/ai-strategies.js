@@ -106,7 +106,7 @@ function chooseConquerorAttack(actions, ctx) {
 }
 
 export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true }) {
-  if (difficulty === "conqueror" && conquerorSearch) {
+  if (difficulty === "conqueror" && conquerorSearch && enemies.length === 1) {
     return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage});
   }
   if (!actions.length) return null;
