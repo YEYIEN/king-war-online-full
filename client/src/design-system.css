@@ -1,0 +1,78 @@
+/* King War visual system v1 — thin, reversible override layer.
+ * Keep gameplay logic and player choices untouched.
+ * Tokens differentiate neutral interface, attack, magic, and turn progression.
+ */
+:root {
+  --kw-bg:#101925;
+  --kw-surface:#192635;
+  --kw-surface-raised:#233446;
+  --kw-border:#405569;
+  --kw-ink:#F4F7FC;
+  --kw-muted:#C1CFDC;
+  --kw-gold:#D8B477;
+  --kw-attack:#B95858;
+  --kw-magic:#9070C4;
+  --kw-confirm:#3F9679;
+  --kw-warn:#D1914F;
+  --kw-focus:#F7D590;
+}
+body {background:var(--kw-bg);color:var(--kw-ink);}
+:where(button,input,select,textarea,[role="button"]):focus-visible,
+.gameCard:focus-visible {
+ outline:3px solid var(--kw-focus) !important;
+ outline-offset:3px !important;
+ box-shadow:0 0 0 5px rgba(10,18,30,.7);
+}
+:where(button,input,select,textarea):disabled {cursor:not-allowed;}
+:where(button,.gameCard) {touch-action:manipulation;}
+:where(.card,.zoneCard,.playerSummary,.startBox,.resultModal) {
+  border-color:var(--kw-border);
+}
+:where(.gameCard,.playerSummary,.zoneCard) {color:var(--kw-ink);}
+:where(.effectText,.status,.statusPill,.actionLabel,.miniLine) {
+  overflow-wrap:anywhere;
+}
+:where(.guidedLesson) {
+  background:var(--kw-surface) !important;
+  border-color:var(--kw-border) !important;
+  color:var(--kw-ink) !important;
+}
+.guidedLesson h2,.guidedLessonTop {
+ color:var(--kw-ink) !important;
+}
+.guidedLesson .lessonTask {
+ color:var(--kw-ink);
+ background:#223A55;
+ border-left-color:var(--kw-gold);
+}
+.guidedLesson .lessonWarning {
+ color:#F5D8A4;
+ background:#3B3026;
+}
+.guidedLesson .lessonCorrect {color:#8BE4AB;}
+.guidedLesson .lessonWrong {color:#FFAAA1;}
+.lessonChoiceGroup button {
+ color:var(--kw-ink);
+ background:var(--kw-surface-raised);
+ border-color:var(--kw-border);
+}
+.lessonChoiceGroup button.selected {
+ border-color:var(--kw-gold);
+ background:#394456;
+}
+.lessonProgress span {background:#3F5367;}
+.lessonProgress span.active {background:var(--kw-gold);}
+@media(max-width:760px){
+  :where(.guidedPage button,.tutorialPlayPage button,.hero button) {
+    min-height:44px;
+  }
+  :where(.gameCard,.zoneCard) {min-width:0;}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    scroll-behavior:auto !important;
+    transition-duration:.01ms !important;
+  }
+}
