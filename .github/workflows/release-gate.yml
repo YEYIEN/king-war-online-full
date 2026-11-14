@@ -99,3 +99,31 @@ jobs:
             balance-followup-output.json
           retention-days: 30
           if-no-files-found: warn
+
+  king-ai-counterplay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Verify five own-king plans and counterplay unit tests
+        run: node --test tests/king-specific-ai-policy.test.mjs
+      - name: Evaluate 20 directed king matchups and policy ablations
+        env:
+          KW_SIMULATION: '1'
+          KING_MATRIX_MATCHES_PER_SEED: '35'
+          KING_MULTI_MATCHES_PER_SEED: '90'
+        run: node scripts/king-matchup-ai-matrix.mjs > king-matchup-ai-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: king-ai-matchup-study
+          path: |
+            king-matchup-ai-matrix.json
+            king-matchup-ai-summary.md
+            king-matchup-ai-output.json
+          retention-days: 30
+          if-no-files-found: warn
