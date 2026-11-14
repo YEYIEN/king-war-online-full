@@ -70,7 +70,7 @@ if(!filePath) {
   observedHumanTurnSeconds:g.humanDurationSamples?+(g.humanDurationMsSum/g.humanDurationSamples/1000).toFixed(1):null,
   observedAiTurnSeconds:g.aiDurationSamples?+(g.aiDurationMsSum/g.aiDurationSamples/1000).toFixed(1):null,
   king:Object.fromEntries(Object.entries(g.king).map(([name,k])=>[name,{...k,winRate:k.completedAppearances?+(100*k.wins/k.completedAppearances).toFixed(2):null}])),
-  seat:Object.fromEntries(Object.entries(g.seat).map(([name,k])=>[name,{...k,winRate:+(100*k.wins/k.appearances).toFixed(2)}])),
+  seat:Object.fromEntries(Object.entries(g.seat).map(([name,k])=>[name,{...k,winRate:k.completedAppearances?+(100*k.wins/k.completedAppearances).toFixed(2):null}])),
   spellImpactRate:Object.fromEntries(Object.entries(g.spells).map(([spell,c])=>[spell,c?+(100*(g.spellImpacts[spell]||0)/c).toFixed(1):0])),
   comebackRate:{
    severe:g.comeback.severeQualified?+(100*g.comeback.severeWins/g.comeback.severeQualified).toFixed(2):null,
