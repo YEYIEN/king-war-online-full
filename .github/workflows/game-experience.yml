@@ -97,3 +97,21 @@ jobs:
           DIFFICULTY: hard
           QIN_OPENING_BONUS: '0'
         run: node scripts/king-balance-baseline.mjs
+      - name: Last stand without shield (matched-seed comparison)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1600'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          COMEBACK: '1'
+          LAST_STAND_SHIELD: '0'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Last stand with temporary shield (matched-seed comparison)
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1600'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          COMEBACK: '1'
+          LAST_STAND_SHIELD: '1'
+        run: node scripts/king-balance-baseline.mjs
