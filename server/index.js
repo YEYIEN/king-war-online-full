@@ -14,7 +14,7 @@ import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeM
 import { createSocketEventGuard } from "./socket-guard.js";
 import { originPolicy } from "./origin-policy.js";
 import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
-import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat, STRATEGY_ARCHETYPES, scoreArchetypeDeployment, scoreKingPlanDeployment, counterKingThreat, scoreKingCounterAttack, scoreKingPlanAttack } from "./ai-strategies.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat, STRATEGY_ARCHETYPES, scoreArchetypeDeployment, scoreKingPlanDeployment, counterKingThreat, scoreKingCounterAttack, scoreKingPlanAttack, scoreKingPlanMagic } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -1053,12 +1053,17 @@ function aiChooseMagic(room, ai, enemy) {
       (aiMagicCardValue(magic,ai,a)+(ai.simCounterPlan?counterKingThreat(a,ai)*0.35:0))
     )[0] || preferredEnemy;
   }
-  if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, bestSpellEnemy(b)) - aiMagicCardValue(a, ai, bestSpellEnemy(a)));
+  const spellPriority=spell=>{
+    const target=bestSpellEnemy(spell);
+    return aiMagicCardValue(spell,ai,target)+
+      (ai.simKingPlan ? scoreKingPlanMagic({self:ai,enemy:target,spell}) : 0);
+  };
+  if (strategicMagic) spells.sort((a,b)=>spellPriority(b)-spellPriority(a));
   for (const magic of spells) {
     const spellEnemy=bestSpellEnemy(magic);
     if (room.settings?.aiCurriculumPolicy !== false && !shouldUseMagicNow({
       difficulty: getAIDifficulty(room, ai), spell: magic, ai, enemy: preferredEnemy,
-      value: aiMagicCardValue(magic, ai, spellEnemy),
+      value: spellPriority(magic),
       hasReadyAlly: ai.field.some(unit => canAttack(unit) && unit.type !== "法師")
     })) continue;
     if (openingTruce(room) && magic.target !== "我方") continue;
