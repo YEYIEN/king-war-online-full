@@ -691,7 +691,7 @@ function aiSelectEnemy(room, ai) {
     p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
     p.magic.length * (p.field.some(u => u.type === "法師") ? 3 : 0) -
     p.field.filter(u => u.type === "步兵").length * 4 +
-    (room.players.length >= 3 && p.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 2 : 0);
+    (room.players.length >= 3 && difficulty === "hard" && p.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 2 : 0);
   return enemies.sort((a, b) => threat(b) - threat(a))[0];
 }
 
@@ -703,7 +703,7 @@ function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   // more useful than finishing an already-weak opponent just because it is weak.
   const strategicThreat = room.players.length >= 3
     ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magic.length * 5 + enemy.hp * 0.35 +
-      (enemy.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 4 : 0)
+      (difficulty === "hard" && enemy.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 4 : 0)
     : 0;
   if (difficulty === "normal") return basic + strategicThreat;
   if (!defender) {
@@ -751,7 +751,7 @@ function returnUnitToHand(room, player, unitId) {
 function aiUseKingAbility(room, ai) {
   if (ai.king?.name !== "成吉思汗" || ai.recallUsed || ai.hand.length >= maxHand(ai)) return false;
   const difficulty = getAIDifficulty(room);
-  if (difficulty === "easy") return false;
+  if (difficulty === "easy" && Math.random() > 0.25) return false;
   const candidates = ai.field.filter(u => u.type === "騎兵" && u.tapped);
   if (!candidates.length) return false;
   if (ai.field.length < 3) return false;
