@@ -1264,7 +1264,7 @@ io.on("connection", socket => {
     const ai = {
       id: aiId,
       socketId: "AI_" + aiId,
-      name: "訓練騎士",
+      name: difficulty === "conqueror" ? "征服者" : difficulty === "hard" ? "戰術大師" : difficulty === "normal" ? "實戰教官" : "訓練騎士",
       isHost: false,
       isAI: true,
       connected: true,
@@ -1287,7 +1287,7 @@ io.on("connection", socket => {
       unitDeck: [],
       magicDeck: [],
       currentPlayerId: null,
-      log: [`${human.name} 開始單人模式，AI 對手：訓練騎士。`]
+      log: [`${human.name} 開始單人模式，對手為 ${ai.name}。`]
     };
 
     rooms.set(roomCode, room);
