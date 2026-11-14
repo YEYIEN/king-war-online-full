@@ -7,7 +7,7 @@ on:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -224,3 +224,8 @@ jobs:
           GENGHIS_THREAT_WEIGHT: '2'
           AI_MAGIC_STRATEGY: '1'
         run: node scripts/king-balance-baseline.mjs
+      - name: Multi-seed state invariant and risk matrix (2-5 players)
+        env:
+          KW_SIMULATION: '1'
+          SAMPLE_PER_CELL: '120'
+        run: node scripts/simulation-risk-matrix.mjs
