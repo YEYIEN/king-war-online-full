@@ -16,6 +16,23 @@ export function publicOpponentForAI(player) {
   };
 }
 
+/** Pure opponent-threat score using public game information only. */
+export function scorePublicEnemyThreat(player,{playerCount,difficulty,genghisThreatWeight=2}){
+  return player.hp * 0.8 +
+    player.field.reduce((sum,unit)=>sum+effectiveVisibleDamage(unit)*(canAttackVisible(unit)?2:1),0) +
+    player.magicCount * (player.field.some(unit=>unit.type==="法師")?3:0) -
+    player.field.filter(unit=>unit.type==="步兵").length*4 +
+    (playerCount>=3 && difficulty==="hard" && player.king?.name==="成吉思汗"
+      ? Math.max(0,Number(genghisThreatWeight))*2 : 0);
+}
+
+function effectiveVisibleDamage(unit){
+  return (unit?.damage||0)+(unit?.status?.includes("傷害+1")?1:0)+(unit?.status?.includes("燃血+1傷害")?1:0);
+}
+function canAttackVisible(unit) {
+  return !!unit && !unit.tapped && !["整備","不能攻擊","疲乏","疲乏待解"].some(status=>unit.status?.includes(status));
+}
+
 export const AI_PROFILES = Object.freeze({
   easy: { aim: "Learn turn flow: deploy, see combat, end turn", risk: "visible", searchDepth: 0 },
   normal: { aim: "Recognize when buffs, counters and trades matter", risk: "tactical", searchDepth: 0 },
