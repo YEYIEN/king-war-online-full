@@ -4,7 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
-import { rankValue, power, effectiveDamage, canAttack, battle } from "./combat-primitives.js";
+import { rankValue, power, effectiveDamage, canAttack, battle, previewUnitAttack } from "./combat-primitives.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
@@ -786,9 +786,8 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
   const defender = defenderPlayer.field[di];
   if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
 
-  const attackerPower = power(attacker);
-  const defenderPower = power(defender);
-  const result = battle(attacker, defender);
+  const { verdict: result, attackerPower, defenderPower,
+    archerSaved, archerExtra, killedEnemy, killedAttacker } = previewUnitAttack(attacker, defender);
   if (room.simMetrics) {
     room.simMetrics.unitAttacks++;
     if (result === "both") room.simMetrics.mutualKills++;
@@ -797,14 +796,12 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
   attacker.tapped = true;
   incrementMatchMetric(room,"unitAttack",1,{playerId:attackerPlayer.id});
 
-  const archerSaved = attacker.type === "弓兵" && defenderPower >= attackerPower;
-  const archerExtra = attacker.type === "弓兵" && defenderPower < attackerPower && !attacker.archerBonusUsed;
+
   if (archerSaved && defenderPower > attackerPower && !attacker.status.includes("疲乏")) {
     attacker.status.push("疲乏");
   }
 
-  const killedEnemy = result === "attacker" || result === "both";
-  const killedAttacker = (result === "defender" || result === "both") && !archerSaved;
+
   if (killedEnemy) {
     incrementMatchMetric(room,"unitKill",1,{playerId:attackerPlayer.id});
     defenderPlayer.field.splice(di, 1);
