@@ -25,7 +25,7 @@ export function selectDeployChoice(scored, difficulty, random = Math.random) {
  * archers, spell effects and opponent hidden hands are evaluated by the live
  * engine after selection. Models visible board trades and one enemy response.
  */
-function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conquerorProfile = "balanced" }) {
+function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conquerorProfile = "resource" }) {
   const unit = state.own.find(x=>x.id===move.attackerId);
   const foe = state.opponents.find(x=>x.id===move.enemy.id);
   if (!unit || unit.tapped || !foe || foe.hp<=0) return null;
