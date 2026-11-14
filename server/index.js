@@ -7,7 +7,7 @@ import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
-import { selectDeployChoice, selectAttackChoice, AI_PROFILES } from "./ai-strategies.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -622,7 +622,7 @@ function aiDeployUnits(room, ai, enemy) {
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
     const scored = ai.hand
-      .map((card, index) => ({ card, index, score: aiDeployScore(card, ai, enemy) }))
+      .map((card, index) => ({ card, index, score: scoreTeachingDeployment(card, ai, enemy, difficulty, aiDeployScore(card, ai, enemy)) }))
       .sort((a, b) => b.score - a.score);
 
     const best = selectDeployChoice(scored, difficulty);
@@ -995,6 +995,11 @@ function aiChooseMagic(room, ai, enemy) {
   const spells = [...ai.magic];
   if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, enemy) - aiMagicCardValue(a, ai, enemy));
   for (const magic of spells) {
+    if (!shouldUseMagicNow({
+      difficulty: getAIDifficulty(room, ai), spell: magic, ai, enemy,
+      value: aiMagicCardValue(magic, ai, enemy),
+      hasReadyAlly: ai.field.some(unit => canAttack(unit) && unit.type !== "法師")
+    })) continue;
     if (openingTruce(room) && magic.target !== "我方") continue;
     const caster = mages.find(unit => mageCanCast(unit, magic));
     if (!caster) continue;
@@ -1123,13 +1128,6 @@ async function performAITurn(roomCode) {
   const beforeDeployCount = ai.field.length;
   aiDeployUnits(room, ai, enemy);
   if (room.simMetrics) room.simMetrics.aiDeployments += Math.max(0, ai.field.length - beforeDeployCount);
-  if (room.singleplayer && ai.field.length !== beforeDeployCount && getAIDifficulty(room,ai) === "easy") {
-    const recent = ai.field.slice(beforeDeployCount);
-    const example = recent[0];
-    if (example?.type === "步兵") room.log.push("學習提示：步兵還在場上時，敵人不能直接攻擊國王。");
-    else if (example?.type === "騎兵") room.log.push("學習提示：騎兵部署當回合通常就能進攻，其他兵種常需等待。");
-    else room.log.push("學習提示：部署後注意整備與能否行動，再決定是否進攻。");
-  }
   if (ai.field.length !== beforeDeployCount) {
     broadcast(room);
     await sleep(2100);
@@ -1142,9 +1140,6 @@ async function performAITurn(roomCode) {
   if (["hard", "conqueror"].includes(getAIDifficulty(room, ai)) && isStillAITurn(room, ai)) {
     let casts = 0;
     while (casts++ < 2 && aiSelectEnemy(room, ai) && aiChooseMagic(room, ai, aiSelectEnemy(room, ai))) usedMagic = true;
-  }
-  if (usedMagic && room.singleplayer && getAIDifficulty(room,ai) === "normal") {
-    room.log.push("戰術提示：魔法施放時機取決於法師是否能行動，以及它能否真正改變交換結果。");
   }
   if (usedMagic) {
     broadcast(room);
@@ -1160,10 +1155,6 @@ async function performAITurn(roomCode) {
   if (!isStillAITurn(room, ai)) return;
 
   await aiAttackPhase(room, ai, enemy);
-  if (room.singleplayer && getAIDifficulty(room,ai) === "normal" && room.status === "playing") {
-    room.log.push("戰術提示：先計算兵種剋制、戰力與生還機率，再決定要消滅守衛還是保留戰力。");
-    broadcast(room);
-  }
 
   if (room.status === "ended") {
     broadcast(room);
