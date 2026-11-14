@@ -40,6 +40,8 @@ const RANKS = ["初級", "中級", "高級"];
 const COUNTER = { 步兵: "弓兵", 弓兵: "法師", 法師: "騎兵", 騎兵: "步兵" };
 const RANK_VALUE = { 初級: 1, 中級: 2, 高級: 3 };
 const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
+const AI_DIFFICULTIES = ["easy", "normal", "hard"];
+function getAIDifficulty(room) { return AI_DIFFICULTIES.includes(room?.settings?.aiDifficulty) ? room.settings.aiDifficulty : "normal"; }
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
 const KINGS = [
@@ -210,7 +212,7 @@ function publicPlayer(p, viewer) {
   const isMe = p.id === viewer;
   return { id:p.id, name:p.name, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
-function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0 }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
+function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal" }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer)) }; }
 function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
@@ -553,14 +555,15 @@ function aiDeployScore(card, ai, enemy) {
 }
 
 function aiDeployUnits(room, ai, enemy) {
-  let deployLimit = ai.field.length === 0 ? 2 : ai.field.length <= 2 ? 2 : 1;
+  const difficulty = getAIDifficulty(room);
+  let deployLimit = difficulty === "easy" ? 1 : difficulty === "hard" ? (ai.field.length <= 2 ? 3 : 2) : (ai.field.length <= 2 ? 2 : 1);
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
     const scored = ai.hand
       .map((card, index) => ({ card, index, score: aiDeployScore(card, ai, enemy) }))
       .sort((a, b) => b.score - a.score);
 
-    const best = scored[0];
+    const best = difficulty === "easy" ? scored[Math.floor(Math.random() * Math.min(3, scored.length))] : scored[0];
     if (!best || best.score < 8) break;
 
     const [card] = ai.hand.splice(best.index, 1);
@@ -620,6 +623,60 @@ function aiAttackScore(attacker, enemy, defender) {
 
   score += defenderRank * 4;
   return score;
+}
+
+
+function aiSelectEnemy(room, ai) {
+  const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
+  if (!enemies.length) return null;
+  const difficulty = getAIDifficulty(room);
+  if (difficulty === "easy") return enemies[Math.floor(Math.random() * enemies.length)];
+  if (difficulty !== "hard") return enemies[0];
+  const threat = p =>
+    (30 - p.hp) * 0.8 +
+    p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
+    p.magic.length * (p.field.some(u => u.type === "法師") ? 3 : 0) -
+    p.field.filter(u => u.type === "步兵").length * 4;
+  return enemies.sort((a, b) => threat(b) - threat(a))[0];
+}
+
+function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
+  const basic = aiAttackScore(attacker, enemy, defender);
+  if (getAIDifficulty(room) !== "hard") return basic;
+  if (!defender) {
+    let result = basic + (enemy.hp <= effectiveDamage(attacker) ? 350 : 18);
+    if (attacker.type === "步兵" && ai.field.filter(u => u.type === "步兵").length === 1 && ai.hp < 12) result -= 55;
+    return result;
+  }
+  const result = battle(attacker, defender);
+  let value = basic;
+  if (defender.type === "步兵" && enemy.field.filter(u => u.type === "步兵").length === 1) {
+    value += 55 + ai.field.filter(u => canAttack(u) && u.id !== attacker.id).length * 22;
+  }
+  if (defender.type === "法師" && enemy.magic.length) value += 35;
+  if (defender.type === "騎兵" && canAttack(defender)) value += 16;
+  if (result === "defender" && attacker.type !== "弓兵") value -= 85;
+  if (result === "both" && attacker.rank === "高級" && defender.rank !== "高級") value -= 65;
+  if (attacker.type === "步兵" && ai.field.filter(u => u.type === "步兵").length === 1 && ai.hp < 12 && result !== "attacker") value -= 60;
+  return value;
+}
+
+function aiUseKingAbility(room, ai) {
+  if (ai.king?.name !== "成吉思汗" || ai.recallUsed || ai.hand.length >= maxHand(ai)) return false;
+  const difficulty = getAIDifficulty(room);
+  if (difficulty === "easy") return false;
+  const candidates = ai.field.filter(u => u.type === "騎兵" && u.tapped);
+  if (!candidates.length) return false;
+  if (difficulty === "normal" && Math.random() > 0.6) return false;
+  const unit = candidates.sort((a, b) => rankValue(b.rank) - rankValue(a.rank))[0];
+  ai.field.splice(ai.field.findIndex(u => u.id === unit.id), 1);
+  unit.tapped = false;
+  unit.justDeployed = false;
+  ai.hand.push(unit);
+  ai.recallUsed = true;
+  drawUnits(room, ai, 1);
+  room.log.push(`${ai.name} 使用草原機動撤回 ${unit.name} 並抽1張兵種卡。`);
+  return true;
 }
 
 // Shared combat resolution for both human Socket.IO actions and AI decisions.
@@ -697,51 +754,36 @@ function aiResolveAttackKing(room, ai, enemy, attackerId) {
   return resolveAttackKing(room, ai, enemy, attackerId).ok;
 }
 
-async function aiAttackPhase(room, ai, enemy) {
+async function aiAttackPhase(room, ai, preferredEnemy) {
+  const difficulty = getAIDifficulty(room);
   let safety = 0;
-
-  while (safety < 8) {
-    safety++;
-
-    const attackers = ai.field.filter((u) => aiCanAttack(u));
+  while (safety++ < 10 && room.status === "playing") {
+    const attackers = ai.field.filter(u => aiCanAttack(u));
     if (!attackers.length) break;
-
+    const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
+    const targets = difficulty === "hard" ? enemies : [preferredEnemy].filter(p => p && !p.eliminated);
     const actions = [];
-
-    for (const attacker of attackers) {
-      if (!enemy.field.some((u) => u.type === "步兵")) {
-        actions.push({
-          type: "king",
-          attackerId: attacker.id,
-          score: aiAttackScore(attacker, enemy, null)
-        });
+    for (const enemy of targets) for (const attacker of attackers) {
+      if (!enemy.field.some(u => u.type === "步兵")) {
+        actions.push({ type: "king", enemy, attackerId: attacker.id,
+          score: aiStrategicAttackScore(room, ai, attacker, enemy, null) });
       }
-
       for (const defender of enemy.field) {
-        actions.push({
-          type: "unit",
-          attackerId: attacker.id,
-          defenderId: defender.id,
-          score: aiAttackScore(attacker, enemy, defender)
-        });
+        actions.push({ type: "unit", enemy, attackerId: attacker.id, defenderId: defender.id,
+          score: aiStrategicAttackScore(room, ai, attacker, enemy, defender) });
       }
     }
-
     actions.sort((a, b) => b.score - a.score);
-    const best = actions[0];
-
-    if (!best || best.score < 5) break;
-
-    if (best.type === "king") {
-      aiResolveAttackKing(room, ai, enemy, best.attackerId);
-    } else {
-      aiResolveAttackUnit(room, ai, enemy, best.attackerId, best.defenderId);
-    }
-
+    const options = difficulty === "easy" ? actions.slice(0, Math.min(actions.length, 4)) : actions;
+    const chosen = difficulty === "easy" ? options[Math.floor(Math.random() * options.length)] : options[0];
+    if (!chosen || chosen.score < (difficulty === "hard" ? 32 : difficulty === "easy" ? -15 : 5)) break;
+    const result = chosen.type === "king"
+      ? aiResolveAttackKing(room, ai, chosen.enemy, chosen.attackerId)
+      : aiResolveAttackUnit(room, ai, chosen.enemy, chosen.attackerId, chosen.defenderId);
+    if (!result) break;
     broadcast(room);
     await sleep(1900);
-
-    if (enemy.eliminated) break;
+    if (room.currentPlayerId !== ai.id) break;
   }
 }
 
@@ -906,8 +948,7 @@ async function performAITurn(roomCode) {
   const ai = room.players.find((p) => p.id === room.currentPlayerId);
   if (!isStillAITurn(room, ai)) return;
 
-  const enemies = room.players.filter((p) => p.id !== ai.id && !p.eliminated);
-  const enemy = enemies[0];
+  const enemy = aiSelectEnemy(room, ai);
 
   if (!enemy) {
     finishIfGameOver(room);
@@ -935,7 +976,11 @@ async function performAITurn(roomCode) {
 
   if (!isStillAITurn(room, ai)) return;
 
-  const usedMagic = aiChooseMagic(room, ai, enemy);
+  let usedMagic = aiChooseMagic(room, ai, enemy);
+  if (getAIDifficulty(room) === "hard" && isStillAITurn(room, ai)) {
+    let casts = 0;
+    while (casts++ < 2 && aiSelectEnemy(room, ai) && aiChooseMagic(room, ai, aiSelectEnemy(room, ai))) usedMagic = true;
+  }
   if (usedMagic) {
     broadcast(room);
     await sleep(2100);
@@ -958,6 +1003,7 @@ async function performAITurn(roomCode) {
 
   if (!isStillAITurn(room, ai)) return;
 
+  if (aiUseKingAbility(room, ai)) broadcast(room);
   room.log.push(`${ai.name} 準備結束回合。`);
   broadcast(room);
   await sleep(1600);
@@ -1036,7 +1082,7 @@ io.on("connection", socket => {
     reply?.({ ok: true });
   });
 
-  socket.on("singleplayer:start", ({ name }, reply) => {
+  socket.on("singleplayer:start", ({ name, difficulty = "normal" }, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1079,6 +1125,7 @@ io.on("connection", socket => {
       maxPlayers: 2,
       status: "lobby",
       singleplayer: true,
+      settings: { turnTimeLimit: 0, aiDifficulty: AI_DIFFICULTIES.includes(difficulty) ? difficulty : "normal" },
       players: [human, ai],
       unitDeck: [],
       magicDeck: [],
@@ -1201,7 +1248,7 @@ io.on("connection", socket => {
       tutorial: true,
       matchmaking: false,
       singleplayer: false,
-      settings: { turnTimeLimit: 0 },
+      settings: { turnTimeLimit: 0, aiDifficulty: "normal" },
       players: [player, ai],
       unitDeck,
       magicDeck,
@@ -1264,7 +1311,7 @@ io.on("connection", socket => {
         hostId: pid,
         maxPlayers: 2,
         status: "lobby",
-        settings: { turnTimeLimit: 0 },
+        settings: { turnTimeLimit: 0, aiDifficulty: "normal" },
         isPublic: true,
         matchmaking: true,
         singleplayer: false,
@@ -1348,7 +1395,7 @@ io.on("connection", socket => {
       hostId: pid,
       maxPlayers: Math.min(5, Math.max(2, Number(maxPlayers) || 2)),
       status: "lobby",
-      settings: { turnTimeLimit: 0 },
+      settings: { turnTimeLimit: 0, aiDifficulty: "normal" },
       isPublic: false,
       matchmaking: false,
       singleplayer: false,
@@ -1403,7 +1450,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit }, reply) => {
+  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty }, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1430,6 +1477,11 @@ io.on("connection", socket => {
       }
 
       room.maxPlayers = nextMax;
+    }
+
+    if (aiDifficulty !== undefined) {
+      if (!AI_DIFFICULTIES.includes(aiDifficulty)) return reply?.({ ok: false, error: "不支援的 AI 難度。" });
+      room.settings.aiDifficulty = aiDifficulty;
     }
 
     if (turnTimeLimit !== undefined) {
@@ -1666,7 +1718,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     for (let n = 0; n < matches; n++) {
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0 }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: "normal" }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
