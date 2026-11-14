@@ -1,3 +1,5 @@
+import { canAttack } from "./combat-primitives.js";
+
 /**
  * Enumerate public-board attack choices without accessing player hands, decks,
  * sockets or reconnect tokens. The authoritative resolver still validates each
