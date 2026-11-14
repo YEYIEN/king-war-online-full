@@ -631,7 +631,7 @@ function aiDeployUnits(room, ai, enemy) {
     const scored = ai.hand
       .map((card, index) => ({ card, index, score: (room.settings?.aiCurriculumPolicy === false ? aiDeployScore(card, ai, enemy) : scoreTeachingDeployment(card, ai, enemy, difficulty, aiDeployScore(card, ai, enemy), { louisMageSetup: room.settings?.louisMageSetup === true }))
         + (ai.simResearchStyle ? scoreArchetypeDeployment(card, ai, enemy, ai.simResearchStyle) : 0)
-        + (ai.simKingPlan ? scoreKingPlanDeployment(card, ai, enemy, difficulty) : 0) }))
+        + (ai.simKingPlan ? scoreKingPlanDeployment(card, ai, enemy, difficulty)*(difficulty==="conqueror"?0.45:1) : 0) }))
       .sort((a, b) => b.score - a.score);
 
     const best = selectDeployChoice(scored, difficulty);
@@ -715,8 +715,8 @@ function aiSelectEnemy(room, ai) {
     live: enemy, publicView: publicOpponentForAI(enemy)
   }));
   sorted.sort((a,b) =>
-    (scorePublicEnemyThreat(b.publicView,options)+(ai.simCounterPlan?counterKingThreat(b.publicView,ai):0)) -
-    (scorePublicEnemyThreat(a.publicView,options)+(ai.simCounterPlan?counterKingThreat(a.publicView,ai):0))
+    (scorePublicEnemyThreat(b.publicView,options)+(ai.simCounterPlan?counterKingThreat(b.publicView,ai)*0.25:0)) -
+    (scorePublicEnemyThreat(a.publicView,options)+(ai.simCounterPlan?counterKingThreat(a.publicView,ai)*0.25:0))
   );
   return sorted[0].live;
 }
@@ -909,7 +909,7 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
         score: aiStrategicAttackScore(room, ai, attacker, enemy, defender)
           + (ai.simKingPlan ? scoreKingPlanAttack({self:ai,enemy,attacker,defender}) : 0)
           + (ai.simCounterPlan && difficulty==="conqueror"
-            ? scoreKingCounterAttack({enemy,defender,attacker}) : 0)
+            ? scoreKingCounterAttack({enemy,defender,attacker})*0.3 : 0)
       };
     });
     const chosen = selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
@@ -1043,7 +1043,7 @@ function aiChooseMagic(room, ai, enemy) {
   const preferredEnemy = publicOpponentForAI(enemy);
   const opponents = room.players.filter(p=>p.id!==ai.id && !p.eliminated && p.hp>0).map(publicOpponentForAI);
   function bestSpellEnemy(magic) {
-    if (!strategicMagic || (room.settings?.aiMagicTargeting !== true && !ai.simCounterPlan) || magic.target === "我方") return preferredEnemy;
+    if (!strategicMagic || room.settings?.aiMagicTargeting !== true || magic.target === "我方") return preferredEnemy;
     return [...opponents].sort((a,b)=>
       (aiMagicCardValue(magic,ai,b)+(ai.simCounterPlan?counterKingThreat(b,ai)*0.35:0))-
       (aiMagicCardValue(magic,ai,a)+(ai.simCounterPlan?counterKingThreat(a,ai)*0.35:0))
