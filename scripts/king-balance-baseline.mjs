@@ -7,7 +7,8 @@ const seed = Number(process.env.SEED || 104729);
 const difficulty = process.env.DIFFICULTY || "normal";
 const louisBonus = process.env.LOUIS_BONUS !== "0";
 const comebackEnabled = process.env.COMEBACK === "1";
-const data = await simulateKingBaseline({ matches, playerCount: players, maxTurns, seed, difficulty, louisBonus, comebackEnabled });
+const openingTruceEnabled = process.env.OPENING_TRUCE === "1";
+const data = await simulateKingBaseline({ matches, playerCount: players, maxTurns, seed, difficulty, louisBonus, comebackEnabled, openingTruceEnabled });
 console.log(JSON.stringify(data, null, 2));
 if (data.finished / data.matches < 0.8) {
   console.error("WARNING: low completion rate; interpret results with caution");
