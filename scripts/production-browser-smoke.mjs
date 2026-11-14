@@ -77,7 +77,7 @@ try {
   await trainee.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await trainee.getByRole("button", { name: "開始操作教學" }).click();
   await trainee.getByRole("heading", { name: /第一關｜先部署可立即行動的騎兵/ }).waitFor({ timeout: 10000 });
-  await trainee.getByText("雙方原本戰力相同", { exact: false }).first().waitFor();
+  await trainee.getByText("我方握有中級騎兵", { exact: false }).first().waitFor();
   await trainee.close();
 
   const aiMenu = await desktop.newPage();
