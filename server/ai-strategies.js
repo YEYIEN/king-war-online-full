@@ -10,6 +10,46 @@ export const AI_PROFILES = Object.freeze({
   conqueror: { aim: "Maximize winning chances using bounded tactical continuation search", risk: "minimax-proxy", searchDepth: 2 }
 });
 
+/** Behavioral curricula affect only AI preferences, never legality, player actions or UI.
+ * Easy: show normal game flow by using accessible units, without intentionally throwing.
+ * Normal: recognize spell timing and retain scarce actions until they change an exchange.
+ * Hard: guard resources, future threats and immediate conversion opportunities.
+ */
+export function scoreTeachingDeployment(card, self, enemy, difficulty, base) {
+  let score=base;
+  const guards=self.field.filter(u=>u.type==="步兵").length;
+  const mages=self.field.filter(u=>u.type==="法師").length;
+  const ready= self.field.filter(u=>!u.tapped).length;
+  if (difficulty==="easy") {
+    if (!guards && card.type==="步兵") score+=14;
+    if (card.type==="騎兵" && card.rank!=="高級") score+=9;
+    if (card.rank==="高級" && self.field.length<2) score-=16;
+  } else if (difficulty==="normal") {
+    if (!mages && card.type==="法師" && self.magic.length) score+=20;
+    if (card.type==="騎兵" && enemy?.field?.some(u=>u.type==="步兵")) score+=12;
+    if (card.rank==="高級" && !guards && self.hp<=15) score-=16;
+  } else if (difficulty==="hard") {
+    if (!guards && self.hp<18 && card.type==="步兵") score+=30;
+    if (!mages && card.type==="法師" && self.magic.length>=2) score+=22;
+    if (card.type==="騎兵" && enemy?.field?.some(u=>u.type==="步兵")) score+=10;
+    if (card.rank==="高級" && ready===0 && self.hp<=10) score-=20;
+  }
+  return score;
+}
+
+export function shouldUseMagicNow({difficulty, spell, ai, enemy, value, hasReadyAlly=false}) {
+  if (difficulty==="easy") return true;
+  if (difficulty==="normal") {
+    if (spell.name==="燃血術" && ai.hp<=12) return false;
+    if (spell.target==="我方" && !hasReadyAlly && spell.name!=="燃血術") return false;
+    if (spell.name==="天殞術" && enemy.field.filter(u=>u.rank!=="高級").length<2) return false;
+    return value>=32;
+  }
+  if (spell.name==="燃血術" && ai.hp<=13) return false;
+  if (spell.target==="我方" && !hasReadyAlly && spell.name!=="燃血術") return false;
+  return value>=28;
+}
+
 export function selectDeployChoice(scored, difficulty, random = Math.random) {
   if (!scored.length) return null;
   if (difficulty === "easy") {
