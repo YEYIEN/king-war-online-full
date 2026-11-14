@@ -58,6 +58,7 @@ export function buildMatchSummary(room, { winnerId = null, reason = "last-standi
   const aiCount=room.players.filter(p=>p.isAI).length;
   return {
     schemaVersion:METRICS_SCHEMA_VERSION, source:"live", mode,
+    rulesetId:String(process.env.KW_RULESET_ID || "unversioned").slice(0,80),
     finishedAt:new Date(now).toISOString(),
     elapsedMs:Math.max(0,now-m.startedAt),
     playerCount:room.players.length,aiCount,humanCount:room.players.length-aiCount,
@@ -67,7 +68,8 @@ export function buildMatchSummary(room, { winnerId = null, reason = "last-standi
     finishReason:reason,
     winnerSeat:winners.length ? room.players.indexOf(winners[0])+1 : null,
     winnerKing:winners[0]?.king?.name ?? null,
-    comeback:comeback ? {severe:!!comeback.comebackWin,critical:!!comeback.criticalWin} : null,
+    comeback:comeback ? {severeQualified:comeback.trailingPlayers>0,criticalQualified:comeback.criticalPlayers>0,
+      severe:!!comeback.comebackWin,critical:!!comeback.criticalWin} : null,
     events:{...m.events},spells:{...m.spells},spellsEffective:{...m.spellsEffective},
     seats:room.players.map((p,i)=>({
       seat:i+1,king:p.king?.name || "unknown",ai:!!p.isAI,
