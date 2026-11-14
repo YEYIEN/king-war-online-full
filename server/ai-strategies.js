@@ -69,9 +69,9 @@ export function scoreKingPlanDeployment(card, self, enemy, difficulty="hard") {
       // Mobility matters only if recall can still create meaningful advantage.
       return card.type==="騎兵" && (self.recallDrawCount||0)<2 && self.hand.length<=5 ? 22 : 0;
     case "秦始皇":
-      // The extra draw is useful when cards can be converted to field presence.
-      return self.hand.length>=6 && card.rank!=="高級" ? 18 :
-        self.hand.length>=7 && card.type==="步兵" && guards===0 ? 22 : 0;
+      // Protect the initial board, then convert the 9-card-capacity economy.
+      return card.type==="步兵" && guards===0 ? 16 :
+        self.hand.length>=6 && card.rank!=="高級" ? 18 : 0;
     case "路易十四":
       // A surviving mage produces spells even with no spell yet in hand.
       return card.type==="法師" && mages===0 ? (guards>0?34:24) :
