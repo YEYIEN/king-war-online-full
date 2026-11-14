@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { applyMagicFieldEffect } from "./magic-effects.js";
 import { rankValue, power, effectiveDamage, canAttack, battle, previewUnitAttack } from "./combat-primitives.js";
+import { listPublicAttackCandidates } from "./ai-legal-actions.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
@@ -707,7 +708,7 @@ function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   // In free-for-all games, pressuring the strongest remaining army is generally
   // more useful than finishing an already-weak opponent just because it is weak.
   const strategicThreat = room.players.length >= 3
-    ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magic.length * 5 + enemy.hp * 0.35 +
+    ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magicCount * 5 + enemy.hp * 0.35 +
       (difficulty === "hard" && enemy.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 4 : 0)
     : 0;
   if (difficulty === "normal") return basic + strategicThreat;
@@ -721,7 +722,7 @@ function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   if (defender.type === "步兵" && enemy.field.filter(u => u.type === "步兵").length === 1) {
     value += 55 + ai.field.filter(u => canAttack(u) && u.id !== attacker.id).length * 22;
   }
-  if (defender.type === "法師" && enemy.magic.length) value += 35;
+  if (defender.type === "法師" && enemy.magicCount) value += 35;
   if (defender.type === "騎兵" && canAttack(defender)) value += 16;
   if (result === "defender" && attacker.type !== "弓兵") value -= 85;
   if (result === "both" && attacker.rank === "高級" && defender.rank !== "高級") value -= 65;
@@ -874,24 +875,20 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
     const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
     const targets = (difficulty !== "easy" && room.players.length > 2) || difficulty === "hard" || difficulty === "conqueror"
       ? enemies : [preferredEnemy].filter(p => p && !p.eliminated);
-    const actions = [];
-    for (const enemy of targets) for (const attacker of attackers) {
-      if (!enemy.field.some(u => u.type === "步兵")) {
-        actions.push({ type: "king", enemy, attackerId: attacker.id,
-          score: aiStrategicAttackScore(room, ai, attacker, enemy, null) });
-      }
-      for (const defender of enemy.field) {
-        actions.push({ type: "unit", enemy, attackerId: attacker.id, defenderId: defender.id,
-          score: aiStrategicAttackScore(room, ai, attacker, enemy, defender) });
-      }
-    }
-    // Never pass the original room player objects through the policy boundary.
-    // The scored actions previously still referenced private player objects.
     const publicEnemies = enemies.map(publicOpponentForAI);
     const publicEnemyById = new Map(publicEnemies.map(enemy => [enemy.id, enemy]));
-    const publicActions = actions.map(action => ({
-      ...action, enemy: publicEnemyById.get(action.enemy.id)
-    }));
+    const publicTargets = targets.map(enemy => publicEnemyById.get(enemy.id));
+    // Candidate generation and valuation operate exclusively on public board data.
+    const publicActions = listPublicAttackCandidates(attackers, publicTargets).map(action => {
+      const enemy = publicEnemyById.get(action.enemyId);
+      const attacker = attackers.find(unit => unit.id === action.attackerId);
+      const defender = action.defenderId ? enemy.field.find(unit => unit.id === action.defenderId) : null;
+      return {
+        type: action.type, enemy, attackerId: action.attackerId,
+        ...(action.defenderId ? {defenderId: action.defenderId} : {}),
+        score: aiStrategicAttackScore(room, ai, attacker, enemy, defender)
+      };
+    });
     const chosen = selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
       battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
       conquerorProfile: room.settings?.conquerorProfile || "resource" });
