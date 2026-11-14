@@ -13,7 +13,7 @@ import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeM
 import { createSocketEventGuard } from "./socket-guard.js";
 import { originPolicy } from "./origin-policy.js";
 import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
-import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI } from "./ai-strategies.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -692,13 +692,20 @@ function aiSelectEnemy(room, ai) {
   const difficulty = getAIDifficulty(room, ai);
   if (difficulty === "easy") return enemies[Math.floor(Math.random() * enemies.length)];
   if (difficulty === "normal" && room.players.length === 2) return enemies[0];
-  const threat = p =>
-    p.hp * 0.8 +
-    p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
-    p.magic.length * (p.field.some(u => u.type === "法師") ? 3 : 0) -
-    p.field.filter(u => u.type === "步兵").length * 4 +
-    (room.players.length >= 3 && difficulty === "hard" && p.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 2 : 0);
-  return enemies.sort((a, b) => threat(b) - threat(a))[0];
+  const options = {
+    playerCount: room.players.length,
+    difficulty,
+    genghisThreatWeight: room.settings?.genghisThreatWeight ?? 2
+  };
+  // Keep the live object only for the authoritative action execution.
+  // Strategic enemy selection reads its public projection exclusively.
+  const sorted = enemies.map(enemy => ({
+    live: enemy, publicView: publicOpponentForAI(enemy)
+  }));
+  sorted.sort((a,b) =>
+    scorePublicEnemyThreat(b.publicView,options)-scorePublicEnemyThreat(a.publicView,options)
+  );
+  return sorted[0].live;
 }
 
 function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
