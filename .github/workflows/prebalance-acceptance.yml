@@ -75,6 +75,11 @@ jobs:
           KW_SIMULATION: '1'
           ARCHETYPE_MATCHES_PER_SEED: '10'
         run: node scripts/prebalance-archetype-league.mjs > prebalance-archetypes.json
+      - name: Factorial king-seat and comeback simulations
+        env:
+          KW_SIMULATION: '1'
+          BALANCE_MATCHES_PER_SEED: '250'
+        run: node scripts/balance-factorial-research.mjs > balance-factorial-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -83,5 +88,8 @@ jobs:
             prebalance-ai-audit.json
             prebalance-policy-league.json
             prebalance-archetypes.json
+            balance-factorial-raw.json
+            balance-factorial-summary.md
+            balance-factorial-output.json
           retention-days: 30
           if-no-files-found: warn
