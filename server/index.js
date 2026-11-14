@@ -1475,7 +1475,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty }, reply) => {
+  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled }, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1507,6 +1507,11 @@ io.on("connection", socket => {
     if (aiDifficulty !== undefined) {
       if (!AI_DIFFICULTIES.includes(aiDifficulty)) return reply?.({ ok: false, error: "不支援的 AI 難度。" });
       room.settings.aiDifficulty = aiDifficulty;
+    }
+
+    if (comebackEnabled !== undefined) {
+      if (typeof comebackEnabled !== "boolean") return reply?.({ ok: false, error: "逆轉機制設定必須為布林值。" });
+      room.settings.comebackEnabled = comebackEnabled;
     }
 
     if (turnTimeLimit !== undefined) {
