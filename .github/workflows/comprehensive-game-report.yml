@@ -1,0 +1,29 @@
+name: Comprehensive game report
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  comprehensive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Automated scenario report and safety assertions
+        env:
+          KW_SIMULATION: '1'
+          MAIN_MATCHES_PER_SEED: '400'
+          EASY_MATCHES_PER_SEED: '200'
+          AB_MATCHES_PER_SEED: '200'
+        run: node scripts/comprehensive-game-report.mjs | tee comprehensive-report-data.json
+      - name: Retain structured outcome report
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-war-comprehensive-outcomes
+          path: comprehensive-report-data.json
+          retention-days: 30
