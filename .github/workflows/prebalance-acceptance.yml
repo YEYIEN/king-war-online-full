@@ -66,6 +66,11 @@ jobs:
           KW_SIMULATION: '1'
           PREBALANCE_LEAGUE_MATCHES_PER_SEED: '30'
         run: node scripts/prebalance-policy-league.mjs > prebalance-policy-league.json
+      - name: Experimental six-archetype stress league
+        env:
+          KW_SIMULATION: '1'
+          ARCHETYPE_MATCHES_PER_SEED: '10'
+        run: node scripts/prebalance-archetype-league.mjs > prebalance-archetypes.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -73,5 +78,6 @@ jobs:
           path: |
             prebalance-ai-audit.json
             prebalance-policy-league.json
+            prebalance-archetypes.json
           retention-days: 30
           if-no-files-found: warn
