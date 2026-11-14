@@ -1440,6 +1440,18 @@ function App() {
                   ))}
                 </div>
               </div>
+              {room.maxPlayers === 2 && (
+                <div className="settingBlock">
+                  <span className="settingLabel">雙人公平開局（實驗規則）</span>
+                  <p className="settingHint">開啟後先手首回合只能部署與準備，不能進攻；後手開局多抽1張兵種。關閉則沿用原規則。</p>
+                  <div className="settingButtonGroup">
+                    <button type="button" className={room.settings?.firstSeatPeacefulTurn ? "settingChoice active" : "settingChoice"}
+                      onClick={() => updateRoomSettings({ fairOpening2P: true })}>開啟試玩</button>
+                    <button type="button" className={!room.settings?.firstSeatPeacefulTurn ? "settingChoice active" : "settingChoice"}
+                      onClick={() => updateRoomSettings({ fairOpening2P: false })}>原規則</button>
+                  </div>
+                </div>
+              )}
               <div className="settingBlock">
                 <span className="settingLabel">背水一戰（逆轉機制）</span>
                 <div className="settingButtonGroup">
