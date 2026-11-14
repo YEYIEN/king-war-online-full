@@ -7,6 +7,7 @@ import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
+import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -112,6 +113,9 @@ function finishIfGameOver(room) {
     room.status = "ended";
     room.currentPlayerId = null;
     room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
+    finalizeMatchMetrics(room, { winnerId:living[0]?.id || null,
+      reason:room.matchMetrics?.finishReason || "last-standing",
+      comeback:room.simProgress ? analyzeFinalOutcome(room,living[0]?.id || null) : null });
 
     // ROOM_CLEANUP_ON_GAME_OVER_V1
     // 結束後保留一段時間讓玩家看結果，之後刪除房間，避免舊房間污染新局。
@@ -384,6 +388,7 @@ function finishTurn(room, player, reason = "結束回合") {
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
+  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt);
   room.turnsCompleted = (room.turnsCompleted || 0) + 1;
   if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
@@ -455,6 +460,7 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
 
   player.hp = 0;
   player.eliminated = true;
+  if (room.matchMetrics) room.matchMetrics.finishReason = "player-surrender-or-disconnect";
   player.connected = false;
   player.socketId = null;
   room.log.push(`${player.name} ${reason}`);
@@ -482,6 +488,7 @@ function useLastStand(room, player, mode = "assault") {
   room.lastStandCount = (room.lastStandCount || 0) + 1;
   if (!room.lastStandModes) room.lastStandModes = { assault: 0, defense: 0 };
   room.lastStandModes[mode]++;
+  incrementMatchMetric(room,"lastStand",1,{playerId:player.id});
   if (room.simMetrics) room.simMetrics.comebackUses[mode]++;
   room.log.push(mode === "assault"
     ? `${player.name} 選擇突圍：失去2HP、抽2兵種、獲得一次緊急部署，並獲得3點護盾。`
@@ -494,6 +501,8 @@ function startGame(room) {
   clearRoomCleanup(room);
   room.status = "playing";
   room.turnsCompleted = 0;
+  room.matchMetrics = createMatchMetrics(room);
+  room.simProgress = { trailingPlayers: new Set(), criticalPlayers: new Set() };
   room.unitDeck = makeUnits();
   room.magicDeck = makeMagic();
 
@@ -648,6 +657,7 @@ function aiDeployUnits(room, ai, enemy) {
     }
 
     ai.field.push(card);
+    incrementMatchMetric(room,"deploy",1,{playerId:ai.id});
     room.log.push(`${ai.name} 部署 ${card.name}${card.rank === "高級" ? "，進入整備" : ""}${triggeredReinforcement ? "，觸發急援，本回合可以攻擊" : ""}。`); // AI_VISIBILITY_DEPLOY_LOG
     deployLimit--;
   }
@@ -746,6 +756,7 @@ function returnUnitToHand(room, player, unitId) {
   unit.status = [];
   player.hand.push(unit);
   player.recallUsed = true;
+  incrementMatchMetric(room,"recall",1,{playerId:player.id});
   const drawBonus = unit.type === "騎兵" && (player.recallDrawCount || 0) < (room.settings?.genghisDrawLimit ?? 2);
   if (drawBonus) {
     drawUnits(room, player, 1);
@@ -790,6 +801,7 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
     if (result === "defender") room.simMetrics.failedTrades++;
   }
   attacker.tapped = true;
+  incrementMatchMetric(room,"unitAttack",1,{playerId:attackerPlayer.id});
 
   const archerSaved = attacker.type === "弓兵" && defenderPower >= attackerPower;
   const archerExtra = attacker.type === "弓兵" && defenderPower < attackerPower && !attacker.archerBonusUsed;
@@ -799,7 +811,11 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
 
   const killedEnemy = result === "attacker" || result === "both";
   const killedAttacker = (result === "defender" || result === "both") && !archerSaved;
-  if (killedEnemy) defenderPlayer.field.splice(di, 1);
+  if (killedEnemy) {
+    incrementMatchMetric(room,"unitKill",1,{playerId:attackerPlayer.id});
+    defenderPlayer.field.splice(di, 1);
+  }
+  if (killedEnemy && killedAttacker) incrementMatchMetric(room,"unitTrade",1,{playerId:attackerPlayer.id});
   if (killedAttacker) attackerPlayer.field.splice(ai, 1);
 
   const survivor = attackerPlayer.field.find(u => u.id === attacker.id);
@@ -831,6 +847,8 @@ function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
 
   const damage = mitigateKingDamage(defenderPlayer, effectiveDamage(attacker));
   defenderPlayer.hp -= damage;
+  incrementMatchMetric(room,"kingAttack",1,{playerId:attackerPlayer.id});
+  incrementMatchMetric(room,"kingDamage",damage,{playerId:attackerPlayer.id});
   if (room.simMetrics) {
     room.simMetrics.kingAttacks++;
     room.simMetrics.kingDamage += damage;
@@ -932,7 +950,11 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
   room.magicDeck.push(magic);
   caster.tapped = true;
 
+  const beforeField = JSON.stringify(target.field.map(u=>({id:u.id,status:u.status,tapped:u.tapped})));
   const { destroyed } = applyMagicFieldEffect(magic.name, target, ids);
+  const effective = destroyed > 0 || beforeField !== JSON.stringify(target.field.map(u=>({id:u.id,status:u.status,tapped:u.tapped})));
+  incrementMatchMetric(room,"spellCast",1,{playerId:player.id,spell:magic.name,effective});
+  if (effective) incrementMatchMetric(room,"spellImpact",1,{playerId:player.id});
   if (magic.name === "燃血術") {
     player.hp -= 3;
     if (player.hp <= 0) {
@@ -1800,6 +1822,7 @@ io.on("connection", socket => {
     }
 
     p.field.push(c);
+    incrementMatchMetric(room,"deploy",1,{playerId:p.id});
     if (room.tutorial) room.tutorialProgress = 1;
     room.log.push(`${p.name} 部署 ${c.name}${c.rank==="高級"?"，進入整備":""}${triggeredReinforcement ? "，觸發急援，本回合可以攻擊" : ""}。`);
     reply?.({ok:true}); broadcast(room);
