@@ -9,6 +9,7 @@ import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
 import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
+import { guardSocket } from "./socket-guard.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -17,7 +18,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const allowedOrigins = (process.env.KW_ALLOWED_ORIGINS || "").split(",").map(x=>x.trim()).filter(Boolean);
+const io = new Server(server, { cors: { origin: allowedOrigins.length ? allowedOrigins : true } });
 const rooms = new Map();
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
@@ -1218,6 +1220,7 @@ async function performAITurn(roomCode) {
 
 
 io.on("connection", socket => {
+  guardSocket(socket);
 
 
   socket.on("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
@@ -1943,6 +1946,8 @@ io.on("connection", socket => {
   });
 });
 
+app.get("/healthz", (_req,res)=>res.json({ok:true,service:"king-war",version:process.env.KW_RULESET_ID||"unversioned"}));
+app.get("/readyz", (_req,res)=>res.json({ready:server.listening}));
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "../client/dist");
   app.use(express.static(dist));
