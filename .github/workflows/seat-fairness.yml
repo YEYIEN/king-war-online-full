@@ -1,0 +1,26 @@
+name: Seat fairness experiments
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/release-hardening-20261114
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Compare fair-opening variants across AI levels
+        env:
+          KW_SIMULATION: '1'
+          SEAT_MATCHES_PER_SEED: '300'
+        run: node scripts/release-seat-fairness-ab.mjs | tee seat-fairness-ab.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seat-fairness-ab
+          path: seat-fairness-ab.json
+          retention-days: 30

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
-import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, buildMatchSummary,
+import { createMatchMetrics, incrementMatchMetric, beginTurnMetrics, recordTurnDuration, buildMatchSummary,
   finalizeMatchMetrics, persistMatchSummary } from "../server/game-metrics.js";
 
 function room(){
@@ -78,4 +78,19 @@ test("live opt-in JSONL records persist and aggregate with safe completed denomi
   assert.equal(group.observedAiTurnSeconds,0.9);
   assert.equal(group.comebackRate.critical,100);
  }finally{await rm(dir,{recursive:true,force:true})}
+});
+
+test("quiet turn counts only turns without kills or damage",()=>{
+ const r=room();r.matchMetrics=createMatchMetrics(r,1000);
+ beginTurnMetrics(r,"SECRET_A");
+ incrementMatchMetric(r,"deploy",1,{playerId:"SECRET_A"});
+ recordTurnDuration(r,20000,{ai:false,playerId:"SECRET_A"});
+ assert.equal(r.matchMetrics.events.quietCombatTurn,1);
+ beginTurnMetrics(r,"SECRET_A");
+ incrementMatchMetric(r,"unitKill",1,{playerId:"SECRET_A"});
+ recordTurnDuration(r,15000,{ai:false,playerId:"SECRET_A"});
+ assert.equal(r.matchMetrics.events.quietCombatTurn,1);
+ assert.equal(r.matchMetrics.turnDuration,undefined);
+ const summary=buildMatchSummary(r,{winnerId:"SECRET_A",now:50000});
+ assert.equal(summary.seats[0].actions.quietCombatTurn,1);
 });

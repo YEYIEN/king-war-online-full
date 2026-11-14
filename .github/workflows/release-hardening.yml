@@ -1,0 +1,49 @@
+name: Release hardening gates
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/release-hardening-20261114
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm --prefix client ci
+      - name: Full server and security regression
+        run: npm test
+      - name: Client production build
+        run: npm run build
+      - name: Security and dependency audit
+        run: npm audit --audit-level=moderate && npm --prefix client audit --audit-level=moderate
+      - name: Ten concurrent real two-player rooms
+        env:
+          LOAD_ROOMS: '10'
+        run: node scripts/operational-load-test.mjs | tee operational-load-10.json
+      - name: Twenty-five concurrent real two-player rooms
+        env:
+          LOAD_ROOMS: '25'
+        run: node scripts/operational-load-test.mjs | tee operational-load-25.json
+      - name: Fifty concurrent real two-player rooms
+        env:
+          LOAD_ROOMS: '50'
+        run: node scripts/operational-load-test.mjs | tee operational-load-50.json
+      - name: Current AI and gameplay balance audit (unseen seeds)
+        env:
+          KW_SIMULATION: '1'
+          BALANCE_MATCHES_PER_SEED: '90'
+        run: node scripts/release-balance-audit.mjs | tee current-balance-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-hardening-results
+          path: |
+            operational-load-10.json
+            operational-load-25.json
+            operational-load-50.json
+            current-balance-audit.json
+          retention-days: 30

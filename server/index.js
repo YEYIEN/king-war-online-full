@@ -7,8 +7,10 @@ import { applyMagicFieldEffect } from "./magic-effects.js";
 import { nextLivingPlayer } from "./turn-order.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
-import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
+import { createMatchMetrics, incrementMatchMetric, beginTurnMetrics, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
+import { guardSocket } from "./socket-guard.js";
+import { queueRoomRecovery, listRecoveredRooms, isRecoveryEnabled } from "./match-recovery.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -17,7 +19,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const allowedOrigins = (process.env.KW_ALLOWED_ORIGINS || "").split(",").map(x=>x.trim()).filter(Boolean);
+const io = new Server(server, {
+  cors: { origin: allowedOrigins.length ? allowedOrigins : true },
+  allowRequest: (req,callback) => {
+    // WebSocket upgrades must be checked too; CORS alone is not an access control.
+    if (!allowedOrigins.length) return callback(null,true);
+    return callback(null, allowedOrigins.includes(req.headers.origin));
+  }
+});
 const rooms = new Map();
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
@@ -25,11 +35,15 @@ const disconnectGraceTimers = new Map();
 let matchmakingRoomCode = null;
 
 function cleanDisplayName(name) {
-  const raw = String(name ?? "").normalize("NFKC").trim();
+  const raw = (typeof name === "string" ? name : "").normalize("NFKC")
+    .split("").filter(ch => {
+      const code = ch.charCodeAt(0);
+      return !((code <= 31) || (code >= 127 && code <= 159) ||
+        (code >= 8234 && code <= 8238) || (code >= 8294 && code <= 8297));
+    }).join("").trim();
   const fallback = raw || `玩家${Math.floor(1000 + Math.random() * 9000)}`;
-  return Array.from(fallback).slice(0, 16).join("");
+  return Array.from(fallback).slice(0,16).join("");
 }
-
 function asId(value) {
   return String(value ?? "");
 }
@@ -111,7 +125,7 @@ function finishIfGameOver(room) {
   if (living.length <= 1) {
     if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
       const active = room.players.find(p => p.id === room.currentPlayerId);
-      recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI});
+      recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI,playerId:active?.id});
     }
     clearTurnTimer(room);
     room.status = "ended";
@@ -173,6 +187,7 @@ function startTurn(room, p) {
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
   observeTurnStart(room, p);
   if (room.matchMetrics) room.matchMetrics.turnsStarted++;
+  beginTurnMetrics(room,p.id);
   scheduleTurnTimer(room, p);
 
   // DISCONNECT_GRACE_STARTTURN_V1
@@ -235,7 +250,10 @@ function publicPlayer(p, viewer, room) {
 }
 function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
-function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
+function broadcast(room) {
+  if (!room.tutorial) void queueRoomRecovery(room);
+  room.players.forEach(p => { if (!isAIPlayer(p) && p.socketId) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); });
+}
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
 
 
@@ -248,6 +266,7 @@ function deleteRoomNow(roomCode, reason = "房間已清理。") {
   const room = rooms.get(roomCode);
   if (!room) return false;
   if (room.status === "playing") finalizeMatchMetrics(room,{winnerId:null,reason:"abandoned"});
+  void queueRoomRecovery({...room,status:"ended"});
   clearTurnTimer(room);
   clearRoomCleanup(room);
   for (const player of room.players) clearDisconnectGrace(room, player);
@@ -394,7 +413,7 @@ function finishTurn(room, player, reason = "結束回合") {
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
-  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt, {ai:!!player.isAI});
+  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt, {ai:!!player.isAI,playerId:player.id});
   room.turnsCompleted = (room.turnsCompleted || 0) + 1;
   if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
@@ -452,7 +471,7 @@ function advanceAfterElimination(room, player) {
   if (finishIfGameOver(room)) return;
   if (room.currentPlayerId !== player.id) return;
   if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
-    recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI});
+    recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI,playerId:player.id});
   }
   clearTurnTimer(room);
   const next = nextAlive(room, player.id);
@@ -1218,6 +1237,7 @@ async function performAITurn(roomCode) {
 
 
 io.on("connection", socket => {
+  guardSocket(socket);
 
 
   socket.on("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
@@ -1244,6 +1264,20 @@ io.on("connection", socket => {
 
     // DISCONNECT_GRACE_RESUME_V1
     clearDisconnectGrace(room, player);
+    if (room.recovered) {
+      const current = room.players.find(p=>p.id===room.currentPlayerId);
+      if (current?.isAI || current?.connected) {
+        clearRoomCleanup(room);
+        if (current && !current.isAI) scheduleTurnTimer(room,current);
+        if (current?.isAI) scheduleAITurn(room);
+        for (const absent of room.players.filter(p=>!p.isAI&&!p.eliminated&&!p.connected))
+          scheduleDisconnectGrace(room,absent,60);
+        room.recovered=false;
+      } else {
+        // Keep a finite recovery window if another player rejoins first.
+        scheduleRoomCleanup(room,300);
+      }
+    }
 
     room.log.push(`${player.name} 已重新連線。`);
 
@@ -1943,13 +1977,25 @@ io.on("connection", socket => {
   });
 });
 
+app.get("/healthz", (_req,res)=>res.json({ok:true,service:"king-war",version:process.env.KW_RULESET_ID||"unversioned"}));
+app.get("/readyz", (_req,res)=>res.json({ready:server.listening}));
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "../client/dist");
   app.use(express.static(dist));
   app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 if (process.env.KW_SIMULATION !== "1") {
-  server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}`));
+  listRecoveredRooms().then(recovered=>{
+    for (const room of recovered) {
+      room.recovered=true;
+      room.players.forEach(p=>{p.connected=false;p.socketId=null;});
+      room.log.push("伺服器復原對局：請原玩家使用有效重連憑證返回。");
+      rooms.set(room.code,room);
+      scheduleRoomCleanup(room,300);
+    }
+    if (recovered.length) console.log(`Restored ${recovered.length} encrypted active matches`);
+    server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}; recovery=${isRecoveryEnabled()}`));
+  }).catch(error=>{console.error("Match recovery startup failed:",error.message);process.exitCode=1;});
 }
 
 
