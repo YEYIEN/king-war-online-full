@@ -75,3 +75,27 @@ jobs:
             balance-factorial-output.json
           retention-days: 30
           if-no-files-found: warn
+
+  balance-candidate-followup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Validate candidate balance hypotheses on separate seeds
+        env:
+          KW_SIMULATION: '1'
+          FOLLOWUP_MATCHES_PER_SEED: '250'
+        run: node scripts/balance-followup-candidates.mjs > balance-followup-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: balance-candidate-followup
+          path: |
+            balance-followup-raw.json
+            balance-followup-output.json
+          retention-days: 30
+          if-no-files-found: warn
