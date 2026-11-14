@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
 import "./style.css";
+import "./design-system.css";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV ? "http://localhost:3001" : window.location.origin);
 const ASSET_BASE = "/king-war-assets";
@@ -2059,7 +2060,7 @@ function App() {
           <h2>目標玩家</h2>
           <p>選擇你要攻擊或施法的對象。</p>
         </div>
-        <select value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
+        <select aria-label="選擇目標玩家" value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
           {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </section>
