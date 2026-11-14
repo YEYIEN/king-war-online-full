@@ -149,3 +149,20 @@ jobs:
           DIFFICULTY: hard
           SECOND_SEAT_CARDS: '2'
         run: node scripts/king-balance-baseline.mjs
+      - name: Two-player peaceful first turn fairness experiment
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          FIRST_SEAT_PEACE: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Two-player peaceful first turn and second seat extra card
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1800'
+          PLAYERS: '2'
+          DIFFICULTY: hard
+          FIRST_SEAT_PEACE: '1'
+          SECOND_SEAT_CARDS: '1'
+        run: node scripts/king-balance-baseline.mjs
