@@ -81,3 +81,16 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
 .endTurnBtn{background:var(--kw-warn);}
 .dangerBtn{background:var(--kw-attack);}
 .matchBtn{background:var(--kw-magic);}
+
+/* Persistent multiplayer connectivity feedback, independent of transient action toasts. */
+.connectionWarning {
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: 2px solid var(--kw-warn);
+  border-radius: 12px;
+  background: #39291f;
+  color: #ffe4ba;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.connectionWarning strong { color: #fff2d8; }
