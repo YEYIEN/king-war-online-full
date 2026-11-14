@@ -8,7 +8,7 @@ const slices=[
  ["card-and-king-definitions","const TYPES =","function shuffle(a)"],
  ["deck-generation","function makeUnits()","const maxHand ="],
  ["opening-and-drawing","const maxHand =","function finishIfGameOver"],
- ["turn-effects","function startTurn(room, p)","function rankValue(rank)"],
+ ["turn-effects","function startTurn(room, p)","function mageCanCast("],
  ["last-stand","function useLastStand(room, player, mode = \"assault\")","function startGame(room)"]
 ];
 for(const [label,begin,end] of slices){
@@ -17,10 +17,25 @@ for(const [label,begin,end] of slices){
   assert.ok(a>=0 && b>a,`missing ${label} source anchors`);
   return source.slice(a,b);
  }
- assert.equal(extract(current),extract(original),`balance-affecting rule changed without design review: ${label}`);
+ let baseSlice=extract(original);
+ if(label==="turn-effects"){
+   // Pure combat helpers were moved verbatim into combat-primitives.js.
+   const from=baseSlice.indexOf("function rankValue(rank) {");
+   assert.ok(from>0,"missing original combat section");
+   baseSlice=baseSlice.slice(0,from);
+   const newSlice=extract(current);
+   assert.equal(newSlice,baseSlice,`balance-affecting turn rule changed: ${label}`);
+ } else {
+   assert.equal(extract(current),baseSlice,`balance-affecting rule changed without design review: ${label}`);
+ }
  console.error("RULE-FREEZE PASS",label);
 }
 const comeback=readFileSync("server/comeback-rules.js","utf8");
 const oldComeback=execFileSync("git",["show",`${base}:server/comeback-rules.js`],{encoding:"utf8"});
 assert.equal(comeback,oldComeback,"comeback rule changed; requires explicit balance phase");
 console.log("Balance rule freeze passed: no king, card, opening, turn-resource or comeback changes");
+
+const primitives=readFileSync("server/combat-primitives.js","utf8");
+for(const fn of ["rankValue","power","effectiveDamage","canAttack","battle"]){
+ assert.match(primitives,new RegExp(`export function ${fn}\\(`),`missing extracted primitive ${fn}`);
+}
