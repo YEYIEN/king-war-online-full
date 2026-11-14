@@ -88,18 +88,27 @@ function readyOnNextTurn(unit){
       !["整備","階級+1","階級-1","傷害+1","燃血+1傷害","急援","屋大維+1"].includes(s))
   };
 }
+/** Public turn order; skip eliminated seats after the hero. */
+export function nextRationalActorId(players,heroId,turnOrder) {
+  const order=Array.isArray(turnOrder)?turnOrder:[];
+  const seat=order.indexOf(heroId);
+  if(seat<0)return null;
+  const after=order.slice(seat+1).concat(order.slice(0,seat));
+  for(const id of after) {
+    const player=players.find(p=>p.id===id);
+    if(player && player.id!==heroId && !player.eliminated && player.hp>0)return id;
+  }
+  return null;
+}
+
 function opponentResponse(state,heroId,meta,counters,opts){
   let worst={state,utility:firstPlaceUtility(state,heroId,meta),enemyId:null};
   const current=participants(state);
   const initial=worst.utility;
   // Multi-player FFA is sequential, not a coalition attacking the hero at once.
   // Only the next *actual* living seat is modelled as an immediate responder.
-  const order=Array.isArray(opts.turnOrder)?opts.turnOrder:[];
-  const heroSeat=order.indexOf(heroId);
-  const rotated=heroSeat>=0?order.slice(heroSeat+1).concat(order.slice(0,heroSeat)):[];
-  const nextActor=(rotated.length
-    ? rotated.map(id=>current.find(p=>p.id===id)).find(p=>p&&!p.eliminated&&p.hp>0)
-    : current.find(p=>p.id===opts.nextPlayerId&&!p.eliminated&&p.hp>0));
+  const nextId=nextRationalActorId(current,heroId,opts.turnOrder);
+  const nextActor=current.find(p=>p.id===(nextId||opts.nextPlayerId)&&!p.eliminated&&p.hp>0);
   const respondents=nextActor?[nextActor]:current.filter(p=>p.id!==heroId);
   for(const adversary of respondents){
     if(adversary.id===heroId||adversary.eliminated||adversary.hp<=0)continue;
