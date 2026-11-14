@@ -200,3 +200,36 @@ export function selectAttackChoice(actions, { difficulty, self, enemies, random 
   }
   return valued[0];
 }
+
+/**
+ * Mongol recall is a strategic trade-off: recover a tapped cavalry and (possibly)
+ * gain a card, but expose the king and lose a board defender until redeployed.
+ * This function chooses only from the AI's own public board.
+ */
+export function chooseMongolRecall({ self, opponents, difficulty, canAttack, maxHand, drawLimit = 2, random = Math.random }) {
+  if (!self || self.king?.name !== "成吉思汗" || self.recallUsed ||
+      self.hand.length >= maxHand || self.field.length < 3) return null;
+  const candidates=self.field.filter(u=>u.type==="騎兵" && u.tapped);
+  if (!candidates.length) return null;
+  if (difficulty==="easy") return random()<0.25 ? candidates[0] : null;
+  if (difficulty==="normal" && random()>0.35) return null;
+  const opponentsAlive=opponents.filter(p=>!p.eliminated && p.hp>0);
+  const enemyThreat=Math.max(0,...opponentsAlive.map(p=>p.field.filter(u=>canAttack(u)).length));
+  const enemyGuarded=opponentsAlive.some(p=>p.field.some(u=>u.type==="步兵"));
+  const drawAvailable=(self.recallDrawCount||0)<drawLimit;
+  const rank={初級:1,中級:2,高級:3};
+  const scored=candidates.map(unit=>{
+    const boardAfter=self.field.filter(x=>x.id!==unit.id);
+    let score=(drawAvailable?24:0)+(4-(rank[unit.rank]||1))*5;
+    if (self.hand.length<=2) score+=9;
+    if (enemyGuarded) score+=4;
+    // A weak board and exposed HP make every remaining defender more valuable.
+    if (boardAfter.length<2) score-=32;
+    if (self.hp<=15 && enemyThreat>=2) score-=28;
+    if (self.hp<=8 && enemyThreat>=1) score-=34;
+    // Don't throw away an important immediate attack if it somehow remains ready.
+    if (canAttack(unit)) score-=80;
+    return {unit,score};
+  }).sort((a,b)=>b.score-a.score);
+  return scored[0]?.score>0?scored[0].unit:null;
+}
