@@ -59,6 +59,21 @@ const RANK_VALUE = { 初級: 1, 中級: 2, 高級: 3 };
 const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
 const AI_DIFFICULTIES = ["easy", "normal", "hard", "conqueror"];
 function getAIDifficulty(room, player) { const value = player?.aiDifficulty ?? room?.settings?.aiDifficulty; return AI_DIFFICULTIES.includes(value) ? value : "normal"; }
+function useKingAwarePolicy(room, ai) {
+  if(ai?.simKingPlan===true)return true; // isolated research challenger
+  if(process.env.KW_SIMULATION==="1")return false; // preserve historical A/B controls
+  if(getAIDifficulty(room,ai)!=="hard")return false;
+  if(room.settings?.kingAwareHardAI===false)return false;
+  if(room.settings?.kingAwareHardAI===true)return true;
+  // Only the Alexander duel plan has repeated, independent win-rate support.
+  return room.players.length===2 && ai.king?.name==="亞歷山大大帝";
+}
+function useRationalConquerorPolicy(room, ai) {
+  if(ai?.simRationalSearch===true)return true;
+  if(process.env.KW_SIMULATION==="1")return false; // retain unmodified control AI
+  return room.players.length===2 && getAIDifficulty(room,ai)==="conqueror" &&
+    room.settings?.rationalConquerorDuel!==false;
+}
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
 const KINGS = [
@@ -632,7 +647,7 @@ function aiDeployUnits(room, ai, enemy) {
     const scored = ai.hand
       .map((card, index) => ({ card, index, score: (room.settings?.aiCurriculumPolicy === false ? aiDeployScore(card, ai, enemy) : scoreTeachingDeployment(card, ai, enemy, difficulty, aiDeployScore(card, ai, enemy), { louisMageSetup: room.settings?.louisMageSetup === true }))
         + (ai.simResearchStyle ? scoreArchetypeDeployment(card, ai, enemy, ai.simResearchStyle) : 0)
-        + (ai.simKingPlan ? scoreKingPlanDeployment(card, ai, enemy, difficulty)*(difficulty==="conqueror"?0.45:1) : 0) }))
+        + (useKingAwarePolicy(room, ai) ? scoreKingPlanDeployment(card, ai, enemy, difficulty)*(difficulty==="conqueror"?0.45:1) : 0) }))
       .sort((a, b) => b.score - a.score);
 
     const best = selectDeployChoice(scored, difficulty);
@@ -908,12 +923,12 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
         type: action.type, enemy, attackerId: action.attackerId,
         ...(action.defenderId ? {defenderId: action.defenderId} : {}),
         score: aiStrategicAttackScore(room, ai, attacker, enemy, defender)
-          + (ai.simKingPlan ? scoreKingPlanAttack({self:ai,enemy,attacker,defender}) : 0)
+          + (useKingAwarePolicy(room, ai) ? scoreKingPlanAttack({self:ai,enemy,attacker,defender}) : 0)
           + (ai.simCounterPlan && difficulty==="conqueror"
             ? scoreKingCounterAttack({enemy,defender,attacker})*0.3 : 0)
       };
     });
-    const chosen = difficulty==="conqueror" && ai.simRationalSearch === true
+    const chosen = difficulty==="conqueror" && useRationalConquerorPolicy(room, ai)
       ? chooseRationalAttack(publicActions, {self:ai,enemies:publicEnemies,
           // More opponents -> shallower but broader retaliation coverage.
           ownDepth:publicEnemies.length>2?2:3,
@@ -923,7 +938,7 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
       : selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
           battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
           conquerorProfile: room.settings?.conquerorProfile || "resource",
-          ownKingPlan: ai.simKingPlan === true, counterKingPlan: ai.simCounterPlan === true });
+          ownKingPlan: useKingAwarePolicy(room, ai), counterKingPlan: ai.simCounterPlan === true });
     if (room.simMetrics && ai.simRationalSearch === true) {
       const m=room.simMetrics;
       m.rationalCalls=(m.rationalCalls||0)+1;
@@ -1077,7 +1092,7 @@ function aiChooseMagic(room, ai, enemy) {
   const spellPriority=spell=>{
     const target=bestSpellEnemy(spell);
     return aiMagicCardValue(spell,ai,target)+
-      (ai.simKingPlan ? scoreKingPlanMagic({self:ai,enemy:target,spell}) : 0);
+      (useKingAwarePolicy(room, ai) ? scoreKingPlanMagic({self:ai,enemy:target,spell}) : 0);
   };
   if (strategicMagic) spells.sort((a,b)=>spellPriority(b)-spellPriority(a));
   for (const magic of spells) {
