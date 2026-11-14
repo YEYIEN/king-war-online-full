@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  scoreKingPlanDeployment,scoreKingPlanAttack,counterKingThreat,scoreKingCounterAttack,
- publicOpponentForAI
+ publicOpponentForAI,scoreKingPlanMagic
 } from "../server/ai-strategies.js";
 const kings=["亞歷山大大帝","屋大維奧古斯都","成吉思汗","秦始皇","路易十四"];
 const unit=(id,type="騎兵",rank="中級")=>({
@@ -50,4 +50,21 @@ test("own-king attack scores respond to kill, survival and mage protection",()=>
  const mage=unit("mage","法師");
  const ownLouis={king:{name:"路易十四"},hp:20,field:[mage]};
  assert.ok(scoreKingPlanAttack({self:ownLouis,enemy,attacker:mage,defender})<0);
+});
+
+test("different kings assign different values to spell timing using their own information",()=>{
+ const target={id:"enemy",hp:21,magicCount:1,field:[unit("g","步兵")]};
+ const own=(king)=>({
+  king:{name:king},hp:17,field:[unit("ready","騎兵"),unit("mage","法師")],
+  hand:[unit("h1"),unit("h2"),unit("h3"),unit("h4"),unit("h5")],
+  magicDrawUsed:false
+ });
+ const fire={name:"火球術",target:"敵方"};
+ const freeze={name:"冰凍術",target:"敵方"};
+ const buff={name:"力量術",target:"我方"};
+ assert.ok(scoreKingPlanMagic({self:own("亞歷山大大帝"),enemy:target,spell:fire})>0);
+ assert.ok(scoreKingPlanMagic({self:own("屋大維奧古斯都"),enemy:target,spell:buff})>0);
+ assert.ok(scoreKingPlanMagic({self:own("成吉思汗"),enemy:target,spell:freeze})>0);
+ assert.ok(scoreKingPlanMagic({self:own("秦始皇"),enemy:target,spell:fire})>0);
+ assert.ok(scoreKingPlanMagic({self:own("路易十四"),enemy:target,spell:freeze})>0);
 });
