@@ -3,7 +3,7 @@ import {writeFileSync} from "node:fs";
 import {simulateKingBaseline} from "../server/index.js";
 
 const kings=["亞歷山大大帝","屋大維奧古斯都","成吉思汗","秦始皇","路易十四"];
-const seeds=[373379,487123,709133]; // independent from prior balance exploration
+const seeds=process.env.KING_MATRIX_HOLDOUT==="1" ? [1033127,1289237,1794247] : [373379,487123,709133]; // mutually independent sets
 const pairMatches=Number(process.env.KING_MATRIX_MATCHES_PER_SEED||35);
 const multiMatches=Number(process.env.KING_MULTI_MATCHES_PER_SEED||90);
 const arms=[
@@ -85,6 +85,7 @@ for(const arm of arms){
 }
 const out={
  study:"King choice, own-king policies and enemy-king counterplay",rulesRef:"Draft PR #7, simulation-only per-AI flags",
+ holdout:process.env.KING_MATRIX_HOLDOUT==="1",
  seeds,pairMatchesPerSeed:pairMatches,multiMatchesPerSeed:multiMatches,arms,
  scenarioCount:rows.length,games:rows.reduce((sum,row)=>sum+row.games,0),
  caveats:[
