@@ -26,6 +26,9 @@ export function scoreTeachingDeployment(card, self, enemy, difficulty, base) {
     if (card.rank==="高級" && self.field.length<2) score-=16;
   } else if (difficulty==="normal") {
     if (!mages && card.type==="法師" && self.magic.length) score+=20;
+    // Louis XIV requires a mage on the board to begin generating magic.
+    // In normal AI only, prioritize establishing that engine even with an empty magic hand.
+    if (!mages && card.type==="法師" && self.king?.name==="路易十四" && !self.magic.length) score+=18;
     if (card.type==="騎兵" && enemy?.field?.some(u=>u.type==="步兵")) score+=12;
     if (card.rank==="高級" && !guards && self.hp<=15) score-=16;
   } else if (difficulty==="hard") {
