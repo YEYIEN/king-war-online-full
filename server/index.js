@@ -1227,10 +1227,22 @@ async function performAITurn(roomCode) {
 
 
 io.on("connection", socket => {
-  socket.use(createSocketEventGuard());
+  const validateClientAction=createSocketEventGuard();
+  // socket.use runs before Socket.IO materializes the acknowledgement callback.
+  // Register explicit guarded handlers instead so rejected actions receive an
+  // immediate {ok:false} acknowledgement and cannot reach game state.
+  function guardedOn(event,handler) {
+    socket.on(event,(...args)=>{
+      const reply=typeof args.at(-1)==="function"?args.at(-1):null;
+      const payload=args.length && typeof args[0]!=="function"?args[0]:undefined;
+      let accepted=false;
+      validateClientAction([event,payload,reply],()=>{accepted=true;});
+      if(accepted)handler(...args);
+    });
+  }
 
 
-  socket.on("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
+  guardedOn("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
     // ROOM_RESUME_REJECT_ENDED_V1
     const codeText = String(roomCode || "").trim().toUpperCase();
     const pid = String(playerId || "");
@@ -1262,7 +1274,7 @@ io.on("connection", socket => {
   });
 
 
-  socket.on("room:leave", (_, reply) => {
+  guardedOn("room:leave", (_, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: true });
 
@@ -1296,7 +1308,7 @@ io.on("connection", socket => {
     reply?.({ ok: true });
   });
 
-  socket.on("singleplayer:start", ({ name, difficulty = "normal" }, reply) => {
+  guardedOn("singleplayer:start", ({ name, difficulty = "normal" }, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1361,7 +1373,7 @@ io.on("connection", socket => {
 
 
 
-  socket.on("tutorial:start", ({ name }, reply) => {
+  guardedOn("tutorial:start", ({ name }, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1490,7 +1502,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("matchmaking:join", ({ name }, reply) => {
+  guardedOn("matchmaking:join", ({ name }, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const playerName = cleanDisplayName(name);
@@ -1586,7 +1598,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("room:create", ({ name, maxPlayers }, reply) => {
+  guardedOn("room:create", ({ name, maxPlayers }, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const roomCode = code();
@@ -1636,7 +1648,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:join", ({name,code:roomCode}, reply) => {
+  guardedOn("room:join", ({name,code:roomCode}, reply) => {
     detachSocketFromOtherRooms(socket.id);
 
     const room=rooms.get(String(roomCode||"").trim().toUpperCase());
@@ -1648,7 +1660,7 @@ io.on("connection", socket => {
   });
 
 
-  socket.on("room:toggleReady", (_, reply) => {
+  guardedOn("room:toggleReady", (_, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
@@ -1661,7 +1673,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("game:rematch", (_, reply) => {
+  guardedOn("game:rematch", (_, reply) => {
     // REMATCH_FULLY_DISABLED_CLEAN_V1
     return reply?.({
       ok: false,
@@ -1669,7 +1681,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled, openingTruceEnabled, fairOpening2P }, reply) => {
+  guardedOn("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled, openingTruceEnabled, fairOpening2P }, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1736,7 +1748,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("room:addAI", (_, reply) => {
+  guardedOn("room:addAI", (_, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1780,7 +1792,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("room:removeAI", (_, reply) => {
+  guardedOn("room:removeAI", (_, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1810,7 +1822,7 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
-  socket.on("game:start", (_, reply) => {
+  guardedOn("game:start", (_, reply) => {
     const f=findBySocket(socket.id); if(!f) return reply?.({ok:false,error:"你不在房間中。"});
     if(!f.player.isHost) return reply?.({ok:false,error:"只有房主可開始。"});
     if(f.room.status!=="lobby") return reply?.({ok:false,error:"遊戲已開始或已結束。"});
@@ -1820,7 +1832,7 @@ io.on("connection", socket => {
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
 
-  socket.on("game:lastStand", ({ mode = "assault" } = {}, reply) => {
+  guardedOn("game:lastStand", ({ mode = "assault" } = {}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
@@ -1830,7 +1842,7 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:deploy", ({cardId}, reply) => {
+  guardedOn("game:deploy", ({cardId}, reply) => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const i=p.hand.findIndex(c=>c.id===cardId); if(i<0) return reply?.({ok:false,error:"找不到手牌。"});
@@ -1861,7 +1873,7 @@ io.on("connection", socket => {
     reply?.({ok:true}); broadcast(room);
   });
 
-  socket.on("game:recall", ({unitId}, reply) => {
+  guardedOn("game:recall", ({unitId}, reply) => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const result = returnUnitToHand(room, p, unitId);
@@ -1869,7 +1881,7 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
+  guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -1885,7 +1897,7 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
+  guardedOn("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -1896,7 +1908,7 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:castMagic", (payload = {}, reply) => {
+  guardedOn("game:castMagic", (payload = {}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
@@ -1915,7 +1927,7 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  socket.on("game:endTurn", (_, reply) => {
+  guardedOn("game:endTurn", (_, reply) => {
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     if (room.tutorial) {
