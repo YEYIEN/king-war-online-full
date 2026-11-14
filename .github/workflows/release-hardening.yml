@@ -1,0 +1,32 @@
+name: Release hardening gates
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/release-hardening-20261114
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm --prefix client ci
+      - name: Full server and security regression
+        run: npm test
+      - name: Client production build
+        run: npm run build
+      - name: Security and dependency audit
+        run: npm audit --audit-level=moderate && npm --prefix client audit --audit-level=moderate
+      - name: Ten concurrent real two-player rooms
+        env:
+          LOAD_ROOMS: '10'
+        run: node scripts/operational-load-test.mjs | tee operational-load.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-operational-load
+          path: operational-load.json
+          retention-days: 30
