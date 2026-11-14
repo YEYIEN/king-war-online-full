@@ -689,7 +689,7 @@ function aiSelectEnemy(room, ai) {
     p.field.reduce((sum, u) => sum + effectiveDamage(u) * (canAttack(u) ? 2 : 1), 0) +
     p.magic.length * (p.field.some(u => u.type === "法師") ? 3 : 0) -
     p.field.filter(u => u.type === "步兵").length * 4 +
-    (room.players.length >= 3 && room.settings?.genghisThreatAwareness !== false && p.king?.name === "成吉思汗" ? 12 : 0);
+    (room.players.length >= 3 && p.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 2 : 0);
   return enemies.sort((a, b) => threat(b) - threat(a))[0];
 }
 
@@ -701,7 +701,7 @@ function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   // more useful than finishing an already-weak opponent just because it is weak.
   const strategicThreat = room.players.length >= 3
     ? enemy.field.reduce((sum, unit) => sum + rankValue(unit.rank) * 6, 0) + enemy.magic.length * 5 + enemy.hp * 0.35 +
-      (room.settings?.genghisThreatAwareness !== false && enemy.king?.name === "成吉思汗" ? 22 : 0)
+      (enemy.king?.name === "成吉思汗" ? Math.max(0, Number(room.settings?.genghisThreatWeight ?? 2)) * 4 : 0)
     : 0;
   if (difficulty === "normal") return basic + strategicThreat;
   if (!defender) {
@@ -1828,7 +1828,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatAwareness = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1850,7 +1850,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatAwareness, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
