@@ -1237,7 +1237,10 @@ io.on("connection", socket => {
       const payload=args.length && typeof args[0]!=="function"?args[0]:undefined;
       let accepted=false;
       validateClientAction([event,payload,reply],()=>{accepted=true;});
-      if(accepted)handler(...args);
+      if(accepted) {
+        if(payload===undefined && reply && args.length===1) handler({},reply);
+        else handler(...args);
+      }
     });
   }
 
