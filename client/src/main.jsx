@@ -867,6 +867,7 @@ function App() {
   const [playerId, setPlayerId] = useState(null);
   const [room, setRoom] = useState(null);
   const [message, setMessage] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState(socket.connected ? "connected" : "connecting");
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
@@ -1031,6 +1032,20 @@ function App() {
   }, [socket, playerId, targetPlayerId]);
 
   React.useEffect(() => {
+    const connected = () => setConnectionStatus("connected");
+    const disconnected = () => setConnectionStatus("disconnected");
+    const connectionError = () => setConnectionStatus("disconnected");
+    socket.on("connect", connected);
+    socket.on("disconnect", disconnected);
+    socket.on("connect_error", connectionError);
+    return () => {
+      socket.off("connect", connected);
+      socket.off("disconnect", disconnected);
+      socket.off("connect_error", connectionError);
+    };
+  }, [socket]);
+
+  React.useEffect(() => {
     // kw_session_resume
     function resumeSession() {
       const raw = localStorage.getItem("kw_session");
@@ -1046,6 +1061,12 @@ function App() {
         socket.emit("room:resume", saved, (res) => {
           if (!res?.ok) {
             localStorage.removeItem("kw_session");
+            setRoom(null);
+            setPlayerId(null);
+            setTargetPlayerId("");
+            setAttackerId(null);
+            setMagicPlan(null);
+            setMessage(res?.error || "連線已恢復，但原房間無法接續。請重新加入。");
             return;
           }
           rememberSession(res.playerId, res.room, res.resumeToken);
@@ -1079,7 +1100,14 @@ function App() {
     }
   }, [room, playerId, targetPlayerId]);
 
-  const emit = (event, data = {}) => socket.emit(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
+  // Socket.IO normally buffers emits while offline; never replay an old game move on reconnect.
+  const emit = (event, data = {}) => {
+    if (!socket.connected) {
+      setMessage("目前離線，操作未送出。請待連線恢復後重新確認局勢再操作。");
+      return;
+    }
+    socket.emit(event, data, (res) => res?.ok ? setMessage("") : setMessage(res?.error || "操作失敗"));
+  };
   function makeGuestName() {
     return `玩家${Math.floor(1000 + Math.random() * 9000)}`;
   }
@@ -1772,6 +1800,11 @@ function App() {
         </div>
       </header>
 
+      {connectionStatus !== "connected" && (
+        <p className="connectionWarning" role="status" aria-live="polite">
+          <strong>連線中斷或尚未建立。</strong> 目前操作不會被排隊送出，請在恢復後確認戰場狀態。
+        </p>
+      )}
       {message && <p className="error floatingError">{message}</p>}
 
       {mobileActionModal && (
