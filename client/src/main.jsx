@@ -1292,9 +1292,10 @@ function App() {
 
             <section className="startBox aiStartBox">
               <h2>單人挑戰｜電腦對手</h2>
+              <p className="settingHint">簡單：練習部署、攻擊與結束回合；中等：學會兵種剋制與魔法時機；困難：需要規劃資源與突破防線；征服者：不刻意放水的測試型對手（尚非保證必勝）。</p>
               <p>先選擇電腦難度，也可在多人房間加入 AI。</p>
               <div className="settingButtonGroup">
-                {[["easy","簡單"],["normal","中等"],["hard","困難"]].map(([id,label]) => (
+                {[["easy","簡單"],["normal","中等"],["hard","困難"],["conqueror","征服者（研究型）"]].map(([id,label]) => (
                   <button type="button" key={id} className={aiDifficulty === id ? "settingChoice active" : "settingChoice"}
                     onClick={() => setAiDifficulty(id)}>{label}</button>
                 ))}
@@ -1434,7 +1435,7 @@ function App() {
               <div className="settingBlock">
                 <span className="settingLabel">電腦難度（所有 AI 玩家共用）</span>
                 <div className="settingButtonGroup">
-                  {[["easy","簡單：嘗試出牌"],["normal","中等：評估交換"],["hard","困難：預判局勢"]].map(([id,label]) => (
+                  {[["easy","簡單：學習流程"],["normal","中等：學習時機"],["hard","困難：策略應用"],["conqueror","征服者：極限挑戰"]].map(([id,label]) => (
                     <button type="button" key={id} className={(room.settings?.aiDifficulty || "normal") === id ? "settingChoice active" : "settingChoice"}
                       onClick={() => updateRoomSettings({ aiDifficulty: id })}>{label}</button>
                   ))}
