@@ -98,6 +98,7 @@ function trimHand(room, p) {
 function drawUnits(room, p, n) { for (let i=0;i<n && room.unitDeck.length;i++) p.hand.push(room.unitDeck.shift()); trimHand(room, p); }
 function drawMagic(room, p, n) { let d=0; for (let i=0;i<n && room.magicDeck.length && p.magic.length<3;i++,d++) p.magic.push(room.magicDeck.shift()); return d; }
 function alive(room) { return room.players.filter(p => !p.eliminated && p.hp > 0); }
+function openingTruce(room) { return !!room?.settings?.openingTruceEnabled && (room.turnsCompleted || 0) < room.players.length; }
 
 function finishIfGameOver(room) {
   if (!room || room.status === "ended") return true;
@@ -217,7 +218,7 @@ function publicPlayer(p, viewer, room) {
   return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
 function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
-    tutorial: !!room.tutorial, tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
+    tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
 function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
 
@@ -375,6 +376,8 @@ function finishTurn(room, player, reason = "結束回合") {
   clearEndTurnControl(player);
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
+  room.turnsCompleted = (room.turnsCompleted || 0) + 1;
+  if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
   applyOct(room, player);
 
@@ -470,6 +473,7 @@ function startGame(room) {
   // ROOM_CLEANUP_CLEAR_ON_STARTGAME_V1
   clearRoomCleanup(room);
   room.status = "playing";
+  room.turnsCompleted = 0;
   room.unitDeck = makeUnits();
   room.magicDeck = makeMagic();
 
@@ -700,6 +704,7 @@ function aiUseKingAbility(room, ai) {
 
 // Shared combat resolution for both human Socket.IO actions and AI decisions.
 function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, defenderId) {
+  if (openingTruce(room)) return { ok: false, error: "戰前部署期間不可攻擊，請先安排兵種。" };
   if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
     return { ok: false, error: "目標玩家不合法。" };
   }
@@ -743,6 +748,7 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
 }
 
 function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
+  if (openingTruce(room)) return { ok: false, error: "戰前部署期間不可攻擊國王。" };
   if (!defenderPlayer || defenderPlayer.id === attackerPlayer.id || defenderPlayer.eliminated) {
     return { ok: false, error: "目標玩家不合法。" };
   }
@@ -774,6 +780,7 @@ function aiResolveAttackKing(room, ai, enemy, attackerId) {
 }
 
 async function aiAttackPhase(room, ai, preferredEnemy) {
+  if (openingTruce(room)) return;
   const difficulty = getAIDifficulty(room);
   let safety = 0;
   while (safety++ < 10 && room.status === "playing") {
@@ -821,6 +828,7 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
   if (!mageCanCast(caster, magic)) return { ok: false, error: "此法師不能施放這張魔法。" };
 
   const target = getPlayer(room, targetPlayerId);
+  if (openingTruce(room) && magic.target !== "我方") return { ok: false, error: "戰前部署期間不能對敵人施放魔法。" };
   if (!target || target.eliminated) return { ok: false, error: "找不到有效的目標玩家。" };
 
   if (magic.target === "我方" && target.id !== player.id) {
@@ -879,6 +887,7 @@ function aiChooseMagic(room, ai, enemy) {
   if (!mages.length || !ai.magic.length) return false;
 
   for (const magic of [...ai.magic]) {
+    if (openingTruce(room) && magic.target !== "我方") continue;
     const caster = mages.find(unit => mageCanCast(unit, magic));
     if (!caster) continue;
 
@@ -1475,7 +1484,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled }, reply) => {
+  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled, openingTruceEnabled }, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1507,6 +1516,11 @@ io.on("connection", socket => {
     if (aiDifficulty !== undefined) {
       if (!AI_DIFFICULTIES.includes(aiDifficulty)) return reply?.({ ok: false, error: "不支援的 AI 難度。" });
       room.settings.aiDifficulty = aiDifficulty;
+    }
+
+    if (openingTruceEnabled !== undefined) {
+      if (typeof openingTruceEnabled !== "boolean") return reply?.({ ok: false, error: "戰前部署設定必須為布林值。" });
+      room.settings.openingTruceEnabled = openingTruceEnabled;
     }
 
     if (comebackEnabled !== undefined) {
@@ -1768,7 +1782,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, comebackEnabled = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, comebackEnabled = false, openingTruceEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1787,7 +1801,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     for (let n = 0; n < matches; n++) {
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, comebackEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, comebackEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
@@ -1829,7 +1843,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, louisBonus, comebackEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, louisBonus, comebackEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
