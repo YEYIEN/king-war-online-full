@@ -1898,6 +1898,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
+  const unfinishedReasons = { turnLimit: 0, stalledAITurn: 0, unexpected: 0 };
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
   const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
     kingDamage: 0, damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
@@ -1955,6 +1956,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       const seatIndex = Object.fromEntries(room.players.map((p, i) => [p.id, i + 1]));
       for (const p of room.players) { counts[p.king.name].games++; seats[seatIndex[p.id]].games++; }
       let turns = 0;
+      let stalled = false;
       while (room.status === "playing" && turns < maxTurns) {
         const before = room.currentPlayerId;
         await performAITurn(room.code);
@@ -1962,6 +1964,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         checkInvariants(room);
         if (room.currentPlayerId === before && room.status === "playing") {
           // A stalled AI action must not make this a falsely completed game.
+          stalled = true;
           break;
         }
         if (room.log.length > 80) room.log.splice(0, room.log.length - 80);
@@ -1988,6 +1991,9 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         }
       } else {
         unfinished++;
+        if (stalled) unfinishedReasons.stalledAITurn++;
+        else if (turns >= maxTurns) unfinishedReasons.turnLimit++;
+        else unfinishedReasons.unexpected++;
         for (const p of room.players) counts[p.king.name].unfinished++;
       }
       rooms.delete(room.code);
@@ -1999,7 +2005,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
     seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
-    finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
+    finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins, comebackUse, comebackWinsByMode, telemetry, turnsHistogram, invariantViolations: violations,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
