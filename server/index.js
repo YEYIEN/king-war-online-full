@@ -49,7 +49,7 @@ const KINGS = [
   { name: "屋大維奧古斯都", effectName: "羅馬秩序", effect: "非自己回合時，隨機1名我方場上兵種戰力+1。" },
   { name: "成吉思汗", effectName: "草原機動", effect: "每回合可撤回1名我方兵種；若是騎兵，抽1張兵種卡。" },
   { name: "秦始皇", effectName: "中央集權", effect: "手牌上限9，每回合開始抽2張兵種卡。" },
-  { name: "路易十四", effectName: "太陽王權", effect: "每回合第一次使用魔法卡後，抽1張兵種卡。" }
+  { name: "路易十四", effectName: "太陽王權", effect: "場上有法師時，每回合開始額外抽1張魔法卡；本回合第一次施法後再抽1張兵種卡。" }
 ];
 
 const MAGIC_DEFS = [
@@ -151,6 +151,9 @@ function startTurn(room, p) {
   drawUnits(room, p, ud);
   const mages = p.field.filter(u => u.type === "法師").length;
   const md = drawMagic(room, p, mages);
+  const louisBonus = p.king?.name === "路易十四" && mages > 0 && room.settings?.louisBonus !== false
+    ? drawMagic(room, p, 1) : 0;
+  if (louisBonus) room.log.push(`${p.name} 的太陽王權：額外補充1張魔法卡。`);
   room.log.push(`${p.name} 回合開始，抽${ud}張兵種卡${mages ? `，並因${mages}名法師抽${md}張魔法卡` : ""}。`);
   scheduleTurnTimer(room, p);
 
@@ -667,7 +670,8 @@ function aiUseKingAbility(room, ai) {
   if (difficulty === "easy") return false;
   const candidates = ai.field.filter(u => u.type === "騎兵" && u.tapped);
   if (!candidates.length) return false;
-  if (difficulty === "normal" && Math.random() > 0.6) return false;
+  if (ai.field.length < 3) return false;
+  if (difficulty === "normal" && Math.random() > 0.35) return false;
   const unit = candidates.sort((a, b) => rankValue(b.rank) - rankValue(a.rank))[0];
   ai.field.splice(ai.field.findIndex(u => u.id === unit.id), 1);
   unit.tapped = false;
@@ -1729,7 +1733,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729 } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, comebackEnabled = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1748,7 +1752,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     for (let n = 0; n < matches; n++) {
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: "normal" }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, comebackEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
@@ -1787,8 +1791,8 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     rooms.clear();
   }
   return {
-    methodology: "actual game server rules + original baseline AI policy, randomly assigned kings/seats; unfinished matches count as no win",
-    seed, matches, playerCount, maxTurns,
+    methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
+    seed, matches, playerCount, maxTurns, difficulty, louisBonus, comebackEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
