@@ -9,6 +9,7 @@ import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
 import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { createSocketEventGuard } from "./socket-guard.js";
+import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -236,7 +237,13 @@ function publicPlayer(p, viewer, room) {
 }
 function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
-function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
+function persistRoomSnapshot(room) {
+  void saveRoomSnapshot(room).catch(error=>console.error("Room recovery snapshot error:",error.message));
+}
+function broadcast(room) {
+  room.players.forEach(p => { if (!isAIPlayer(p) && p.socketId) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); });
+  persistRoomSnapshot(room);
+}
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
 
 
@@ -256,6 +263,7 @@ function deleteRoomNow(roomCode, reason = "房間已清理。") {
   io.in(room.code).emit("room:deleted", { reason });
   io.socketsLeave(room.code);
   rooms.delete(room.code);
+  void removeRoomSnapshot(room.code).catch(error=>console.error("Snapshot cleanup failed:",error.message));
   return true;
 }
 
@@ -1340,6 +1348,7 @@ io.on("connection", socket => {
     };
 
     rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
     socket.join(roomCode);
 
     startGame(room);
@@ -1468,6 +1477,7 @@ io.on("connection", socket => {
     };
 
     rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
     socket.join(roomCode);
 
     reply?.({
@@ -1530,6 +1540,7 @@ io.on("connection", socket => {
       };
 
       rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
       socket.join(roomCode);
 
       reply?.({
@@ -1614,6 +1625,7 @@ io.on("connection", socket => {
     };
 
     rooms.set(roomCode, room);
+    persistRoomSnapshot(room);
     socket.join(roomCode);
 
     reply?.({
@@ -1938,6 +1950,7 @@ io.on("connection", socket => {
     if (f.room.matchmaking && f.room.status === "lobby" && matchmakingRoomCode === f.room.code) {
       matchmakingRoomCode = null;
       rooms.delete(f.room.code);
+      void removeRoomSnapshot(f.room.code).catch(error=>console.error("Snapshot cleanup failed:",error.message));
       return;
     }
 
@@ -1945,13 +1958,37 @@ io.on("connection", socket => {
   });
 });
 
+app.get("/healthz",(_req,res)=>res.status(200).json({ok:true,service:"king-war",uptimeSeconds:Math.floor(process.uptime())}));
+
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "../client/dist");
   app.use(express.static(dist));
   app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 if (process.env.KW_SIMULATION !== "1") {
-  server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}`));
+  // Restore only opt-in encrypted snapshots. A process restart invalidates
+  // existing sockets; resume requires the original secret token on the client.
+  const recovered=await loadRoomSnapshots();
+  for (const warning of recovered.errors) console.warn("Ignored invalid room snapshot:",warning.file,warning.error);
+  for (const room of recovered.rooms) {
+    if (rooms.has(room.code)) continue;
+    for (const player of room.players) {
+      player.connected=!!player.isAI;
+      if (!player.isAI) player.socketId=null;
+    }
+    rooms.set(room.code,room);
+    if(room.status==="playing") {
+      const active=room.players.find(p=>p.id===room.currentPlayerId && !p.eliminated);
+      if(!active) {console.warn("Skipping invalid recovered active room");rooms.delete(room.code);continue;}
+      room.log.push("伺服器已重新啟動，可使用原本重連憑證返回對局。");
+      // Restart the turn timer rather than charging players for server downtime.
+      scheduleTurnTimer(room,active);
+      for(const player of room.players.filter(p=>!p.isAI && !p.eliminated))
+        scheduleDisconnectGrace(room,player,60);
+      scheduleAITurn(room);
+    } else scheduleRoomCleanup(room,180);
+  }
+  server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT} (recovered rooms: ${recovered.rooms.length})`));
 }
 
 
