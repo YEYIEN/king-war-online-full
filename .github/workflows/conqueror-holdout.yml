@@ -1,0 +1,25 @@
+name: Conqueror holdout validation
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Evaluate trained Conqueror on independent seeds across 2-5 players
+        env:
+          KW_SIMULATION: '1'
+        run: node scripts/conqueror-holdout.mjs | tee conqueror-holdout.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conqueror-holdout
+          path: conqueror-holdout.json
+          retention-days: 30
