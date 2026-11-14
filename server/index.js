@@ -13,7 +13,7 @@ import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeM
 import { createSocketEventGuard } from "./socket-guard.js";
 import { originPolicy } from "./origin-policy.js";
 import { saveRoomSnapshot, removeRoomSnapshot, loadRoomSnapshots } from "./room-snapshots.js";
-import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat, STRATEGY_ARCHETYPES, scoreArchetypeDeployment, scoreKingPlanDeployment, counterKingThreat, scoreKingCounterAttack } from "./ai-strategies.js";
+import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall, publicOpponentForAI, scorePublicEnemyThreat, STRATEGY_ARCHETYPES, scoreArchetypeDeployment, scoreKingPlanDeployment, counterKingThreat, scoreKingCounterAttack, scoreKingPlanAttack } from "./ai-strategies.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -907,13 +907,15 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
         type: action.type, enemy, attackerId: action.attackerId,
         ...(action.defenderId ? {defenderId: action.defenderId} : {}),
         score: aiStrategicAttackScore(room, ai, attacker, enemy, defender)
+          + (ai.simKingPlan ? scoreKingPlanAttack({self:ai,enemy,attacker,defender}) : 0)
           + (ai.simCounterPlan && difficulty==="conqueror"
             ? scoreKingCounterAttack({enemy,defender,attacker}) : 0)
       };
     });
     const chosen = selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
       battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
-      conquerorProfile: room.settings?.conquerorProfile || "resource" });
+      conquerorProfile: room.settings?.conquerorProfile || "resource",
+      ownKingPlan: ai.simKingPlan === true, counterKingPlan: ai.simCounterPlan === true });
     if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
     // Resolve exclusively through the authoritative server with a validated live ID.
     const liveEnemy = enemies.find(enemy => enemy.id === chosen.enemy.id);
