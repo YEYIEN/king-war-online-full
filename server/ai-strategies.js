@@ -25,7 +25,7 @@ export function selectDeployChoice(scored, difficulty, random = Math.random) {
  * archers, spell effects and opponent hidden hands are evaluated by the live
  * engine after selection. Models visible board trades and one enemy response.
  */
-function scoreTacticalMove(move, state, { battle, power, effectiveDamage }) {
+function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conquerorProfile = "balanced" }) {
   const unit = state.own.find(x=>x.id===move.attackerId);
   const foe = state.opponents.find(x=>x.id===move.enemy.id);
   if (!unit || unit.tapped || !foe || foe.hp<=0) return null;
@@ -40,7 +40,7 @@ function scoreTacticalMove(move, state, { battle, power, effectiveDamage }) {
     const damage=Math.min(target.hp,effectiveDamage(actor));
     actor.tapped=true;
     target.hp-=damage;
-    return { state:next,score:damage*27+(target.hp<=0?1100:0) };
+    return { state:next,score:damage*(conquerorProfile==="assault"?34:conquerorProfile==="resource"?23:27)+(target.hp<=0?1100:0) };
   }
   const defender=target.field.find(x=>x.id===move.defenderId);
   if (!defender) return null;
@@ -50,9 +50,9 @@ function scoreTacticalMove(move, state, { battle, power, effectiveDamage }) {
   const killSelf=(verdict==="defender"||verdict==="both")&&!blocked;
   const lastGuard=defender.type==="步兵"&&target.field.filter(x=>x.type==="步兵").length===1;
   let gain=0;
-  if(killEnemy)gain+=35+({"初級":1,"中級":2,"高級":3}[defender.rank]||1)*15
-    +(lastGuard?45:0)+(defender.type==="法師"&&target.magic?.length?22:0);
-  if(killSelf)gain-=34+({"初級":1,"中級":2,"高級":3}[actor.rank]||1)*19;
+  if(killEnemy)gain+=(conquerorProfile==="resource"?45:35)+({"初級":1,"中級":2,"高級":3}[defender.rank]||1)*15
+    +(lastGuard?(conquerorProfile==="assault"?60:conquerorProfile==="resource"?30:45):0)+(defender.type==="法師"&&target.magic?.length?22:0);
+  if(killSelf)gain-=(conquerorProfile==="resource"?48:34)+({"初級":1,"中級":2,"高級":3}[actor.rank]||1)*(conquerorProfile==="resource"?25:19);
   if(verdict==="defender"&&!blocked)gain-=14;
   if(killEnemy)target.field=target.field.filter(x=>x.id!==defender.id);
   if(killSelf)next.own=next.own.filter(x=>x.id!==actor.id);
@@ -105,9 +105,9 @@ function chooseConquerorAttack(actions, ctx) {
   return best;
 }
 
-export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true }) {
+export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true, conquerorProfile = "balanced" }) {
   if (difficulty === "conqueror" && conquerorSearch && enemies.length === 1) {
-    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage});
+    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage,conquerorProfile});
   }
   if (!actions.length) return null;
   const valued = actions.map(action => {
