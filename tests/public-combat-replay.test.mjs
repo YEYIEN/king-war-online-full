@@ -61,3 +61,17 @@ test("guard removal enables next king strike and shield consumes on cloned state
  assert.equal(result.state.opponents[0].lastStandShield,2);
  assert.equal(state.opponents[0].lastStandShield,4);
 });
+
+test("replay strips private player and unit fields and limits pathological replay",()=>{
+ const attacker=unit("a","騎兵","高級",{privateCardSecret:"never-share"});
+ const opponentUnit=unit("t","法師","初級",{privateCardSecret:"no"});
+ const state=make([attacker],[opponentUnit]);
+ state.own.hand=[{secret:"own"}];
+ state.opponents[0].magic=[{secret:"opponent"}];
+ state.opponents[0].resumeToken="secret-token";
+ const r=applyPublicAttackStep(state,{type:"unit",enemyId:"op",attackerId:"a",defenderId:"t"});
+ assert.equal(r.ok,true);
+ assert.equal(JSON.stringify(r.state).includes("secret"),false);
+ assert.equal(JSON.stringify(r.state).includes("privateCardSecret"),false);
+ assert.equal(replayPublicAttackSteps(state,Array(257).fill({type:"king"})).ok,false);
+});
