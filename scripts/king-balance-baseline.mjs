@@ -6,7 +6,7 @@ const maxTurns = Number(process.env.MAX_TURNS || 100);
 const seed = Number(process.env.SEED || 104729);
 const difficulty = process.env.DIFFICULTY || "normal";
 const louisBonus = process.env.LOUIS_BONUS !== "0";
-const comebackEnabled = process.env.COMEBACK !== "0";
+const comebackEnabled = process.env.COMEBACK === "1";
 const data = await simulateKingBaseline({ matches, playerCount: players, maxTurns, seed, difficulty, louisBonus, comebackEnabled });
 console.log(JSON.stringify(data, null, 2));
 if (data.finished / data.matches < 0.8) {
