@@ -2069,7 +2069,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", challengerKingPlan = false, challengerCounterPlan = false, challengerRationalSearch = false, kingPair = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", challengerKingPlan = false, challengerCounterPlan = false, challengerRationalSearch = false, kingPair = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false, includeMatchRecords = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -2094,6 +2094,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     comebackUses: { assault: 0, defense: 0 }, rationalCalls:0,rationalPasses:0,rationalNodes:0,rationalChanged:0 };
   const turnsHistogram = { "0-9": 0, "10-19": 0, "20-39": 0, "40-79": 0, "80+": 0 };
   const turnSamples = includeTurnSamples ? [] : null;
+  const matchRecords = includeMatchRecords ? [] : null;
   const violations = {};
   function checkInvariants(room) {
     const violation = name => { violations[name] = (violations[name] || 0) + 1; };
@@ -2162,6 +2163,14 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         challengerStats.gamesByKing[challengerPlayer.king.name] = (challengerStats.gamesByKing[challengerPlayer.king.name] || 0) + 1;
       }
       for (const p of room.players) { counts[p.king.name].games++; seats[seatIndex[p.id]].games++; }
+      // Research metadata only: never store card IDs, private hands, deck sequence or credentials.
+      const initialState = matchRecords ? room.players.map(p => ({
+        playerId:p.id,seat:seatIndex[p.id],king:p.king.name,
+        aiDifficulty:getAIDifficulty(room,p),researchStyle:p.simResearchStyle||"balanced",
+        startingUnits:p.hand.length,
+        startingTypes:Object.fromEntries(["步兵","弓兵","法師","騎兵"].map(type=>[type,p.hand.filter(u=>u.type===type).length])),
+        startingRanks:Object.fromEntries(["初級","中級","高級"].map(rank=>[rank,p.hand.filter(u=>u.rank===rank).length]))
+      })) : null;
       let turns = 0;
       let stalled = false;
       while (room.status === "playing" && turns < maxTurns) {
@@ -2222,6 +2231,26 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         else unfinishedReasons.unexpected++;
         for (const p of room.players) counts[p.king.name].unfinished++;
       }
+      if(matchRecords) {
+        const winner=finalized ? survivors[0] : null;
+        matchRecords.push({
+          gameIndex:n,derivedSeed:(seed ^ Math.imul(n+1,0x9e3779b9))>>>0,
+          finished:finalized,unfinishedReason:finalized?null:(stalled?"stalledAITurn":turns>=maxTurns?"turnLimit":"unexpected"),
+          turns,winnerKing:winner?.king?.name||null,
+          winnerSeat:winner?seatIndex[winner.id]:null,
+          winnerDifficulty:winner?getAIDifficulty(room,winner):null,
+          players:initialState,
+          criticalEligible:outcome.criticalPlayers>0,criticalComebackWin:!!outcome.criticalWin,
+          trailingEligible:outcome.trailingPlayers>0,comebackWin:!!outcome.comebackWin,
+          lastStandUsed:!!room.lastStandCount,lastStandModes:{...(room.lastStandModes||{})},
+          combat:{
+            unitAttacks:m.unitAttacks,mutualKills:m.mutualKills,failedTrades:m.failedTrades,
+            kingAttacks:m.kingAttacks,kingDamage:m.kingDamage,
+            spells:{...m.spells},spellsEffective:{...m.spellsEffective},
+            deployments:m.aiDeployments,mongolRecalls:m.mongolRecalls
+          }
+        });
+      }
       rooms.delete(room.code);
     }
   } finally {
@@ -2233,7 +2262,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     seed, matches, playerCount, maxTurns, difficulty, challenger, challengerStyle, challengerKingPlan, challengerCounterPlan, challengerRationalSearch, kingPair, conquerorSearch, conquerorProfile, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, aiCurriculumPolicy, aiRecallStrategy, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
-    ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
+    ...(turnSamples ? { turnSamples } : {}), ...(matchRecords ? { matchRecords } : {}), invariantViolations: violations,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
     seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
