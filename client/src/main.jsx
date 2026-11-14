@@ -868,6 +868,7 @@ function App() {
   const [room, setRoom] = useState(null);
   const [message, setMessage] = useState("");
   const [connectionStatus, setConnectionStatus] = useState(socket.connected ? "connected" : "connecting");
+  const pendingRequestsRef = useRef(new Set());
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
@@ -1106,7 +1107,21 @@ function App() {
       setMessage("目前離線，操作未送出。請待連線恢復後重新確認局勢再操作。");
       return false;
     }
-    socket.emit(event, data, callback);
+    if (pendingRequestsRef.current.has(event)) {
+      setMessage("同類操作仍在等候伺服器確認，請勿重複送出。");
+      return false;
+    }
+    pendingRequestsRef.current.add(event);
+    // Acknowledged, bounded requests avoid offline buffers and duplicate double-clicks.
+    socket.timeout(5000).emit(event, data, (error, response) => {
+      pendingRequestsRef.current.delete(event);
+      if (error) {
+        const failure = {ok:false,error:"伺服器未在 5 秒內確認操作，請檢查目前局勢後再試。"};
+        callback?.(failure);
+        return;
+      }
+      callback?.(response);
+    });
     return true;
   }
 
