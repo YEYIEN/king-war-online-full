@@ -135,3 +135,52 @@
 - 即使純戰鬥核心完全一致，也不能因單次攻擊預覽正確就宣告 Conqueror 已具備多回合搜尋。
 
 **續行批次結論：完成可重用精確戰鬥核心的第一步及 AI 公開動作生成；完整模擬引擎、異質策略聯賽與階段0–6的正式結案仍未達標。**
+
+---
+
+## 八、第三批續行：AI 信息權限、戰術搜尋、局部重播、異質策略與 CI 風險
+
+### 8.1 修改前新發現
+
+| 問題 | 根本原因／風險 |
+|---|---|
+| AI 選敵、法師施法及成吉思汗撤回仍接觸 live player | 攻擊評分已公開化，但其他決策鏈未完全隔離，存在未來讀到隱藏卡內容的維護風險 |
+| Conqueror 三次攻擊搜尋可能預測無效行動 | 只檢查 tapped / 整備，忽略疲乏、禁止攻擊狀態，並低估背水護盾 |
+| 兵種與魔法預覽不具備逐步重播 | 難以將策略決策精確對回正式結算 |
+| 對抗測試只使用現有難度策略 | 征服者對快攻、防守、法師、資源偏好等異質對手的韌性未經診斷 |
+| GitHub Actions 每次提交觸發大量過期測試 | 大量排隊工作提高驗收訊號噪音；確切排隊原因仍未知 |
+| 戰鬥純函式抽取後可能規則漂移 | 過去只查詢函式名稱，無法保證原始戰力、剋制公式仍相同 |
+
+### 8.2 已實際提交的解法
+
+1. AI 公開資訊：`scorePublicEnemyThreat()` 只讀公開場上兵種、國王、HP 與魔法張數；`aiSelectEnemy`、`aiDeployUnits`、`aiChooseMagic` 和成吉思汗撤回評估改用 `publicOpponentForAI()` 的公開投影。施法與攻擊最後仍由正式 resolver 按 ID 驗證。
+2. Conqueror：在搜尋中統一調用正式 `canAttack`、`previewUnitAttack`、`mitigateKingDamage`，排除疲乏與無法攻擊的分支，正確估計弓兵疲乏及背水護盾；加入 `tests/conqueror-legal-search.test.mjs`。**這可能改變 AI 勝率，尚待同樣種子 holdout 驗證，不視為策略性能已提升**。
+3. 可重播局部攻擊：新增 `server/public-combat-replay.js`，支援不可變單次攻擊及受限連續攻擊重播；保存國王 HP/護盾、出手狀態、兵種生死及弓兵額外攻擊；限制最多256次動作，白名單複製公開字段，不帶出牌庫、私人手牌、憑證。新增 `tests/public-combat-replay.test.mjs`。
+4. 魔法預覽：`server/magic-effects.js` 新增 `previewMagicFieldEffect`，複製公開場地後直接使用原本 `applyMagicFieldEffect`，避免維護兩套不同魔法計算。新增 `tests/magic-preview.test.mjs`，對照九種魔法的局部場地效果與來源不可變性。燃血 HP 成本、施法者行動與國王被動仍由正式引擎處理。
+5. 異質策略壓力測試：新增 `STRATEGY_ARCHETYPES`：balanced / rush / fortress / arcane / economy / counter，僅在 `KW_SIMULATION=1` 的挑戰者選牌加分生效；正常遊戲不新增平衡規則。新增 `scripts/prebalance-archetype-league.mjs`，涵蓋2–5人，輸出國王與座位結果；`tests/strategy-archetypes.test.mjs` 驗證預設 balanced 為 no-op。**目前只改部署評分，不能稱作完整異質戰術 AI**。
+6. 規則凍結：更新 `scripts/prebalance-rule-freeze.mjs`，比對原始程式與抽出後的 `rankValue`、`power`、`effectiveDamage`、`canAttack`、`battle` 實作，不只確認函式名稱存在。
+7. 驗收佇列：三個主要工作流程 `prebalance-acceptance.yml`、`verify-fixes.yml`、`release-gate.yml` 加入 `concurrency: cancel-in-progress: true`，降低相同 PR 過期檢查累積；尚未驗證 GitHub Actions 排隊問題是否因此解除。
+
+### 8.3 修改後已確認什麼，未確認什麼？
+
+- **已確認**：以上修改已提交 Draft PR #7；程式檔案可讀、研究策略旗標預設不啟用、未更動五王 HP／卡牌攻防數值／先手或背水規則。
+- **未確認**：本批新 Node、Socket.IO、瀏覽器 CI 全通過；路易十四／征服者勝率是否維持；連線失敗場景、部署穩定性與真實 Render 資源是否合格；新擴充魔法預覽、公開回放是否和正式全部複合規則一致。
+- **本批 CI 最後一次檢查**：關鍵流程仍只取得 queued / 尚未取得 completed 結果。這是**工程驗收阻擋**，不能藉修改報告而取消。
+
+### 8.4 再次分析殘餘風險及解除計畫
+
+| 殘餘風險 | 是否阻擋「只剩平衡」 | 解除條件 |
+|---|---|---|
+| 新版本 CI 沒有通過證據 | **是** | 最新 SHA 的完整 Node、Socket.IO、Vite build、Playwright、依賴掃描，失敗項逐一修復重跑 |
+| 伺服器 ack 遺失後的同一操作重複提交 | **是** | 以 room/player + request ID 的伺服器端冪等機制，跨斷線重試、雙擊與亂序測試 |
+| 模擬引擎只完整覆蓋部分攻擊／魔法場地效果 | **是** | 共用 state/action 合法狀態轉移、精確部署與施法、國王被動、抽牌與回合轉換，對照真人伺服器事件重播 |
+| Conqueror 實際搜尋時間與結果尚未重新驗證 | **是** | 運算時間/記憶體 p95、2–5人與不同對手獨立 holdout，必要時節點預算與隔離執行 |
+| 異質策略目前僅改變部署偏好 | **是** | 延伸攻擊、施法、保存資源等多階段目標，逐風格固定局面測試與對抗聯賽 |
+| 真機、跨網路及 Render staging 驗收未完成 | 發布前**是**；離線平衡研究可先不阻擋 | 執行真機及 staging 網路延遲、斷線、多人負載、安全與恢復演練 |
+| 原規則文件與程式差異尚未人工逐條核對 | **是** | 逐條審計國王被動、魔法、弓兵、特殊狀態、抽牌與勝負邊界；建立 golden-case 表 |
+
+### 8.5 結案決策
+
+此批可宣告**局部純戰鬥／魔法預覽及 AI 研究工具已開發**，不可宣告**全部工程問題已清零**，也不應宣稱使用者接下來只需要處理遊戲平衡。尤其缺乏最新 CI 成功結果時，不能將候選改動升級為正式預設，更不能合併 main。
+
+接下來的優先序仍是：取得 CI 完成證據 → 修阻擋問題 → 完整共用引擎與事件重播 → 驗證 Conqueror 多戰術能力與效能 → 凍結 AI → 沙盤平衡研究。
