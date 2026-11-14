@@ -27,6 +27,8 @@ const io = new Server(server, {
   maxHttpBufferSize:32*1024
 });
 const rooms = new Map();
+const MAX_LIVE_ROOMS = Math.max(1,Math.min(10000,Number(process.env.KW_MAX_ROOMS)||200));
+function atRoomCapacity(){return process.env.KW_SIMULATION!=="1" && rooms.size>=MAX_LIVE_ROOMS;}
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
 const disconnectGraceTimers = new Map();
@@ -1325,6 +1327,7 @@ io.on("connection", socket => {
 
   guardedOn("singleplayer:start", ({ name, difficulty = "normal" }, reply) => {
     detachSocketFromOtherRooms(socket.id);
+    if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
 
     const roomCode = code();
     const humanId = nanoid(10);
@@ -1390,6 +1393,7 @@ io.on("connection", socket => {
 
   guardedOn("tutorial:start", ({ name }, reply) => {
     detachSocketFromOtherRooms(socket.id);
+    if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
 
     const roomCode = code();
     const pid = nanoid(10);
@@ -1532,6 +1536,7 @@ io.on("connection", socket => {
     const pid = nanoid(10);
 
     if (!room) {
+      if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
       const roomCode = code();
 
       const player = {
@@ -1615,6 +1620,7 @@ io.on("connection", socket => {
 
   guardedOn("room:create", ({ name, maxPlayers }, reply) => {
     detachSocketFromOtherRooms(socket.id);
+    if(atRoomCapacity())return reply?.({ok:false,error:"伺服器房間已滿，請稍後再試。"});
 
     const roomCode = code();
     const pid = nanoid(10);
