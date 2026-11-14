@@ -243,6 +243,7 @@ function kwConnectedHumans(room) {
 function deleteRoomNow(roomCode, reason = "房間已清理。") {
   const room = rooms.get(roomCode);
   if (!room) return false;
+  if (room.status === "playing") finalizeMatchMetrics(room,{winnerId:null,reason:"abandoned"});
   clearTurnTimer(room);
   clearRoomCleanup(room);
   for (const player of room.players) clearDisconnectGrace(room, player);
@@ -389,7 +390,7 @@ function finishTurn(room, player, reason = "結束回合") {
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
-  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt);
+  if (room.matchMetrics && room.turnStartedAt) recordTurnDuration(room, Date.now()-room.turnStartedAt, {ai:!!player.isAI});
   room.turnsCompleted = (room.turnsCompleted || 0) + 1;
   if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
