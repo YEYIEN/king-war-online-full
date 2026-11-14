@@ -1556,7 +1556,7 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled, openingTruceEnabled }, reply) => {
+  socket.on("room:updateSettings", ({ maxPlayers, turnTimeLimit, aiDifficulty, comebackEnabled, openingTruceEnabled, fairOpening2P }, reply) => {
     const f = findBySocket(socket.id);
     if (!f) return reply?.({ ok: false, error: "你不在房間中。" });
 
@@ -1588,6 +1588,12 @@ io.on("connection", socket => {
     if (aiDifficulty !== undefined) {
       if (!AI_DIFFICULTIES.includes(aiDifficulty)) return reply?.({ ok: false, error: "不支援的 AI 難度。" });
       room.settings.aiDifficulty = aiDifficulty;
+    }
+
+    if (fairOpening2P !== undefined) {
+      if (typeof fairOpening2P !== "boolean") return reply?.({ ok: false, error: "雙人公平開局設定無效。" });
+      room.settings.firstSeatPeacefulTurn = fairOpening2P;
+      room.settings.secondSeatExtraCards = fairOpening2P ? 1 : 0;
     }
 
     if (openingTruceEnabled !== undefined) {
