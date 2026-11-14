@@ -129,3 +129,32 @@ jobs:
             king-matchup-ai-output.json
           retention-days: 30
           if-no-files-found: warn
+
+  rational-search-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Validate bounded rational search and king-specific policies
+        env:
+          KW_SIMULATION: '1'
+        run: node --test tests/ai-rational-planner.test.mjs tests/king-specific-ai-policy.test.mjs
+      - name: Compare 2–5 player rational policies with unchanged conqueror
+        env:
+          KW_SIMULATION: '1'
+          RATIONAL_GAMES_PER_SEED: '12'
+        run: node scripts/rational-planner-ab.mjs > rational-planner-ab-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rational-search-research
+          path: |
+            rational-planner-ab.json
+            rational-planner-ab-output.json
+          retention-days: 30
+          if-no-files-found: warn
