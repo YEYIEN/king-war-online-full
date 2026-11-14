@@ -1,4 +1,5 @@
-import {canAttack as canAttackVisible, effectiveDamage as effectiveVisibleDamage} from "./combat-primitives.js";
+import {canAttack as canAttackVisible, effectiveDamage as effectiveVisibleDamage, previewUnitAttack} from "./combat-primitives.js";
+import {mitigateKingDamage} from "./comeback-rules.js";
 
 /**
  * Distinct AI curricula and a bounded search-based research challenger.
@@ -96,26 +97,25 @@ export function selectDeployChoice(scored, difficulty, random = Math.random) {
 function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conquerorProfile = "resource" }) {
   const unit = state.own.find(x=>x.id===move.attackerId);
   const foe = state.opponents.find(x=>x.id===move.enemy.id);
-  if (!unit || unit.tapped || !foe || foe.hp<=0) return null;
+  if (!unit || !canAttackVisible(unit) || !foe || foe.hp<=0) return null;
   const next = {
-    own:state.own.map(x=>({...x})),
-    opponents:state.opponents.map(x=>({...x,field:x.field.map(u=>({...u}))}))
+    own:state.own.map(x=>({...x,status:[...(x.status||[])]})),
+    opponents:state.opponents.map(x=>({...x,field:x.field.map(u=>({...u,status:[...(u.status||[])]}))}))
   };
   const actor=next.own.find(x=>x.id===unit.id);
   const target=next.opponents.find(x=>x.id===foe.id);
   if (move.type==="king") {
     if (target.field.some(x=>x.type==="步兵")) return null;
-    const damage=Math.min(target.hp,effectiveDamage(actor));
+    const damage=Math.min(target.hp,mitigateKingDamage(target,effectiveDamage(actor)));
     actor.tapped=true;
     target.hp-=damage;
     return { state:next,score:damage*(conquerorProfile==="assault"?34:conquerorProfile==="resource"?23:27)+(target.hp<=0?1100:0) };
   }
   const defender=target.field.find(x=>x.id===move.defenderId);
   if (!defender) return null;
-  const verdict=battle(actor,defender);
-  const blocked=actor.type==="弓兵" && power(defender)>=power(actor);
-  const killEnemy=verdict==="attacker"||verdict==="both";
-  const killSelf=(verdict==="defender"||verdict==="both")&&!blocked;
+  const prediction=previewUnitAttack(actor,defender);
+  const {verdict,killedEnemy:killEnemy,killedAttacker:killSelf}=prediction;
+  const blocked=prediction.archerSaved;
   const lastGuard=defender.type==="步兵"&&target.field.filter(x=>x.type==="步兵").length===1;
   let gain=0;
   if(killEnemy)gain+=(conquerorProfile==="resource"?45:35)+({"初級":1,"中級":2,"高級":3}[defender.rank]||1)*15
@@ -125,15 +125,16 @@ function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conque
   if(killEnemy)target.field=target.field.filter(x=>x.id!==defender.id);
   if(killSelf)next.own=next.own.filter(x=>x.id!==actor.id);
   else {
-    const archerExtra=actor.type==="弓兵"&&power(defender)<power(actor)&&!actor.archerBonusUsed;
-    actor.tapped=!archerExtra;
-    if(archerExtra)actor.archerBonusUsed=true;
+    if(blocked && prediction.defenderPower>prediction.attackerPower &&
+      !actor.status.includes("疲乏"))actor.status.push("疲乏");
+    actor.tapped=!prediction.archerExtra;
+    if(prediction.archerExtra)actor.archerBonusUsed=true;
   }
   return {state:next,score:gain};
 }
 function futureActions(state) {
   const actions=[];
-  for(const own of state.own.filter(x=>!x.tapped&&!x.status?.includes("整備"))) {
+  for(const own of state.own.filter(canAttackVisible)) {
     for(const enemy of state.opponents.filter(x=>x.hp>0)) {
       if(!enemy.field.some(x=>x.type==="步兵"))actions.push({type:"king",enemy,attackerId:own.id});
       for(const foe of enemy.field)actions.push({type:"unit",enemy,attackerId:own.id,defenderId:foe.id});
