@@ -1244,22 +1244,8 @@ function App() {
   }
 
 
-  React.useEffect(() => {
-    // AUTO_RETURN_HOME_AFTER_RESULT_CLEAN_V1
-    if (room?.status !== "ended") return;
-
-    const timer = window.setTimeout(() => {
-      clearSavedSession();
-      setRoom(null);
-      setPlayerId(null);
-      setTargetPlayerId("");
-      setAttackerId(null);
-      setMagicPlan(null);
-      setMessage("本局已結束，已自動回到主選單。");
-    }, 5000);
-
-    return () => window.clearTimeout(timer);
-  }, [room?.status, room?.roomCode]);
+  // Keep the completed match visible until the player explicitly leaves.
+  // The server retains control over room cleanup and may notify clients if the room expires.
 
   if (tutorialMode) {
     return <InteractiveTutorial onExit={() => setTutorialMode(false)} />;
@@ -2024,8 +2010,9 @@ function App() {
                 : "你的國王被擊敗了，再調整策略試一次。"}
             </p>
             <p className="resultHint">
-              結果畫面將停留 5 秒，之後自動回到主選單。
+              你可以查看本局結果，準備好後再返回主選單。
             </p>
+            <button type="button" className="primaryBtn" onClick={returnHomeFromResult}>返回主選單</button>
           </div>
         </section>
       )}
