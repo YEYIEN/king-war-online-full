@@ -1,0 +1,25 @@
+name: Gameplay risk matrix
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  risk-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Validate simulation JavaScript syntax
+        run: |
+          node --check server/index.js
+          node --check scripts/simulation-risk-matrix.mjs
+      - name: Run multi-seed matrix and assert game invariants
+        env:
+          KW_SIMULATION: '1'
+          SAMPLE_PER_CELL: '120'
+        run: node scripts/simulation-risk-matrix.mjs
