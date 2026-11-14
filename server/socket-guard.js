@@ -14,6 +14,7 @@ const GAME_EVENT_SET = new Set(GAME_CLIENT_EVENTS);
 const HIGH_COST_EVENTS = new Set(["room:resume","room:create","room:join",
   "matchmaking:join","singleplayer:start","tutorial:start"]);
 const MAX_CLIENT_PAYLOAD_BYTES = 12 * 1024;
+const OPTIONAL_OBJECT_EVENTS = new Set(["room:leave","room:toggleReady","game:rematch","room:addAI","room:removeAI","game:start","game:endTurn"]);
 
 export function createSocketEventGuard({now=Date.now, onReject=()=>{}}={}) {
   const events=[];
@@ -27,6 +28,7 @@ export function createSocketEventGuard({now=Date.now, onReject=()=>{}}={}) {
       if(reply) reply({ok:false,error:reason});
       // Never call the real handler on rejected payloads.
     }
+    if(payload===undefined && !OPTIONAL_OBJECT_EVENTS.has(event)) return reject("缺少操作資料。");
     if(payload!==undefined && (payload===null || typeof payload!=="object" || Array.isArray(payload)))
       return reject("操作資料格式無效。");
     let bytes=0;
