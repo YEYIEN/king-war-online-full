@@ -918,7 +918,8 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
           // More opponents -> shallower but broader retaliation coverage.
           ownDepth:publicEnemies.length>2?2:3,
           rootWidth:publicEnemies.length>2?6:11,
-          beamWidth:4,maxNodes:1600,responseWidth:20})
+          beamWidth:4,maxNodes:1600,responseWidth:20,
+          turnOrder:room.players.map(player=>player.id)})
       : selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
           battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
           conquerorProfile: room.settings?.conquerorProfile || "resource",
