@@ -3,6 +3,7 @@ import { simulateKingBaseline } from "../server/index.js";
 
 const seeds=[104729,130363,196613];
 const large=Number(process.env.MATCHES_PER_SEED || 300);
+const search=process.env.CONQUEROR_SEARCH !== "0";
 const scenarios=[
   { players:2, opponent:"easy" },
   { players:2, opponent:"normal" },
@@ -16,7 +17,7 @@ for(const x of scenarios){
   const runs=[];
   for(const seed of seeds){
     const r=await simulateKingBaseline({
-      seed, playerCount:x.players, matches:large, difficulty:x.opponent, challenger:"conqueror",
+      seed, playerCount:x.players, matches:large, difficulty:x.opponent, challenger:"conqueror", conquerorSearch:search,
       maxTurns:180, comebackEnabled:true
     });
     assert.deepEqual(r.invariantViolations,{});
@@ -42,4 +43,4 @@ for(const x of scenarios){
   });
   console.error("SIM",x.players,x.opponent,"Conqueror:",wins,"/",games);
 }
-console.log(JSON.stringify({methodology:"Only Conqueror has its policy; other players use specified baseline difficulty. Seats rotated and kings assigned by actual game. Equal rules, no hidden-hand access beyond own view. Win rates are simulation-specific.",seeds,matchesPerSeed:large,rows},null,2));
+console.log(JSON.stringify({conquerorSearch:search,methodology:"Only Conqueror has its policy; other players use specified baseline difficulty. Seats rotated and kings assigned by actual game. Equal rules, no hidden-hand access beyond own view. Win rates are simulation-specific.",seeds,matchesPerSeed:large,rows},null,2));
