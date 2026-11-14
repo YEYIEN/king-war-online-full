@@ -19,6 +19,8 @@ const scenarios=[
   {id:"p5-normal-louis-mage",playerCount:5,difficulty:"normal",louisMageSetup:true},
   {id:"p4-normal-magic-targeting",playerCount:4,difficulty:"normal",aiMagicTargeting:true},
   {id:"p5-normal-magic-targeting",playerCount:5,difficulty:"normal",aiMagicTargeting:true},
+  {id:"p3-hard-no-laststand",playerCount:3,difficulty:"hard",comebackEnabled:false},
+  {id:"p4-hard-no-laststand",playerCount:4,difficulty:"hard",comebackEnabled:false},
   {id:"p5-hard-no-laststand",playerCount:5,difficulty:"hard",comebackEnabled:false},
   {id:"p5-conqueror-no-laststand",playerCount:5,difficulty:"conqueror",comebackEnabled:false},
   {id:"p5-hard-defense-rally-experiment",playerCount:5,difficulty:"hard",defenseRallyEnabled:true},
