@@ -42,3 +42,10 @@ test("royal shield absorbs at most three damage, never prevents all king damage"
   assert.equal(mitigateKingDamage(king, 4), 2);
   assert.equal(king.lastStandShield, 0);
 });
+
+test("mode validation and comeback state are server-owned", () => {
+  const { room, player } = scenario();
+  assert.equal(canUseLastStand(room, player), true);
+  player.lastStandUsed = true;
+  assert.equal(canUseLastStand(room, player), false);
+});
