@@ -924,6 +924,23 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
           battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
           conquerorProfile: room.settings?.conquerorProfile || "resource",
           ownKingPlan: ai.simKingPlan === true, counterKingPlan: ai.simCounterPlan === true });
+    if (room.simMetrics && ai.simRationalSearch === true) {
+      const m=room.simMetrics;
+      m.rationalCalls=(m.rationalCalls||0)+1;
+      m.rationalNodes=(m.rationalNodes||0)+(chosen?.rationalNodes||0);
+      if(!chosen)m.rationalPasses=(m.rationalPasses||0)+1;
+      // A matched legacy decision identifies whether deeper search changes play.
+      const legacy=selectAttackChoice(publicActions,{
+        difficulty,self:ai,enemies:publicEnemies,battle,power,canAttack,effectiveDamage,
+        conquerorSearch:room.settings?.conquerorSearch!==false,
+        conquerorProfile:room.settings?.conquerorProfile||"resource"
+      });
+      if((chosen?.enemy?.id||null)!==(legacy?.enemy?.id||null)||
+         (chosen?.attackerId||null)!==(legacy?.attackerId||null)||
+         (chosen?.defenderId||null)!==(legacy?.defenderId||null)||
+         (chosen?.type||null)!==(legacy?.type||null))
+        m.rationalChanged=(m.rationalChanged||0)+1;
+    }
     if (!chosen || chosen.expectedScore < (difficulty === "conqueror" ? 5 : difficulty === "hard" ? 25 : difficulty === "easy" ? -15 : 5)) break;
     // Resolve exclusively through the authoritative server with a validated live ID.
     const liveEnemy = enemies.find(enemy => enemy.id === chosen.enemy.id);
@@ -2058,7 +2075,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
   const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
     kingDamage: 0, damageByKing: {}, spells: {}, spellsEffective: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
-    comebackUses: { assault: 0, defense: 0 } };
+    comebackUses: { assault: 0, defense: 0 }, rationalCalls:0,rationalPasses:0,rationalNodes:0,rationalChanged:0 };
   const turnsHistogram = { "0-9": 0, "10-19": 0, "20-39": 0, "40-79": 0, "80+": 0 };
   const turnSamples = includeTurnSamples ? [] : null;
   const violations = {};
@@ -2107,7 +2124,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       room.simProgress = { trailingPlayers: new Set(), criticalPlayers: new Set() };
       room.simMetrics = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0, kingDamage: 0,
         damageByKing: {}, spells: {}, spellsEffective: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
-        comebackUses: { assault: 0, defense: 0 } };
+        comebackUses: { assault: 0, defense: 0 }, rationalCalls:0,rationalPasses:0,rationalNodes:0,rationalChanged:0 };
       if(kingPair){
         room.simKingPair=kingPair;
         room.simChallengerSeat=n%playerCount;
@@ -2148,7 +2165,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       const bucket = turns < 10 ? "0-9" : turns < 20 ? "10-19" : turns < 40 ? "20-39" : turns < 80 ? "40-79" : "80+";
       turnsHistogram[bucket]++;
       const m = room.simMetrics;
-      for (const name of ["unitAttacks","mutualKills","failedTrades","kingAttacks","kingDamage","aiDeployments","mongolRecalls"]) telemetry[name] += m[name];
+      for (const name of ["unitAttacks","mutualKills","failedTrades","kingAttacks","kingDamage","aiDeployments","mongolRecalls","rationalCalls","rationalPasses","rationalNodes","rationalChanged"]) telemetry[name] += m[name]||0;
       for (const name of ["damageByKing","spells","spellsEffective","turnsByKing"]) {
         for (const [key, value] of Object.entries(m[name])) telemetry[name][key] = (telemetry[name][key] || 0) + value;
       }
