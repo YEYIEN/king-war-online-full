@@ -1912,7 +1912,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
-  const resultMetrics = { matchesWithTrailingPlayer: 0, completedMatchesWithTrailingPlayer: 0, actualComebackWins: 0, comebackWinsUsingLastStand: 0, comebackWinsWithoutLastStand: 0, playerTurnsObserved: 0, potentialComebackPlayers: 0 };
+  const resultMetrics = { matchesWithTrailingPlayer: 0, completedMatchesWithTrailingPlayer: 0, actualComebackWins: 0, comebackWinsUsingLastStand: 0, comebackWinsWithoutLastStand: 0, playerTurnsObserved: 0, potentialComebackPlayers: 0, completedMatchesWithCriticalPlayer: 0, criticalPlayerInstances: 0, criticalComebackWins: 0 };
   const unfinishedReasons = { turnLimit: 0, stalledAITurn: 0, unexpected: 0 };
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
   const telemetry = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0,
@@ -1963,7 +1963,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
           hp: 30, field: [], magic: [], hand: [], eliminated: false
         }))
       };
-      room.simProgress = { trailingPlayers: new Set() };
+      room.simProgress = { trailingPlayers: new Set(), criticalPlayers: new Set() };
       room.simMetrics = { unitAttacks: 0, mutualKills: 0, failedTrades: 0, kingAttacks: 0, kingDamage: 0,
         damageByKing: {}, spells: {}, turnsByKing: {}, aiDeployments: 0, mongolRecalls: 0,
         comebackUses: { assault: 0, defense: 0 } };
@@ -2003,6 +2003,9 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       const outcome = analyzeFinalOutcome(room, finalized ? survivors[0].id : null);
       if (outcome.trailingPlayers) resultMetrics.matchesWithTrailingPlayer++;
       resultMetrics.potentialComebackPlayers += outcome.trailingPlayers;
+      resultMetrics.criticalPlayerInstances += outcome.criticalPlayers;
+      if (finalized && outcome.criticalPlayers) resultMetrics.completedMatchesWithCriticalPlayer++;
+      if (outcome.criticalWin) resultMetrics.criticalComebackWins++;
       if (finalized && outcome.trailingPlayers) resultMetrics.completedMatchesWithTrailingPlayer++;
       if (outcome.comebackWin) resultMetrics.actualComebackWins++;
       if (outcome.comebackWin && outcome.comebackUserWin) resultMetrics.comebackWinsUsingLastStand++;
