@@ -29,7 +29,7 @@ export function decryptRoom(data,secret,code) {
  decipher.setAuthTag(data.subarray(12,28));
  const room=JSON.parse(Buffer.concat([decipher.update(data.subarray(28)),decipher.final()]).toString("utf8"));
  if(room.code!==code||room.status!=="playing"||!Array.isArray(room.players)||
-    room.players.length<2||room.players.length>5||!room.players.every(p=>p.id&&p.resumeToken&&Array.isArray(p.field)&&Array.isArray(p.hand)&&Array.isArray(p.magic)))
+    room.players.length<2||room.players.length>5||!room.players.every(p=>p.id&&(p.isAI||p.resumeToken)&&Array.isArray(p.field)&&Array.isArray(p.hand)&&Array.isArray(p.magic)))
   throw new Error("Recovery state failed validation");
  room.players.forEach(p=>{p.socketId=null;p.connected=false;});
  room.simProgress={trailingPlayers:new Set(),criticalPlayers:new Set()};
