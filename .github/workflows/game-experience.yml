@@ -182,3 +182,27 @@ jobs:
           DIFFICULTY: hard
           GENGHIS_THREAT: '1'
         run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol moderate threat weight 1
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '1'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol moderate threat weight 2
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '2'
+        run: node scripts/king-balance-baseline.mjs
+      - name: Five-player Mongol moderate threat weight 3
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '1200'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          GENGHIS_THREAT_WEIGHT: '3'
+        run: node scripts/king-balance-baseline.mjs
