@@ -20,7 +20,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 const allowedOrigins = (process.env.KW_ALLOWED_ORIGINS || "").split(",").map(x=>x.trim()).filter(Boolean);
-const io = new Server(server, { cors: { origin: allowedOrigins.length ? allowedOrigins : true } });
+const io = new Server(server, {
+  cors: { origin: allowedOrigins.length ? allowedOrigins : true },
+  allowRequest: (req,callback) => {
+    // WebSocket upgrades must be checked too; CORS alone is not an access control.
+    if (!allowedOrigins.length) return callback(null,true);
+    return callback(null, allowedOrigins.includes(req.headers.origin));
+  }
+});
 const rooms = new Map();
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
@@ -28,9 +35,10 @@ const disconnectGraceTimers = new Map();
 let matchmakingRoomCode = null;
 
 function cleanDisplayName(name) {
-  const raw = String(name ?? "").normalize("NFKC").trim();
+  const raw = (typeof name === "string" ? name : "")
+    .normalize("NFKC").replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069]/g,"").trim();
   const fallback = raw || `玩家${Math.floor(1000 + Math.random() * 9000)}`;
-  return Array.from(fallback).slice(0, 16).join("");
+  return Array.from(fallback).slice(0,16).join("");
 }
 
 function asId(value) {
