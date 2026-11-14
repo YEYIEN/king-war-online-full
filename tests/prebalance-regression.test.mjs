@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { simulateKingBaseline } from "../server/index.js";
+// Set simulation guard BEFORE importing server/index.js; otherwise tests start a live listener.
+process.env.KW_SIMULATION = "1";
+const { simulateKingBaseline } = await import("../server/index.js");
 
 const baseline={matches:18,seed:812081,playerCount:3,difficulty:"normal",maxTurns:180,comebackEnabled:true};
 function withoutVariableTime(r){
