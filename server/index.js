@@ -136,8 +136,11 @@ function startTurn(room, p) {
   clearOct(p);
 
   const hadEmptyFieldAtTurnStart = p.field.length === 0;
-  p.reinforcementAvailable = hadEmptyFieldAtTurnStart;
+  const rally = !!p.pendingDefenseRally;
+  p.reinforcementAvailable = hadEmptyFieldAtTurnStart || rally;
   p.reinforcementUsed = false;
+  p.pendingDefenseRally = false;
+  if (rally) room.log.push(`${p.name} 的固守反擊生效：本回合首張初級或中級部署兵種可立即行動。`);
 
   if (hadEmptyFieldAtTurnStart) {
     room.log.push(`${p.name} 場上沒有兵種，獲得急援：本回合第一張部署的初級或中級兵種可以立刻攻擊。`);
@@ -473,6 +476,7 @@ function useLastStand(room, player, mode = "assault") {
     player.reinforcementUsed = false;
   } else {
     drawUnits(room, player, 1);
+    if (room.settings?.defenseRallyEnabled === true) player.pendingDefenseRally = true;
   }
   room.lastStandCount = (room.lastStandCount || 0) + 1;
   if (!room.lastStandModes) room.lastStandModes = { assault: 0, defense: 0 };
@@ -517,6 +521,7 @@ function startGame(room) {
     p.lastStandUsed = false;
     p.lastStandMode = null;
     p.lastStandShield = 0;
+    p.pendingDefenseRally = false;
 
     drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5);
     if (p.king.name === "成吉思汗" && room.settings?.genghisGuaranteedCavalry !== false && !p.hand.some(c => c.type === "騎兵")) {
@@ -1905,7 +1910,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -1956,7 +1961,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, comebackPolicy, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
@@ -2033,7 +2038,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, comebackPolicy, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
     ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
