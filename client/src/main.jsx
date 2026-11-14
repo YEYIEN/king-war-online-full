@@ -159,6 +159,14 @@ function actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan }) {
     return { tone: "waiting", title: `等待 ${current?.name || "其他玩家"} 行動`, steps: ["現在不是你的回合。", "你可以觀察場上兵種、HP 與遊戲紀錄。"] };
   }
 
+  if (room.openingTruceActive) {
+    return { tone: "neutral", title: "戰前部署期：先建立防線", steps: [
+      "所有玩家先完成一回合部署；暫時不能攻擊或對敵方施放魔法。",
+      "請決定哪些兵種守護國王、哪些兵種準備第二回合進攻。",
+      "完成部署後按「結束回合」，全員部署後正式交戰。"
+    ] };
+  }
+
   if (magicPlan) {
     if (magicPlan.step === "caster") {
       return {
@@ -1441,6 +1449,15 @@ function App() {
                     onClick={() => updateRoomSettings({ comebackEnabled: false })}>關閉</button>
                 </div>
               </div>
+              <div className="settingBlock">
+                <span className="settingLabel">公平開局：全員先部署一回合（實驗規則）</span>
+                <div className="settingButtonGroup">
+                  <button type="button" className={room.settings?.openingTruceEnabled ? "settingChoice active" : "settingChoice"}
+                    onClick={() => updateRoomSettings({ openingTruceEnabled: true })}>開啟</button>
+                  <button type="button" className={!room.settings?.openingTruceEnabled ? "settingChoice active" : "settingChoice"}
+                    onClick={() => updateRoomSettings({ openingTruceEnabled: false })}>關閉（原規則）</button>
+                </div>
+              </div>
               <div className="aiControlRow">
                 <button
                   className="secondary"
@@ -1944,6 +1961,12 @@ function App() {
         </section>
       )}
 
+      {room.openingTruceActive && (
+        <section className="guidedLesson">
+          <h2>戰前部署期間</h2>
+          <p>所有玩家先完成一次布陣；本輪禁止攻擊及對敵方使用魔法。請先決定自己的兵種防線。</p>
+        </section>
+      )}
       {room?.tutorial && <GuidedTutorialCoach key={room.roomCode} progress={room.tutorialProgress || 0} onExit={returnToMainMenu} />}
 
       {attackFeedback && (
