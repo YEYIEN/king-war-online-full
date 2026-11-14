@@ -19,7 +19,7 @@ export function publicOpponentForAI(player) {
 export const AI_PROFILES = Object.freeze({
   easy: { aim: "Learn turn flow: deploy, see combat, end turn", risk: "visible", searchDepth: 0 },
   normal: { aim: "Recognize when buffs, counters and trades matter", risk: "tactical", searchDepth: 0 },
-  hard: { aim: "Plan a full tactical sequence and protect resources", risk: "strategic", searchDepth: 1 },
+  hard: { aim: "Use tactical heuristics to protect resources and plan attacks", risk: "strategic", searchDepth: 0 },
   conqueror: { aim: "Maximize winning chances using bounded tactical continuation search", risk: "minimax-proxy", searchDepth: 2 }
 });
 
@@ -77,9 +77,9 @@ export function selectDeployChoice(scored, difficulty, random = Math.random) {
 }
 
 /**
- * Bounded two-action lookahead. It is NOT an exact game-tree solver:
+ * Bounded three-attack lookahead in two-player matches. It is NOT an exact game-tree solver:
  * archers, spell effects and opponent hidden hands are evaluated by the live
- * engine after selection. Models visible board trades and one enemy response.
+ * engine after selection. Models visible board trades, not a real enemy turn.
  */
 function scoreTacticalMove(move, state, { battle, power, effectiveDamage, conquerorProfile = "resource" }) {
   const unit = state.own.find(x=>x.id===move.attackerId);
