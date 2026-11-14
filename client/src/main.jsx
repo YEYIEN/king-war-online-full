@@ -1234,7 +1234,8 @@ function App() {
   }
 
   function returnHomeFromResult() {
-    // CLIENT_RETURN_HOME_CLEAR_SESSION_FINAL_V1
+    // Let the server release this participant when leaving the finished result screen.
+    requestNow("room:leave", {}, () => {});
     clearSavedSession();
     setRoom(null);
     setPlayerId(null);
