@@ -43,7 +43,7 @@ async function withRoom(t, size, fn) {
     assert.equal((await request(socket,"room:toggleReady")).ok,true);
   }
   const byId=new Map(members.map(m=>[m.playerId,m]));
-  const view=async()=>{const m=members[0];return (await request(m.socket,"room:resume",{
+  const view=async(playerId=members[0].playerId)=>{const m=byId.get(playerId);return (await request(m.socket,"room:resume",{
     roomCode:created.room.roomCode,playerId:m.playerId,resumeToken:m.resumeToken
   })).room;};
   await fn({members,byId,view,created});
@@ -84,7 +84,8 @@ test("Mongol recall never overflows hand after many full round passes", {timeout
       const current=byId.get(room.currentPlayerId);
       assert.ok(current,"playing current seat is active");
       if(current.playerId===mongol.id){
-        const me=room.players.find(p=>p.id===mongol.id);
+        const privateRoom=await view(mongol.id);
+        const me=privateRoom.players.find(p=>p.id===mongol.id);
         if(!deployedId){
           const troop=me.hand.find(u=>u.type!=="騎兵"&&u.rank!=="高級") || me.hand.find(u=>u.type!=="騎兵") || me.hand[0];
           assert.ok(troop);
@@ -98,7 +99,7 @@ test("Mongol recall never overflows hand after many full round passes", {timeout
           assert.equal((await request(current.socket,"game:deploy",{cardId:freeSlotCard.id})).ok,true);
           const out=await request(current.socket,"game:recall",{unitId:deployedId});
           assert.equal(out.ok,true,JSON.stringify(out));
-          const after=await view();
+          const after=await view(mongol.id);
           const returned=after.players.find(p=>p.id===mongol.id);
           assert.ok(returned.hand.length<=7,"recall must respect hand cap even without bonus draw");
           assert.deepEqual(returned.hand.find(u=>u.id===deployedId)?.status,[],"returned card has no stale status");
