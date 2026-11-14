@@ -64,3 +64,12 @@ jobs:
           LOUIS_BONUS: '1'
           COMEBACK: '1'
         run: node scripts/king-balance-baseline.mjs
+      - name: Five-player hard AI with fair opening round
+        env:
+          KW_SIMULATION: '1'
+          MATCHES: '500'
+          PLAYERS: '5'
+          DIFFICULTY: hard
+          LOUIS_BONUS: '1'
+          OPENING_TRUCE: '1'
+        run: node scripts/king-balance-baseline.mjs
