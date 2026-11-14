@@ -46,6 +46,82 @@ export function scoreArchetypeDeployment(card,self,opponent,style="balanced") {
   return opponent?.field?.some(unit=>unit.type===card.counterTarget) ? 34 : 0;
 }
 
+/** Research policy: personalize planning to the AI's OWN king.
+ * Inputs are own allowed cards and the opponents' visible board only.
+ * Never change legal moves, draws, king abilities or turn rules.
+ */
+export function scoreKingPlanDeployment(card, self, enemy, difficulty="hard") {
+  if(!["hard","conqueror"].includes(difficulty))return 0;
+  const king=self.king?.name;
+  const guards=self.field.filter(u=>u.type==="步兵").length;
+  const mages=self.field.filter(u=>u.type==="法師").length;
+  const attackers=self.field.filter(u=>canAttackVisible(u)).length;
+  switch(king){
+    case "亞歷山大大帝":
+      // A reliable winning trade converts into another unit card.
+      return enemy?.field?.some(u=>u.type===card.counterTarget) ? 16 :
+        card.type==="騎兵" && enemy?.field?.some(u=>u.type==="步兵") ? 18 : 0;
+    case "屋大維奧古斯都":
+      // Keep survivable board presence to receive next opponent-turn buff.
+      return card.type==="步兵" && guards===0 ? 24 :
+        card.rank==="高級" && guards>0 ? 10 : 0;
+    case "成吉思汗":
+      // Mobility matters only if recall can still create meaningful advantage.
+      return card.type==="騎兵" && (self.recallDrawCount||0)<2 && self.hand.length<=5 ? 22 : 0;
+    case "秦始皇":
+      // The extra draw is useful when cards can be converted to field presence.
+      return self.hand.length>=6 && card.rank!=="高級" ? 18 :
+        self.hand.length>=7 && card.type==="步兵" && guards===0 ? 22 : 0;
+    case "路易十四":
+      // A surviving mage produces spells even with no spell yet in hand.
+      return card.type==="法師" && mages===0 ? (guards>0?34:24) :
+        card.type==="步兵" && guards===0 && mages>0 ? 24 :
+        card.type==="法師" && mages>0 && attackers===0 ? 9 : 0;
+    default:return 0;
+  }
+}
+
+/** Research policy: Conqueror identifies threats in the ENEMY king's public
+ * ability without guessing unrevealed cards or hidden deck order.
+ */
+export function counterKingThreat(enemy, self=null) {
+  const king=enemy?.king?.name;
+  const field=enemy?.field||[];
+  const guards=field.filter(u=>u.type==="步兵").length;
+  const mages=field.filter(u=>u.type==="法師").length;
+  const cavalry=field.filter(u=>u.type==="騎兵").length;
+  switch(king){
+    case "亞歷山大大帝":
+      return field.reduce((sum,u)=>sum+(canAttackVisible(u)?4:1),0);
+    case "屋大維奧古斯都":
+      return field.length*2+(guards?6:0);
+    case "成吉思汗":
+      return cavalry*7+Math.min(4,field.length)*2;
+    case "秦始皇":
+      return field.length<3 ? 10 : 3;
+    case "路易十四":
+      return mages*12+(mages && enemy.magicCount>0?Math.min(enemy.magicCount,3)*5:0);
+    default:return 0;
+  }
+}
+
+/** Counterplay prefers denying the visible engine, not attacking a king name
+ * irrespective of its battlefield. Intended only for Conqueror research A/B.
+ */
+export function scoreKingCounterAttack({enemy,defender,attacker}) {
+  if(!enemy||!attacker)return 0;
+  if(defender){
+    if(enemy.king?.name==="路易十四" && defender.type==="法師")return 28+(enemy.magicCount>0?12:0);
+    if(enemy.king?.name==="成吉思汗" && defender.type==="騎兵")return 20;
+    if(enemy.king?.name==="亞歷山大大帝" && canAttackVisible(defender))return 8;
+    if(enemy.king?.name==="屋大維奧古斯都" && defender.type==="步兵")return 9;
+    return 0;
+  }
+  if(enemy.king?.name==="秦始皇" && enemy.field.length<3)return 15;
+  if(enemy.king?.name==="路易十四" && enemy.field.every(u=>u.type!=="步兵"))return 8;
+  return 0;
+}
+
 export const AI_PROFILES = Object.freeze({
   easy: { aim: "Learn turn flow: deploy, see combat, end turn", risk: "visible", searchDepth: 0 },
   normal: { aim: "Recognize when buffs, counters and trades matter", risk: "tactical", searchDepth: 0 },
