@@ -44,7 +44,7 @@ const COUNTER = { 步兵: "弓兵", 弓兵: "法師", 法師: "騎兵", 騎兵: 
 const RANK_VALUE = { 初級: 1, 中級: 2, 高級: 3 };
 const DAMAGE = { 初級: 1, 中級: 3, 高級: 5 };
 const AI_DIFFICULTIES = ["easy", "normal", "hard", "conqueror"];
-function getAIDifficulty(room) { return AI_DIFFICULTIES.includes(room?.settings?.aiDifficulty) ? room.settings.aiDifficulty : "normal"; }
+function getAIDifficulty(room, player) { const value = player?.aiDifficulty ?? room?.settings?.aiDifficulty; return AI_DIFFICULTIES.includes(value) ? value : "normal"; }
 const MAGIC_LEVEL_RANK = { 初級魔法: "初級", 中級魔法: "中級", 高級魔法: "高級" };
 
 const KINGS = [
@@ -617,7 +617,7 @@ function aiDeployScore(card, ai, enemy) {
 }
 
 function aiDeployUnits(room, ai, enemy) {
-  const difficulty = getAIDifficulty(room);
+  const difficulty = getAIDifficulty(room, ai);
   let deployLimit = difficulty === "easy" ? 1 : (difficulty === "hard" || difficulty === "conqueror") ? (ai.field.length <= 2 ? 3 : 2) : (ai.field.length <= 2 ? 2 : 1);
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
@@ -691,7 +691,7 @@ function aiAttackScore(attacker, enemy, defender) {
 function aiSelectEnemy(room, ai) {
   const enemies = room.players.filter(p => p.id !== ai.id && !p.eliminated);
   if (!enemies.length) return null;
-  const difficulty = getAIDifficulty(room);
+  const difficulty = getAIDifficulty(room, ai);
   if (difficulty === "easy") return enemies[Math.floor(Math.random() * enemies.length)];
   if (difficulty === "normal" && room.players.length === 2) return enemies[0];
   const threat = p =>
@@ -705,7 +705,7 @@ function aiSelectEnemy(room, ai) {
 
 function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
   const basic = aiAttackScore(attacker, enemy, defender);
-  const difficulty = getAIDifficulty(room);
+  const difficulty = getAIDifficulty(room, ai);
   if (difficulty === "easy" || (difficulty === "normal" && room.players.length === 2)) return basic;
   // In free-for-all games, pressuring the strongest remaining army is generally
   // more useful than finishing an already-weak opponent just because it is weak.
@@ -758,7 +758,7 @@ function returnUnitToHand(room, player, unitId) {
 
 function aiUseKingAbility(room, ai) {
   if (ai.king?.name !== "成吉思汗" || ai.recallUsed || ai.hand.length >= maxHand(ai)) return false;
-  const difficulty = getAIDifficulty(room);
+  const difficulty = getAIDifficulty(room, ai);
   if (difficulty === "easy" && Math.random() > 0.25) return false;
   const candidates = ai.field.filter(u => u.type === "騎兵" && u.tapped);
   if (!candidates.length) return false;
@@ -857,7 +857,7 @@ function aiResolveAttackKing(room, ai, enemy, attackerId) {
 
 async function aiAttackPhase(room, ai, preferredEnemy) {
   if (openingTruce(room)) return;
-  const difficulty = getAIDifficulty(room);
+  const difficulty = getAIDifficulty(room, ai);
   let safety = 0;
   while (safety++ < 10 && room.status === "playing") {
     const attackers = ai.field.filter(u => aiCanAttack(u));
@@ -990,7 +990,7 @@ function aiChooseMagic(room, ai, enemy) {
   const mages = ai.field.filter(unit => unit.type === "法師" && canAttack(unit));
   if (!mages.length || !ai.magic.length) return false;
 
-  const strategicMagic = ["normal", "hard", "conqueror"].includes(getAIDifficulty(room)) && room.settings?.aiMagicStrategy !== false;
+  const strategicMagic = ["normal", "hard", "conqueror"].includes(getAIDifficulty(room, ai)) && room.settings?.aiMagicStrategy !== false;
   const spells = [...ai.magic];
   if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, enemy) - aiMagicCardValue(a, ai, enemy));
   for (const magic of spells) {
@@ -1102,8 +1102,8 @@ async function performAITurn(roomCode) {
   await sleep(1400);
   if (!isStillAITurn(room, ai)) return;
 
-  if (getAIDifficulty(room) !== "easy" && canUseLastStand(room, ai) &&
-      (["hard", "conqueror"].includes(getAIDifficulty(room)) || ai.hand.length < 3)) {
+  if (getAIDifficulty(room, ai) !== "easy" && canUseLastStand(room, ai) &&
+      (["hard", "conqueror"].includes(getAIDifficulty(room, ai)) || ai.hand.length < 3)) {
     const policy = room.settings?.comebackPolicy || "situational";
     const oldMode = ai.hp <= 8 && (ai.field.length >= 1 || ai.hand.length >= 3) ? "defense" : "assault";
     const enemyAttack = room.players.filter(p => p.id !== ai.id && !p.eliminated).reduce((best,p) =>
@@ -1131,7 +1131,7 @@ async function performAITurn(roomCode) {
   if (!isStillAITurn(room, ai)) return;
 
   let usedMagic = aiChooseMagic(room, ai, enemy);
-  if (["hard", "conqueror"].includes(getAIDifficulty(room)) && isStillAITurn(room, ai)) {
+  if (["hard", "conqueror"].includes(getAIDifficulty(room, ai)) && isStillAITurn(room, ai)) {
     let casts = 0;
     while (casts++ < 2 && aiSelectEnemy(room, ai) && aiChooseMagic(room, ai, aiSelectEnemy(room, ai))) usedMagic = true;
   }
@@ -1910,13 +1910,16 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
+  if (challenger !== null && !AI_DIFFICULTIES.includes(challenger)) throw new Error("invalid challenger difficulty");
+  if (!AI_DIFFICULTIES.includes(difficulty)) throw new Error("invalid baseline difficulty");
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
+  const challengerStats = { matches: 0, wins: 0, unfinished: 0, winsBySeat: {}, gamesBySeat: {}, winsByKing: {}, gamesByKing: {} };
   const resultMetrics = { matchesWithTrailingPlayer: 0, completedMatchesWithTrailingPlayer: 0, actualComebackWins: 0, comebackWinsUsingLastStand: 0, comebackWinsWithoutLastStand: 0, playerTurnsObserved: 0, potentialComebackPlayers: 0, completedMatchesWithCriticalPlayer: 0, criticalPlayerInstances: 0, criticalComebackWins: 0 };
   const unfinishedReasons = { turnLimit: 0, stalledAITurn: 0, unexpected: 0 };
   const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
@@ -1976,6 +1979,14 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       startGame(room);
       checkInvariants(room);
       const seatIndex = Object.fromEntries(room.players.map((p, i) => [p.id, i + 1]));
+      const challengerPlayer = challenger ? room.players[n % playerCount] : null;
+      if (challengerPlayer) {
+        challengerPlayer.aiDifficulty = challenger;
+        challengerStats.matches++;
+        const seat = String(seatIndex[challengerPlayer.id]);
+        challengerStats.gamesBySeat[seat] = (challengerStats.gamesBySeat[seat] || 0) + 1;
+        challengerStats.gamesByKing[challengerPlayer.king.name] = (challengerStats.gamesByKing[challengerPlayer.king.name] || 0) + 1;
+      }
       for (const p of room.players) { counts[p.king.name].games++; seats[seatIndex[p.id]].games++; }
       let turns = 0;
       let stalled = false;
@@ -2019,12 +2030,19 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
         const winner = survivors[0];
         counts[winner.king.name].wins++;
         seats[seatIndex[winner.id]].wins++;
+        if (challengerPlayer && winner.id === challengerPlayer.id) {
+          challengerStats.wins++;
+          const seat = String(seatIndex[winner.id]);
+          challengerStats.winsBySeat[seat] = (challengerStats.winsBySeat[seat] || 0) + 1;
+          challengerStats.winsByKing[winner.king.name] = (challengerStats.winsByKing[winner.king.name] || 0) + 1;
+        }
         if (winner.lastStandUsed) {
           comebackWins++;
           if (winner.lastStandMode in comebackWinsByMode) comebackWinsByMode[winner.lastStandMode]++;
         }
       } else {
         unfinished++;
+        if (challengerPlayer) challengerStats.unfinished++;
         if (stalled) unfinishedReasons.stalledAITurn++;
         else if (turns >= maxTurns) unfinishedReasons.turnLimit++;
         else unfinishedReasons.unexpected++;
@@ -2038,7 +2056,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   }
   return {
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
-    seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
+    seed, matches, playerCount, maxTurns, difficulty, challenger, challengerStats, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, unfinishedReasons, averageTurns: +(totalTurns / matches).toFixed(1),
     comebackGames, comebackWins, comebackUse, comebackWinsByMode, resultMetrics, telemetry, turnsHistogram,
     ...(turnSamples ? { turnSamples } : {}), invariantViolations: violations,
