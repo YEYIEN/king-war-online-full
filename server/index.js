@@ -1051,7 +1051,7 @@ function aiChooseMagic(room, ai, enemy) {
   const spells = [...ai.magic];
   const opponents = room.players.filter(p=>p.id!==ai.id && !p.eliminated && p.hp>0);
   function bestSpellEnemy(magic) {
-    if (!strategicMagic || room.settings?.aiMagicTargeting === false || magic.target === "我方") return enemy;
+    if (!strategicMagic || room.settings?.aiMagicTargeting !== true || magic.target === "我方") return enemy;
     return [...opponents].sort((a,b)=>aiMagicCardValue(magic,ai,b)-aiMagicCardValue(magic,ai,a))[0] || enemy;
   }
   if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, bestSpellEnemy(b)) - aiMagicCardValue(a, ai, bestSpellEnemy(a)));
@@ -2024,7 +2024,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = true, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
