@@ -457,18 +457,27 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
   return true;
 }
 
-function useLastStand(room, player) {
+function useLastStand(room, player, mode = "assault") {
   if (!canUseLastStand(room, player)) return { ok: false, error: "目前尚未符合背水一戰條件，或已經使用過。" };
+  if (!["assault", "defense"].includes(mode)) return { ok: false, error: "不支援的背水一戰策略。" };
   player.lastStandUsed = true;
+  player.lastStandMode = mode;
   player.hp -= 2;
-  player.lastStandShield = room.settings?.lastStandShieldEnabled === false ? 0 : 3;
-  drawUnits(room, player, 2);
-  // Grant a single emergency activation for the next non-high-rank deployment.
-  player.reinforcementAvailable = true;
-  player.reinforcementUsed = false;
+  player.lastStandShield = room.settings?.lastStandShieldEnabled === false ? 0 : (mode === "defense" ? 7 : 3);
+  if (mode === "assault") {
+    drawUnits(room, player, 2);
+    player.reinforcementAvailable = true;
+    player.reinforcementUsed = false;
+  } else {
+    drawUnits(room, player, 1);
+  }
   room.lastStandCount = (room.lastStandCount || 0) + 1;
-  room.log.push(`${player.name} 發動背水一戰：失去2HP、抽2張兵種，緊急部署一次${player.lastStandShield ? "，下次自己回合前可抵擋最多3點國王傷害" : ""}。`);
-  return { ok: true };
+  if (!room.lastStandModes) room.lastStandModes = { assault: 0, defense: 0 };
+  room.lastStandModes[mode]++;
+  room.log.push(mode === "assault"
+    ? `${player.name} 選擇突圍：失去2HP、抽2兵種、獲得一次緊急部署，並獲得3點護盾。`
+    : `${player.name} 選擇固守：失去2HP、抽1兵種、獲得7點護盾，保留資源等待下回合。`);
+  return { ok: true, mode };
 }
 
 function startGame(room) {
@@ -502,6 +511,7 @@ function startGame(room) {
     p.recallDrawCount = 0;
     p.fieldBonus = 0;
     p.lastStandUsed = false;
+    p.lastStandMode = null;
     p.lastStandShield = 0;
 
     drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5);
@@ -1028,7 +1038,7 @@ async function performAITurn(roomCode) {
 
   if (getAIDifficulty(room) !== "easy" && canUseLastStand(room, ai) &&
       (getAIDifficulty(room) === "hard" || ai.hand.length < 3)) {
-    useLastStand(room, ai);
+    useLastStand(room, ai, ai.hp <= 8 && (ai.field.length >= 1 || ai.hand.length >= 3) ? "defense" : "assault");
     broadcast(room);
   }
   const beforeDeployCount = ai.field.length;
@@ -1661,12 +1671,12 @@ io.on("connection", socket => {
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
 
-  socket.on("game:lastStand", (_, reply) => {
+  socket.on("game:lastStand", ({ mode = "assault" } = {}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
     if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
-    const result = useLastStand(room, player);
+    const result = useLastStand(room, player, mode);
     reply?.(result);
     if (result.ok) broadcast(room);
   });
@@ -1823,6 +1833,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
   const counts = Object.fromEntries(KINGS.map(k => [k.name, { games: 0, wins: 0, unfinished: 0 }]));
   const seats = Object.fromEntries(Array.from({ length: playerCount }, (_, n) => [n + 1, { games: 0, wins: 0 }]));
   let unfinished = 0, totalTurns = 0, comebackGames = 0, comebackWins = 0;
+  const comebackUse = { assault: 0, defense: 0 }, comebackWinsByMode = { assault: 0, defense: 0 };
   const originalRandom = Math.random;
   let state = seed >>> 0 || 1;
   Math.random = () => {
@@ -1861,12 +1872,16 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       }
       totalTurns += turns;
       if (room.lastStandCount > 0) comebackGames++;
+      for (const [mode, count] of Object.entries(room.lastStandModes || {})) comebackUse[mode] += count;
       const survivors = alive(room);
       if (room.status === "ended" && survivors.length === 1) {
         const winner = survivors[0];
         counts[winner.king.name].wins++;
         seats[seatIndex[winner.id]].wins++;
-        if (winner.lastStandUsed) comebackWins++;
+        if (winner.lastStandUsed) {
+          comebackWins++;
+          if (winner.lastStandMode in comebackWinsByMode) comebackWinsByMode[winner.lastStandMode]++;
+        }
       } else {
         unfinished++;
         for (const p of room.players) counts[p.king.name].unfinished++;
@@ -1881,7 +1896,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
     methodology: "actual server rules and chosen AI policy; randomly assigned kings/seats; unfinished games count as no win",
     seed, matches, playerCount, maxTurns, difficulty, louisBonus, louisFreeAction, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled,
     finished: matches - unfinished, unfinished, averageTurns: +(totalTurns / matches).toFixed(1),
-    comebackGames, comebackWins,
+    comebackGames, comebackWins, comebackUse, comebackWinsByMode,
     kings: Object.fromEntries(Object.entries(counts).map(([name, count]) =>
       [name, { ...count, winRate: count.games ? +(100 * count.wins / count.games).toFixed(2) : 0 }])),
     seats: Object.fromEntries(Object.entries(seats).map(([seat, count]) =>
