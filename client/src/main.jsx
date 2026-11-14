@@ -1449,15 +1449,6 @@ function App() {
                     onClick={() => updateRoomSettings({ comebackEnabled: false })}>關閉</button>
                 </div>
               </div>
-              <div className="settingBlock">
-                <span className="settingLabel">公平開局：全員先部署一回合（實驗規則）</span>
-                <div className="settingButtonGroup">
-                  <button type="button" className={room.settings?.openingTruceEnabled ? "settingChoice active" : "settingChoice"}
-                    onClick={() => updateRoomSettings({ openingTruceEnabled: true })}>開啟</button>
-                  <button type="button" className={!room.settings?.openingTruceEnabled ? "settingChoice active" : "settingChoice"}
-                    onClick={() => updateRoomSettings({ openingTruceEnabled: false })}>關閉（原規則）</button>
-                </div>
-              </div>
               <div className="aiControlRow">
                 <button
                   className="secondary"
