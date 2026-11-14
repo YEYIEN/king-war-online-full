@@ -29,6 +29,23 @@ export function scorePublicEnemyThreat(player,{playerCount,difficulty,genghisThr
       ? Math.max(0,Number(genghisThreatWeight))*2 : 0);
 }
 
+/** Research-only strategy opponents. No altered cards, HP, draws or hidden information. */
+export const STRATEGY_ARCHETYPES = Object.freeze([
+  "balanced","rush","fortress","arcane","economy","counter"
+]);
+
+export function scoreArchetypeDeployment(card,self,opponent,style="balanced") {
+  if(!STRATEGY_ARCHETYPES.includes(style))throw new Error("unknown strategy style");
+  if(style==="balanced")return 0;
+  if(style==="rush")return card.type==="騎兵" ? 32 : card.rank==="高級" ? -8 : 0;
+  if(style==="fortress")return card.type==="步兵"
+    ? (self.field.some(u=>u.type==="步兵")?12:36) : 0;
+  if(style==="arcane")return card.type==="法師"
+    ? (self.field.some(u=>u.type==="法師")?10:42) : 0;
+  if(style==="economy")return card.rank==="高級" ? 30 : card.rank==="中級" ? 12 : 0;
+  return opponent?.field?.some(unit=>unit.type===card.counterTarget) ? 34 : 0;
+}
+
 export const AI_PROFILES = Object.freeze({
   easy: { aim: "Learn turn flow: deploy, see combat, end turn", risk: "visible", searchDepth: 0 },
   normal: { aim: "Recognize when buffs, counters and trades matter", risk: "tactical", searchDepth: 0 },
