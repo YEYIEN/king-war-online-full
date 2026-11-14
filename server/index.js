@@ -377,6 +377,7 @@ function finishTurn(room, player, reason = "結束回合") {
   clearEndTurnControl(player);
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
+  if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
   room.turnsCompleted = (room.turnsCompleted || 0) + 1;
   if (room.turnsCompleted === room.players.length && room.settings?.openingTruceEnabled) room.log.push("戰前部署結束：現在可以正式開始交戰。");
   trimHand(room, player);
@@ -474,6 +475,7 @@ function useLastStand(room, player, mode = "assault") {
   room.lastStandCount = (room.lastStandCount || 0) + 1;
   if (!room.lastStandModes) room.lastStandModes = { assault: 0, defense: 0 };
   room.lastStandModes[mode]++;
+  if (room.simMetrics) room.simMetrics.comebackUses[mode]++;
   room.log.push(mode === "assault"
     ? `${player.name} 選擇突圍：失去2HP、抽2兵種、獲得一次緊急部署，並獲得3點護盾。`
     : `${player.name} 選擇固守：失去2HP、抽1兵種、獲得7點護盾，保留資源等待下回合。`);
@@ -758,6 +760,11 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
   const attackerPower = power(attacker);
   const defenderPower = power(defender);
   const result = battle(attacker, defender);
+  if (room.simMetrics) {
+    room.simMetrics.unitAttacks++;
+    if (result === "both") room.simMetrics.mutualKills++;
+    if (result === "defender") room.simMetrics.failedTrades++;
+  }
   attacker.tapped = true;
 
   const archerSaved = attacker.type === "弓兵" && defenderPower >= attackerPower;
@@ -800,6 +807,11 @@ function resolveAttackKing(room, attackerPlayer, defenderPlayer, attackerId) {
 
   const damage = mitigateKingDamage(defenderPlayer, effectiveDamage(attacker));
   defenderPlayer.hp -= damage;
+  if (room.simMetrics) {
+    room.simMetrics.kingAttacks++;
+    room.simMetrics.kingDamage += damage;
+    room.simMetrics.damageByKing[attackerPlayer.king.name] = (room.simMetrics.damageByKing[attackerPlayer.king.name] || 0) + damage;
+  }
   attacker.tapped = true;
   room.log.push(`${attackerPlayer.name} 用 ${attacker.name} 攻擊 ${defenderPlayer.name} 國王，造成${damage}傷害。`);
 
@@ -891,6 +903,7 @@ function resolveMagic(room, player, { magicId, casterId, targetPlayerId, targetU
     }
   }
 
+  if (room.simMetrics) room.simMetrics.spells[magic.name] = (room.simMetrics.spells[magic.name] || 0) + 1;
   player.magic.splice(index, 1);
   room.magicDeck.push(magic);
   caster.tapped = true;
@@ -1073,6 +1086,7 @@ async function performAITurn(roomCode) {
   }
   const beforeDeployCount = ai.field.length;
   aiDeployUnits(room, ai, enemy);
+  if (room.simMetrics) room.simMetrics.aiDeployments += Math.max(0, ai.field.length - beforeDeployCount);
   if (ai.field.length !== beforeDeployCount) {
     broadcast(room);
     await sleep(2100);
@@ -1108,7 +1122,10 @@ async function performAITurn(roomCode) {
 
   if (!isStillAITurn(room, ai)) return;
 
-  if (aiUseKingAbility(room, ai)) broadcast(room);
+  if (aiUseKingAbility(room, ai)) {
+    if (room.simMetrics) room.simMetrics.mongolRecalls++;
+    broadcast(room);
+  }
   room.log.push(`${ai.name} 準備結束回合。`);
   broadcast(room);
   await sleep(1600);
