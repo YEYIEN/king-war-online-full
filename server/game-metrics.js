@@ -7,7 +7,7 @@ import { dirname, resolve } from "node:path";
  * Records are emitted once after a real completed match.
  */
 export const METRICS_SCHEMA_VERSION = 1;
-const NONNEGATIVE = new Set(["deploy","unitAttack","unitKill","unitTrade","kingAttack","kingDamage","spellCast","spellImpact","recall","lastStand"]);
+const NONNEGATIVE = new Set(["deploy","unitAttack","unitKill","unitTrade","kingAttack","kingDamage","spellCast","spellImpact","recall","lastStand","quietCombatTurn"]);
 const ALLOWED_MODES = new Set(["assault","defense"]);
 
 export function createMatchMetrics(room, now = Date.now()) {
@@ -36,9 +36,19 @@ export function incrementMatchMetric(room, event, amount = 1, extra = {}) {
   }
 }
 
-export function recordTurnDuration(room, ms, { ai = false } = {}) {
+export function beginTurnMetrics(room, playerId) {
+ const m=room?.matchMetrics;if(!m)return;
+ m.progressStart={playerId,kills:m.events.unitKill,damage:m.events.kingDamage};
+}
+export function recordTurnDuration(room, ms, { ai = false, playerId = null } = {}) {
   const m = room?.matchMetrics;
   if (!m || !Number.isFinite(ms) || ms < 0) return;
+  if (playerId && m.progressStart?.playerId === playerId) {
+    if (m.events.unitKill === m.progressStart.kills &&
+        m.events.kingDamage === m.progressStart.damage)
+      incrementMatchMetric(room,"quietCombatTurn",1,{playerId});
+    m.progressStart=null;
+  }
   m.turnsCompleted++;
   m.turnDurationsMs.push(Math.min(ms, 3600000));
   (ai ? m.turnDurationsAiMs : m.turnDurationsHumanMs).push(Math.min(ms,3600000));
