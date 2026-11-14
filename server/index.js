@@ -727,6 +727,7 @@ function aiStrategicAttackScore(room, ai, attacker, enemy, defender) {
 function returnUnitToHand(room, player, unitId) {
   if (player.king?.name !== "成吉思汗") return { ok: false, error: "只有成吉思汗可以撤回。" };
   if (player.recallUsed) return { ok: false, error: "本回合已撤回。" };
+  if (player.hand.length >= maxHand(player)) return { ok: false, error: "手牌已滿，請先部署兵種再撤回，避免遺失卡牌。" };
   const index = player.field.findIndex(unit => unit.id === unitId);
   if (index < 0) return { ok: false, error: "找不到兵種。" };
   const [unit] = player.field.splice(index, 1);
