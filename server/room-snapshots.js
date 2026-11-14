@@ -22,7 +22,9 @@ function filename(directory,code) {
 function serializeRoom(room) {
  const out={...room};
  delete out.simMetrics;
- delete out.simProgress;
+ out.simProgress=room.simProgress?{
+   trailingPlayers:[...(room.simProgress.trailingPlayers||[])],
+   criticalPlayers:[...(room.simProgress.criticalPlayers||[])]}:null;
  // Do not serialize ephemeral server socket/timeout object state.
  return {schema:SCHEMA,savedAt:Date.now(),room:out};
 }
@@ -46,6 +48,11 @@ export function decryptRoom(contents,key) {
     !["lobby","playing","ended"].includes(decoded.room.status) ||
     decoded.room.players.length<1 || decoded.room.players.length>5)
    throw new Error("Invalid room snapshot");
+ if(decoded.room.simProgress){
+   decoded.room.simProgress={
+     trailingPlayers:new Set(decoded.room.simProgress.trailingPlayers||[]),
+     criticalPlayers:new Set(decoded.room.simProgress.criticalPlayers||[])};
+ }
  return decoded.room;
 }
 function enqueue(task) {
