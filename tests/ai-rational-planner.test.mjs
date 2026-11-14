@@ -39,7 +39,7 @@ test("search leaves all input state intact and respects bounded search nodes",()
  ];
  const actions=eligible(self,enemies);
  const before=JSON.stringify({self,enemies,actions});
- const chosen=chooseRationalAttack(actions,{self,enemies,maxNodes:120,ownDepth:4,rootWidth:20});
+ const chosen=chooseRationalAttack(actions,{self,enemies,maxNodes:120,ownDepth:4,rootWidth:20,turnOrder:["me","p2","p3","p4"]});
  assert.equal(JSON.stringify({self,enemies,actions}),before);
  assert.ok(chosen===null||actions.some(a=>a.type===chosen.type&&a.attackerId===chosen.attackerId&&a.enemy.id===chosen.enemy.id));
  assert.ok((chosen?.rationalNodes??0)<=120);
@@ -58,4 +58,16 @@ test("no legal attacks are passed rather than fabricated",()=>{
  const self=p("me","路易十四",[u("guard","步兵","初級",{status:["疲乏"]})],20);
  const enemy=p("other","秦始皇",[],20);
  assert.equal(chooseRationalAttack([], {self,enemies:[enemy]}),null);
+});
+
+test("seat-order rollout works even when the immediate next rival is already eliminated",()=>{
+ const self=p("me","秦始皇",[u("attacker","騎兵","高級")],12);
+ const enemies=[
+  {...p("p2","亞歷山大大帝",[],0),eliminated:true},
+  p("p3","成吉思汗",[u("horse","騎兵","中級")],7),
+  p("p4","路易十四",[],5)
+ ];
+ const candidates=eligible(self,enemies);
+ const move=chooseRationalAttack(candidates,{self,enemies,turnOrder:["p3","me","p2","p4"],maxNodes:260});
+ assert.ok(move===null||candidates.some(x=>x.enemy.id===move.enemy.id&&x.attackerId===move.attackerId));
 });
