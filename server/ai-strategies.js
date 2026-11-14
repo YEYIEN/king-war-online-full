@@ -1,3 +1,5 @@
+import {canAttack as canAttackVisible, effectiveDamage as effectiveVisibleDamage} from "./combat-primitives.js";
+
 /**
  * Distinct AI curricula and a bounded search-based research challenger.
  * All policies operate on public board state and the AI's own hand only.
@@ -24,13 +26,6 @@ export function scorePublicEnemyThreat(player,{playerCount,difficulty,genghisThr
     player.field.filter(unit=>unit.type==="步兵").length*4 +
     (playerCount>=3 && difficulty==="hard" && player.king?.name==="成吉思汗"
       ? Math.max(0,Number(genghisThreatWeight))*2 : 0);
-}
-
-function effectiveVisibleDamage(unit){
-  return (unit?.damage||0)+(unit?.status?.includes("傷害+1")?1:0)+(unit?.status?.includes("燃血+1傷害")?1:0);
-}
-function canAttackVisible(unit) {
-  return !!unit && !unit.tapped && !["整備","不能攻擊","疲乏","疲乏待解"].some(status=>unit.status?.includes(status));
 }
 
 export const AI_PROFILES = Object.freeze({
