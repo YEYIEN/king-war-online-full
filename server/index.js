@@ -10,6 +10,7 @@ import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js"
 import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
 import { selectDeployChoice, selectAttackChoice, scoreTeachingDeployment, shouldUseMagicNow, chooseMongolRecall } from "./ai-strategies.js";
 import { guardSocket } from "./socket-guard.js";
+import { queueRoomRecovery, listRecoveredRooms, isRecoveryEnabled } from "./match-recovery.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -237,7 +238,10 @@ function publicPlayer(p, viewer, room) {
 }
 function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
-function broadcast(room) { room.players.forEach(p => { if (!isAIPlayer(p)) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); }); }
+function broadcast(room) {
+  if (!room.tutorial) void queueRoomRecovery(room);
+  room.players.forEach(p => { if (!isAIPlayer(p) && p.socketId) io.to(p.socketId).emit("room:update", viewFor(room,p.id)); });
+}
 function findBySocket(sid) { for (const room of rooms.values()) { const p=room.players.find(x=>x.socketId===sid); if(p) return {room, player:p}; } return null; }
 
 
@@ -250,6 +254,7 @@ function deleteRoomNow(roomCode, reason = "房間已清理。") {
   const room = rooms.get(roomCode);
   if (!room) return false;
   if (room.status === "playing") finalizeMatchMetrics(room,{winnerId:null,reason:"abandoned"});
+  void queueRoomRecovery({...room,status:"ended"});
   clearTurnTimer(room);
   clearRoomCleanup(room);
   for (const player of room.players) clearDisconnectGrace(room, player);
@@ -1247,6 +1252,12 @@ io.on("connection", socket => {
 
     // DISCONNECT_GRACE_RESUME_V1
     clearDisconnectGrace(room, player);
+    if (room.recovered) {
+      clearRoomCleanup(room);
+      if (room.currentPlayerId === player.id) scheduleTurnTimer(room,player);
+      if (room.currentPlayerId && room.players.find(p=>p.id===room.currentPlayerId)?.isAI) scheduleAITurn(room);
+      room.recovered=false;
+    }
 
     room.log.push(`${player.name} 已重新連線。`);
 
@@ -1954,7 +1965,17 @@ if (process.env.NODE_ENV === "production") {
   app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 if (process.env.KW_SIMULATION !== "1") {
-  server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}`));
+  listRecoveredRooms().then(recovered=>{
+    for (const room of recovered) {
+      room.recovered=true;
+      room.players.forEach(p=>{p.connected=false;p.socketId=null;});
+      room.log.push("伺服器復原對局：請原玩家使用有效重連憑證返回。");
+      rooms.set(room.code,room);
+      scheduleRoomCleanup(room,300);
+    }
+    if (recovered.length) console.log(`Restored ${recovered.length} encrypted active matches`);
+    server.listen(PORT, () => console.log(`King War Online Full running on http://localhost:${PORT}; recovery=${isRecoveryEnabled()}`));
+  }).catch(error=>{console.error("Match recovery startup failed:",error.message);process.exitCode=1;});
 }
 
 
