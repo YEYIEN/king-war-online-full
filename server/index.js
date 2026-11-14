@@ -776,7 +776,7 @@ function aiUseKingAbility(room, ai) {
     return returnUnitToHand(room, ai, candidates.sort((a,b)=>rankValue(b.rank)-rankValue(a.rank))[0].id).ok;
   }
   const unit = chooseMongolRecall({self:ai,
-    opponents:room.players.filter(p=>p.id!==ai.id),difficulty:getAIDifficulty(room,ai),
+    opponents:room.players.filter(p=>p.id!==ai.id).map(publicOpponentForAI),difficulty:getAIDifficulty(room,ai),
     canAttack,maxHand:maxHand(ai),drawLimit:room.settings?.genghisDrawLimit ?? 2});
   return unit ? returnUnitToHand(room, ai, unit.id).ok : false;
 }
@@ -1023,16 +1023,17 @@ function aiChooseMagic(room, ai, enemy) {
 
   const strategicMagic = ["normal", "hard", "conqueror"].includes(getAIDifficulty(room, ai)) && room.settings?.aiMagicStrategy !== false;
   const spells = [...ai.magic];
-  const opponents = room.players.filter(p=>p.id!==ai.id && !p.eliminated && p.hp>0);
+  const preferredEnemy = publicOpponentForAI(enemy);
+  const opponents = room.players.filter(p=>p.id!==ai.id && !p.eliminated && p.hp>0).map(publicOpponentForAI);
   function bestSpellEnemy(magic) {
-    if (!strategicMagic || room.settings?.aiMagicTargeting !== true || magic.target === "我方") return enemy;
-    return [...opponents].sort((a,b)=>aiMagicCardValue(magic,ai,b)-aiMagicCardValue(magic,ai,a))[0] || enemy;
+    if (!strategicMagic || room.settings?.aiMagicTargeting !== true || magic.target === "我方") return preferredEnemy;
+    return [...opponents].sort((a,b)=>aiMagicCardValue(magic,ai,b)-aiMagicCardValue(magic,ai,a))[0] || preferredEnemy;
   }
   if (strategicMagic) spells.sort((a,b) => aiMagicCardValue(b, ai, bestSpellEnemy(b)) - aiMagicCardValue(a, ai, bestSpellEnemy(a)));
   for (const magic of spells) {
     const spellEnemy=bestSpellEnemy(magic);
     if (room.settings?.aiCurriculumPolicy !== false && !shouldUseMagicNow({
-      difficulty: getAIDifficulty(room, ai), spell: magic, ai, enemy,
+      difficulty: getAIDifficulty(room, ai), spell: magic, ai, enemy: preferredEnemy,
       value: aiMagicCardValue(magic, ai, spellEnemy),
       hasReadyAlly: ai.field.some(unit => canAttack(unit) && unit.type !== "法師")
     })) continue;
@@ -1162,7 +1163,7 @@ async function performAITurn(roomCode) {
     }
   }
   const beforeDeployCount = ai.field.length;
-  aiDeployUnits(room, ai, enemy);
+  aiDeployUnits(room, ai, publicOpponentForAI(enemy));
   if (room.simMetrics) room.simMetrics.aiDeployments += Math.max(0, ai.field.length - beforeDeployCount);
   if (ai.field.length !== beforeDeployCount) {
     broadcast(room);
