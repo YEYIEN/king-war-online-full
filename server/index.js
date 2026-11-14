@@ -109,6 +109,10 @@ function finishIfGameOver(room) {
   const living = alive(room);
 
   if (living.length <= 1) {
+    if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
+      const active = room.players.find(p => p.id === room.currentPlayerId);
+      recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI});
+    }
     clearTurnTimer(room);
     room.status = "ended";
     room.currentPlayerId = null;
@@ -447,6 +451,9 @@ function allGuestsReady(room) {
 function advanceAfterElimination(room, player) {
   if (finishIfGameOver(room)) return;
   if (room.currentPlayerId !== player.id) return;
+  if (room.matchMetrics && room.matchMetrics.turnsCompleted < room.matchMetrics.turnsStarted && room.turnStartedAt) {
+    recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI});
+  }
   clearTurnTimer(room);
   const next = nextAlive(room, player.id);
   if (!next) return;
