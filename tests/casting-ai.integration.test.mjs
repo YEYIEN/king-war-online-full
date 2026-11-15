@@ -57,7 +57,7 @@ async function launch(t, action) {
   return action(socket);
 }
 
-test("guided tutorial: deploy, choose buff, defeat guard, and end turn", { timeout: 15000 }, async t => {
+test("guided tutorial: real deployment, buff, combat, king attack, guard and two turns", { timeout: 15000 }, async t => {
   await launch(t, async socket => {
     const started = await request(socket, "tutorial:start", { name: "Strategy learner" });
     assert.equal(started.ok, true);
@@ -99,8 +99,36 @@ test("guided tutorial: deploy, choose buff, defeat guard, and end turn", { timeo
     room = await state();
     assert.equal(room.tutorialProgress, 3);
     assert.equal(room.players.find(p => p.id === enemy.id).field.length, 0);
-    assert.equal((await request(socket, "game:endTurn")).ok, true);
-    // A completed tutorial is intentionally frozen rather than progressing an unseen AI turn.
+    const firstKingAttacker=room.players.find(p=>p.id===playerId).field.find(u=>u.name==="初級騎兵");
+    assert.ok(firstKingAttacker,"tutorial starts with a ready second attacker");
+    assert.equal((await request(socket,"game:attackKing",{
+      attackerId:firstKingAttacker.id,targetPlayerId:enemy.id
+    })).ok,true);
+    room=await state();
+    assert.equal(room.tutorialProgress,4);
+    assert.equal((await request(socket,"game:endTurn")).ok,true);
+    room=await state();
+    assert.equal(room.tutorialProgress,5);
+    assert.equal(room.players.find(p=>p.id===enemy.id).field[0].name,"初級步兵");
+    const guardCard=room.players.find(p=>p.id===playerId).hand.find(u=>u.name==="中級步兵");
+    assert.ok(guardCard);
+    assert.equal((await request(socket,"game:deploy",{cardId:guardCard.id})).ok,true);
+    room=await state();
+    assert.equal(room.tutorialProgress,6);
+    const guard=room.players.find(p=>p.id===enemy.id).field[0];
+    assert.equal((await request(socket,"game:attackUnit",{
+      attackerId:cavalry.id,targetPlayerId:enemy.id,defenderId:guard.id
+    })).ok,true);
+    room=await state();
+    assert.equal(room.tutorialProgress,7);
+    assert.equal((await request(socket,"game:attackKing",{
+      attackerId:firstKingAttacker.id,targetPlayerId:enemy.id
+    })).ok,true);
+    assert.equal((await state()).tutorialProgress,8);
+    assert.equal((await request(socket,"game:endTurn")).ok,true);
+    room=await state();
+    assert.equal(room.tutorialProgress,9);
+    assert.equal(room.status,"tutorialComplete");
   });
 });
 
