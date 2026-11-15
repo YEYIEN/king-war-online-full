@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "king-war-cache-";
-const CACHE_NAME = CACHE_PREFIX + "runtime-v1";
+const CACHE_NAME = CACHE_PREFIX + "runtime-v2-ui-layout";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
