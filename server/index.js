@@ -177,7 +177,10 @@ function startTurn(room, p) {
     u.tapped = false; u.justDeployed = false; u.archerBonusUsed = false;
     u.status = u.status.filter(s => !["階級+1","階級-1","整備","傷害+1","燃血+1傷害","急援"].includes(s));
   });
-  const ud = p.king?.name === "秦始皇" ? 2 : 1;
+  const openingDrawPenalty=(process.env.KW_SIMULATION==="1" && room.players.length===2 &&
+    room.turnsCompleted===0 && p.id===room.players[0].id)
+    ? Math.min(1,Math.max(0,Number(room.settings?.firstSeatInitialDrawPenalty||0))) : 0;
+  const ud = Math.max(0,(p.king?.name === "秦始皇" ? 2 : 1)-openingDrawPenalty);
   drawUnits(room, p, ud);
   const mages = p.field.filter(u => u.type === "法師").length;
   const md = drawMagic(room, p, mages);
@@ -533,7 +536,9 @@ function startGame(room) {
     p.lastStandShield = 0;
     p.pendingDefenseRally = false;
 
-    drawUnits(room, p, p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5);
+    const openingHandPenalty=(process.env.KW_SIMULATION==="1" && i===0 && room.players.length===2)
+      ? Math.min(2,Math.max(0,Number(room.settings?.firstSeatOpeningHandPenalty||0))) : 0;
+    drawUnits(room, p, (p.king.name === "秦始皇" && room.settings?.qinOpeningBonus === true ? 6 : 5)-openingHandPenalty);
     if (p.king.name === "成吉思汗" && room.settings?.genghisGuaranteedCavalry !== false && !p.hand.some(c => c.type === "騎兵")) {
       const i = room.unitDeck.findIndex(c => c.type === "騎兵");
       if (i >= 0 && p.hand.length) {
@@ -643,6 +648,10 @@ function aiDeployScore(card, ai, enemy) {
 function aiDeployUnits(room, ai, enemy) {
   const difficulty = getAIDifficulty(room, ai);
   let deployLimit = difficulty === "easy" ? 1 : (difficulty === "hard" || difficulty === "conqueror") ? (ai.field.length <= 2 ? 3 : 2) : (ai.field.length <= 2 ? 2 : 1);
+  if(process.env.KW_SIMULATION==="1" && room.players.length===2 && room.turnsCompleted===0 &&
+     ai.id===room.players[0].id && Number.isInteger(room.settings?.firstSeatInitialDeployLimit) &&
+     room.settings.firstSeatInitialDeployLimit>=1)
+    deployLimit=Math.min(deployLimit,room.settings.firstSeatInitialDeployLimit);
 
   while (deployLimit > 0 && ai.hand.length > 0 && ai.field.length < 5) {
     const scored = ai.hand
@@ -2069,7 +2078,7 @@ if (process.env.KW_SIMULATION !== "1") {
  * It measures performance under this policy, NOT unbiased king power or human win rates.
  * Simulation-only; never exposed to Socket.IO clients.
  */
-export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", challengerKingPlan = false, challengerCounterPlan = false, challengerRationalSearch = false, kingPair = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, includeTurnSamples = false, includeMatchRecords = false } = {}) {
+export async function simulateKingBaseline({ matches = 200, playerCount = 2, maxTurns = 100, seed = 104729, difficulty = "normal", challenger = null, challengerStyle = "balanced", challengerKingPlan = false, challengerCounterPlan = false, challengerRationalSearch = false, kingPair = null, conquerorSearch = true, conquerorProfile = "resource", louisBonus = true, louisFreeAction = true, comebackPolicy = "situational", defenseRallyEnabled = false, qinOpeningBonus = false, genghisDrawLimit = 2, genghisGuaranteedCavalry = true, genghisThreatWeight = 2, aiMagicStrategy = true, aiMagicTargeting = false, louisMageSetup = false, aiCurriculumPolicy = true, aiRecallStrategy = true, secondSeatExtraCards = 0, firstSeatPeacefulTurn = false, comebackEnabled = false, lastStandShieldEnabled = true, openingTruceEnabled = false, firstSeatOpeningHandPenalty = 0, firstSeatInitialDrawPenalty = 0, firstSeatInitialDeployLimit = null, includeTurnSamples = false, includeMatchRecords = false } = {}) {
   if (process.env.KW_SIMULATION !== "1") throw new Error("This benchmark may run only with KW_SIMULATION=1");
   if (!Number.isInteger(matches) || matches < 1 || matches > 20000) throw new Error("matches out of bounds");
   if (![2,3,4,5].includes(playerCount)) throw new Error("playerCount out of bounds");
@@ -2131,7 +2140,7 @@ export async function simulateKingBaseline({ matches = 200, playerCount = 2, max
       state = (seed ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0 || 1;
       const room = {
         code: `BALANCE_${n}`, status: "lobby", hostId: "p0", maxPlayers: playerCount,
-        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, conquerorSearch, conquerorProfile, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, aiMagicTargeting, louisMageSetup, aiCurriculumPolicy, aiRecallStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled }, log: [], unitDeck: [], magicDeck: [],
+        settings: { turnTimeLimit: 0, aiDifficulty: difficulty, conquerorSearch, conquerorProfile, louisBonus, louisFreeAction, comebackPolicy, defenseRallyEnabled, qinOpeningBonus, genghisDrawLimit, genghisGuaranteedCavalry, genghisThreatWeight, aiMagicStrategy, aiMagicTargeting, louisMageSetup, aiCurriculumPolicy, aiRecallStrategy, secondSeatExtraCards, firstSeatPeacefulTurn, comebackEnabled, lastStandShieldEnabled, openingTruceEnabled, firstSeatOpeningHandPenalty, firstSeatInitialDrawPenalty, firstSeatInitialDeployLimit }, log: [], unitDeck: [], magicDeck: [],
         players: Array.from({ length: playerCount }, (_, seat) => ({
           id: `p${seat}`, socketId: `SIM_${seat}`, name: `AI_${seat}`,
           isAI: true, isHost: seat === 0, connected: true, ready: true,
