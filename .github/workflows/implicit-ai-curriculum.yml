@@ -1,0 +1,26 @@
+name: Implicit AI learning policy A-B
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Verify unchanged game-state invariants and compare strategy effects
+        env:
+          KW_SIMULATION: '1'
+          MATCHES_PER_SEED: '250'
+        run: node scripts/implicit-ai-curriculum-ab.mjs | tee implicit-ai-ab.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: implicit-ai-ab
+          path: implicit-ai-ab.json
+          retention-days: 30

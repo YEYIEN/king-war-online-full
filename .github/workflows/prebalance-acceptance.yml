@@ -1,0 +1,148 @@
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+name: Prebalance engineering and AI acceptance
+on:
+  push:
+    branches: [feature/prebalance-hardening-ai-20261114]
+  pull_request:
+    branches: [feature/game-experience-redesign-20261114]
+  workflow_dispatch:
+jobs:
+  reliability-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install pinned dependencies
+        run: |
+          npm ci
+          npm --prefix client ci
+      - name: Verify gameplay balance rules remain frozen
+        run: |
+          git fetch origin feature/game-experience-redesign-20261114 --depth=1
+          KW_BALANCE_BASE_REF=FETCH_HEAD node scripts/prebalance-rule-freeze.mjs
+      - name: Test rules, security and AI invariants
+        run: npm test
+      - name: Build production UI
+        run: npm run build
+      - name: Check production dependency advisories
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm --prefix client audit --omit=dev --audit-level=high
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Production browser desktop and 320-430px mobile
+        env:
+          KW_CAPTURE_UI: '1'
+        run: node scripts/production-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prebalance-ui-screenshots
+          path: test-artifacts/ui
+          retention-days: 14
+          if-no-files-found: ignore
+  ai-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: AI tier and player count matrix
+        env:
+          KW_SIMULATION: '1'
+          PREBALANCE_MATCHES_PER_SEED: '30'
+        run: node scripts/prebalance-ai-audit.mjs > prebalance-ai-audit.json
+      - name: Pairwise AI difficulty league
+        env:
+          KW_SIMULATION: '1'
+          PREBALANCE_LEAGUE_MATCHES_PER_SEED: '30'
+        run: node scripts/prebalance-policy-league.mjs > prebalance-policy-league.json
+      - name: Experimental six-archetype stress league
+        env:
+          KW_SIMULATION: '1'
+          ARCHETYPE_MATCHES_PER_SEED: '10'
+        run: node scripts/prebalance-archetype-league.mjs > prebalance-archetypes.json
+      - name: Factorial king-seat and comeback simulations
+        env:
+          KW_SIMULATION: '1'
+          BALANCE_MATCHES_PER_SEED: '250'
+        run: node scripts/balance-factorial-research.mjs > balance-factorial-output.json
+      - name: Analyze experimental effects and opening-hand associations
+        run: node scripts/balance-factorial-analysis.mjs > balance-factorial-analysis-output.json
+      - name: Duel fairness research across nine opening candidates
+        env:
+          KW_SIMULATION: '1'
+          DUEL_EXPLORATION_MATCHES: '250'
+        run: node scripts/duel-first-seat-exploration.mjs > duel-first-seat-exploration-output.json
+      - name: Calibrate initial hand, draw and first seat deployment
+        env:
+          KW_SIMULATION: '1'
+          DUEL_CALIBRATION_MATCHES: '250'
+        run: node scripts/duel-first-seat-calibration.mjs > duel-calibration-output.json
+      - name: Independent fresh-seed duel opening holdout (36000 games)
+        env:
+          KW_SIMULATION: '1'
+          DUEL_HOLDOUT_MATCHES_PER_SEED: '1000'
+        run: node scripts/duel-first-seat-holdout.mjs > duel-holdout-output.json
+      - name: "Refinement: compare primary and one stronger second-seat card compensation"
+        env:
+          KW_SIMULATION: '1'
+          DUEL_REFINEMENT_MATCHES: '1000'
+        run: node scripts/duel-first-seat-refinement.mjs > duel-refinement-output.json
+      - name: Adversarial duels and directed king-pair seat swaps
+        env:
+          KW_SIMULATION: '1'
+          DUEL_ADVERSARIAL_MATCHES: '70'
+        run: node scripts/duel-adversarial-king-pairs.mjs > duel-adversarial-summary-output.json
+      - name: Independent focused Qin Louis and Mongol Octavian duel seat swap
+        env:
+          KW_SIMULATION: '1'
+          DUEL_FOCUSED_MATCHES_PER_SEED: '400'
+        run: node scripts/duel-focused-king-holdout.mjs > duel-focused-summary-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prebalance-ai-audit
+          path: |
+            prebalance-ai-audit.json
+            prebalance-policy-league.json
+            prebalance-archetypes.json
+            balance-factorial-raw.json
+            balance-factorial-summary.md
+            balance-factorial-output.json
+            balance-factorial-analysis.json
+            balance-factorial-analysis.md
+            balance-factorial-analysis-output.json
+            duel-first-seat-exploration.json
+            duel-first-seat-exploration.md
+            duel-first-seat-exploration-output.json
+            duel-calibration-raw.json
+            duel-calibration-summary.md
+            duel-calibration-output.json
+            duel-holdout-results.json
+            duel-holdout-results.md
+            duel-holdout-output.json
+            duel-refinement-results.json
+            duel-refinement-results.md
+            duel-refinement-output.json
+            duel-adversarial-king-pairs.json
+            duel-adversarial-king-pairs.md
+            duel-adversarial-summary-output.json
+            duel-focused-king-holdout.json
+            duel-focused-king-holdout.md
+            duel-focused-summary-output.json
+          retention-days: 30
+          if-no-files-found: warn

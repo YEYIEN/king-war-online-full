@@ -1,0 +1,185 @@
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+name: Release readiness gates
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+      - feature/prebalance-hardening-ai-20261114
+jobs:
+  security-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install server and client dependencies
+        run: |
+          npm ci
+          npm --prefix client ci
+      - name: Regression suite including security and encrypted recovery
+        run: npm test
+      - name: Build production front end
+        run: npm run build
+      - name: Fail on known high or critical dependency advisories
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm --prefix client audit --omit=dev --audit-level=high
+      - name: Static check no unexpected instructional scripts in active matches
+        run: node --test tests/no-intrusive-ai-coaching.test.mjs
+  game-balance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: 2/4/5-player live-rules AI A-B experiments
+        env:
+          KW_SIMULATION: '1'
+          MATCHES_PER_SEED: '200'
+        run: node scripts/release-balance-sweep.mjs | tee release-balance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-balance-data
+          path: release-balance.json
+          retention-days: 30
+
+  factorial-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Run 30 controlled AI balance scenarios
+        env:
+          KW_SIMULATION: '1'
+          BALANCE_MATCHES_PER_SEED: '250'
+        run: node scripts/balance-factorial-research.mjs > balance-factorial-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: balance-factorial-research
+          path: |
+            balance-factorial-raw.json
+            balance-factorial-summary.md
+            balance-factorial-output.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  balance-candidate-followup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Validate candidate balance hypotheses on separate seeds
+        env:
+          KW_SIMULATION: '1'
+          FOLLOWUP_MATCHES_PER_SEED: '250'
+        run: node scripts/balance-followup-candidates.mjs > balance-followup-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: balance-candidate-followup
+          path: |
+            balance-followup-raw.json
+            balance-followup-output.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  king-ai-counterplay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Verify five own-king plans and counterplay unit tests
+        run: node --test tests/king-specific-ai-policy.test.mjs
+      - name: Evaluate 20 directed king matchups and policy ablations
+        env:
+          KW_SIMULATION: '1'
+          KING_MATRIX_HOLDOUT: '1'
+          KING_MATRIX_MATCHES_PER_SEED: '45'
+          KING_MULTI_MATCHES_PER_SEED: '100'
+        run: node scripts/king-matchup-ai-matrix.mjs > king-matchup-ai-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: king-ai-matchup-holdout
+          path: |
+            king-matchup-ai-matrix.json
+            king-matchup-ai-summary.md
+            king-matchup-ai-output.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  rational-search-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Validate bounded rational search and king-specific policies
+        env:
+          KW_SIMULATION: '1'
+        run: node --test tests/ai-rational-planner.test.mjs tests/king-specific-ai-policy.test.mjs
+      - name: Compare 2–5 player rational policies with unchanged conqueror
+        env:
+          KW_SIMULATION: '1'
+          RATIONAL_GAMES_PER_SEED: '12'
+        run: node scripts/rational-planner-ab.mjs > rational-planner-ab-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rational-search-research
+          path: |
+            rational-planner-ab.json
+            rational-planner-ab-output.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  rational-duel-holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Run unseen 3,600-game duel holdout
+        env:
+          KW_SIMULATION: '1'
+          RATIONAL_DUEL_GAMES_PER_SEED: '200'
+        run: node scripts/rational-duel-holdout.mjs > rational-duel-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rational-duel-holdout
+          path: |
+            rational-duel-holdout.json
+            rational-duel-output.json
+          retention-days: 30
+          if-no-files-found: warn

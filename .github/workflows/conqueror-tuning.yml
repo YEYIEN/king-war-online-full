@@ -1,0 +1,26 @@
+name: Conqueror optimization sweep
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/game-experience-redesign-20261114
+jobs:
+  tuning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Compare greedy, balanced beam, assault beam, resource beam against hard AI
+        env:
+          KW_SIMULATION: '1'
+          TUNING_MATCHES_PER_SEED: '300'
+        run: node scripts/conqueror-tuning.mjs | tee conqueror-tuning.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conqueror-tuning
+          path: conqueror-tuning.json
+          retention-days: 30

@@ -1,0 +1,34 @@
+name: Second phase balance research
+on:
+  push:
+    branches: [feature/game-experience-redesign-20261114]
+    paths:
+      - 'server/**'
+      - 'scripts/second-phase-*.mjs'
+      - 'tests/louis-mage-setup.test.mjs'
+      - '.github/workflows/second-phase-balance.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Louis strategy A/B
+        run: KW_SIMULATION=1 node scripts/second-phase-louis-ab.mjs > louis-ab.json
+      - name: Opening and comeback mechanism diagnostics
+        run: KW_SIMULATION=1 node scripts/second-phase-diagnostics.mjs > diagnostics.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: second-phase-balance-results
+          path: |
+            louis-ab.json
+            diagnostics.json
+          if-no-files-found: warn

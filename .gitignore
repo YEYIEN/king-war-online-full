@@ -3,3 +3,8 @@ client/node_modules/
 client/dist/
 .env
 .DS_Store
+
+# Local match analytics; never commit live balance records
+metrics/
+data/match-metrics*.jsonl
+*.match-metrics.jsonl
