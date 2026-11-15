@@ -433,33 +433,79 @@ const GUIDED_LESSONS = [
   }
 ];
 
+const TUTORIAL_RECALL_QUESTIONS = [
+  {
+    prompt: "剛部署的中級騎兵面對同戰力的弓兵，為什麼先用力量術？",
+    options: [
+      "因為騎兵剛部署完全不能行動",
+      "讓戰力從 2 提升到 3，避免直接交換造成的損失",
+      "因為弓兵只能被魔法直接消滅"
+    ],
+    correct: 1,
+    explanation: "騎兵可以立即攻擊，但要先考慮戰力相等時的交換結果。力量術能使這次交換更有利。"
+  },
+  {
+    prompt: "敵方場上還有步兵守衛時，你能直接攻擊國王嗎？",
+    options: [
+      "不行，必須先處理敵方步兵防線",
+      "可以，只要我方有騎兵",
+      "可以，只要國王 HP 低於 10"
+    ],
+    correct: 0,
+    explanation: "步兵是國王的守衛。先清除步兵，才能依照規則攻擊國王。"
+  },
+  {
+    prompt: "你手上有魔法卡，但場上沒有可以施法的法師時，應該怎麼做？",
+    options: [
+      "直接選魔法卡就能施放",
+      "由任意弓兵代替施法",
+      "先部署或準備能合法施法的法師，不能跳過施法者條件"
+    ],
+    correct: 2,
+    explanation: "魔法需要可行動的法師；施法也會消耗法師一次行動。"
+  }
+];
+
 function GuidedTutorialCoach({ progress = 0, onExit }) {
+  const [questionIndex, setQuestionIndex] = React.useState(0);
   const [answer, setAnswer] = React.useState(null);
   const index = Math.min(progress, GUIDED_LESSONS.length - 1);
   const lesson = GUIDED_LESSONS[index];
-  const complete = progress >= 4;
-  const choices = [
-    "因為騎兵剛部署完全不能攻擊",
-    "雙方原本戰力相同，先強化可以避免兩敗俱傷",
-    "因為只有魔法才能消滅弓兵"
-  ];
+  const complete = progress >= GUIDED_LESSONS.length;
+  const question = TUTORIAL_RECALL_QUESTIONS[questionIndex];
+  const correct = answer === question.correct;
+  function nextQuestion() {
+    setQuestionIndex((current) => Math.min(current + 1, TUTORIAL_RECALL_QUESTIONS.length - 1));
+    setAnswer(null);
+  }
+
   return (
     <section className="guidedLesson" aria-label="互動新手實戰教學">
       <div className="guidedLessonTop">
-        <strong>實戰教學 · {complete ? "最後驗收" : `任務 ${progress + 1}/4`}</strong>
-        <span>{complete ? "所有操作都已完成" : "請親自操作正式遊戲卡牌"}</span>
+        <strong>實戰教學 · {complete ? "理解驗收" : `任務 ${progress + 1}/${GUIDED_LESSONS.length}`}</strong>
+        <span>{complete ? `情境確認 ${questionIndex + 1}/${TUTORIAL_RECALL_QUESTIONS.length}` : "請親自操作正式遊戲卡牌"}</span>
       </div>
       {complete ? (
         <>
-          <h2>你已完成一個真正的戰術回合</h2>
-          <p>最後確認：為什麼剛才不能一部署騎兵就直接攻擊中級弓兵？</p>
-          <div className="lessonChoiceGroup">
-            {choices.map((choice, i) => <button type="button" key={choice} className={answer === i ? "selected" : "secondary"} onClick={() => setAnswer(i)}>{choice}</button>)}
+          <h2>實戰回合完成！確認你理解關鍵規則</h2>
+          <p className="lessonTask">{question.prompt}</p>
+          <div className="lessonChoiceGroup" role="group" aria-label={`情境理解題 ${questionIndex + 1}`}>
+            {question.options.map((choice, i) => (
+              <button type="button" key={choice}
+                aria-pressed={answer === i}
+                className={answer === i ? "selected" : "secondary"}
+                onClick={() => setAnswer(i)}>{choice}</button>
+            ))}
           </div>
-          {answer !== null && <p className={answer === 1 ? "lessonCorrect" : "lessonWrong"}>
-            {answer === 1 ? "正確！戰力 2 對 2 會兩敗俱傷；力量術讓騎兵以 3 對 2 獲勝。" : "再觀察戰力比較：中級騎兵雖能立即攻擊，但不表示攻擊一定划算。"}
-          </p>}
-          {answer === 1 && <button className="primaryBtn" onClick={onExit}>通過驗收，回到主選單</button>}
+          {answer !== null && (
+            <p role="status" aria-live="polite" className={correct ? "lessonCorrect" : "lessonWrong"}>
+              {correct ? "判斷正確。" : "這個選擇可能導致不利行動，請重新選擇。"} {question.explanation}
+            </p>
+          )}
+          {correct && (questionIndex === TUTORIAL_RECALL_QUESTIONS.length - 1
+            ? <button type="button" className="primaryBtn" onClick={onExit}>完成理解驗收，返回主選單</button>
+            : <button type="button" className="primaryBtn" onClick={nextQuestion}>下一個情境</button>)}
+          <p className="lessonAssessmentNote">這是即時理解確認，不代表已掌握獨立對戰策略。進入正式對局後仍可查閱規則。</p>
         </>
       ) : (
         <>
@@ -468,7 +514,9 @@ function GuidedTutorialCoach({ progress = 0, onExit }) {
           <p className="lessonTask"><strong>現在請做：</strong>{lesson.action}</p>
           <p><strong>為什麼：</strong>{lesson.why}</p>
           <p className="lessonWarning"><strong>策略提醒：</strong>{lesson.warning}</p>
-          <div className="lessonProgress">{GUIDED_LESSONS.map((_, i) => <span key={i} className={i <= progress ? "active" : ""} />)}</div>
+          <div className="lessonProgress" aria-label={`已完成 ${progress} 個實戰操作`}>
+            {GUIDED_LESSONS.map((_, i) => <span key={i} className={i <= progress ? "active" : ""} />)}
+          </div>
         </>
       )}
     </section>
