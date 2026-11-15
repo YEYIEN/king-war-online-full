@@ -1,5 +1,5 @@
 {
-  "version": "20261115-combat-ui-v4",
-  "updatedAt": "2026-11-15T11:00:00.000Z",
-  "note": "Deployable React UI: guide, magic layout, king attack controls"
+  "version": "20261115-combat-readability-v5",
+  "updatedAt": "2026-11-15T11:30:00.000Z",
+  "note": "Larger battle card labels, names, stats and turn instructions"
 }
