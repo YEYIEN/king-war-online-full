@@ -112,8 +112,32 @@ function trimHand(room, p) {
     room.log.push(`${p.name} 手牌超過上限，將 ${c.name} 放回牌堆底。`);
   }
 }
-function drawUnits(room, p, n) { for (let i=0;i<n && room.unitDeck.length;i++) p.hand.push(room.unitDeck.shift()); trimHand(room, p); }
-function drawMagic(room, p, n) { let d=0; for (let i=0;i<n && room.magicDeck.length && p.magic.length<3;i++,d++) p.magic.push(room.magicDeck.shift()); return d; }
+function replenishDeckIfEmpty(room, deckKey, makeDeck, label) {
+  if (!Array.isArray(room[deckKey])) room[deckKey] = [];
+  if (room[deckKey].length) return;
+  // Each cycle mints independent cards with fresh IDs. Cards in hands/fields
+  // are never taken away, and an exhausted deck never stalls the match.
+  room[deckKey] = makeDeck();
+  room.log.push(`${label}抽牌堆已用盡，自動洗出新一輪牌庫。`);
+}
+function drawUnits(room, p, n) {
+  for (let i = 0; i < n; i++) {
+    replenishDeckIfEmpty(room, "unitDeck", makeUnits, "兵種");
+    if (!room.unitDeck.length) break;
+    p.hand.push(room.unitDeck.shift());
+  }
+  trimHand(room, p);
+}
+function drawMagic(room, p, n) {
+  let count = 0;
+  while (count < n && p.magic.length < 3) {
+    replenishDeckIfEmpty(room, "magicDeck", makeMagic, "魔法");
+    if (!room.magicDeck.length) break;
+    p.magic.push(room.magicDeck.shift());
+    count++;
+  }
+  return count;
+}
 function alive(room) { return room.players.filter(p => !p.eliminated && p.hp > 0); }
 function openingTruce(room) { return (!!room?.settings?.openingTruceEnabled && (room.turnsCompleted || 0) < room.players.length) || (!!room?.settings?.firstSeatPeacefulTurn && room.players.length === 2 && (room.turnsCompleted || 0) === 0); }
 
