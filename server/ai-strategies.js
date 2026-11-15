@@ -46,6 +46,24 @@ export function scoreArchetypeDeployment(card,self,opponent,style="balanced") {
   return opponent?.field?.some(unit=>unit.type===card.counterTarget) ? 34 : 0;
 }
 
+/**
+ * Duel adversarial policy, using public target units and the challenger's own
+ * board only. Research challenger only: never changes move legality or live AI.
+ */
+export function scoreArchetypeAttack({style="balanced",self,enemy,attacker,defender}) {
+  if(!STRATEGY_ARCHETYPES.includes(style))throw new Error("unknown strategy style");
+  if(style==="balanced")return 0;
+  const ownGuards=self.field.filter(unit=>unit.type==="步兵").length;
+  const isKing=!defender;
+  const lastEnemyGuard=defender?.type==="步兵"&&enemy.field.filter(unit=>unit.type==="步兵").length===1;
+  const losingGuard=attacker.type==="步兵"&&ownGuards===1;
+  if(style==="rush")return (isKing?46:0)+(lastEnemyGuard?36:0)+(attacker.type==="騎兵"?14:0);
+  if(style==="fortress")return (losingGuard?-82:0)+(isKing&&ownGuards===0?-32:0);
+  if(style==="arcane")return (attacker.type==="法師"?-27:0)+(defender?.type==="法師"?25:0);
+  if(style==="economy")return (attacker.rank==="高級"&&defender?.rank==="初級"?-28:0)+(isKing?8:0);
+  return defender&&attacker.counterTarget===defender.type?32:0;
+}
+
 /** Research policy: personalize planning to the AI's OWN king.
  * Inputs are own allowed cards and the opponents' visible board only.
  * Never change legal moves, draws, king abilities or turn rules.
@@ -322,15 +340,21 @@ function chooseConquerorAttack(actions, ctx) {
     // break near-ties instead of overruling a superior tactical continuation.
     const total=continuation.score-exposed+
       Math.min(3,Math.max(-3,counterBonus))+
-      Math.min(3,Math.max(-3,ownPlanBonus));
+      Math.min(3,Math.max(-3,ownPlanBonus))+
+      (ctx.researchStyle&&ctx.researchStyle!=="balanced"?
+        scoreArchetypeAttack({
+          style:ctx.researchStyle,self:ctx.self,enemy:move.enemy,
+          attacker:ctx.self.field.find(u=>u.id===move.attackerId),
+          defender:move.defenderId?move.enemy.field.find(u=>u.id===move.defenderId):null
+        }) : 0);
     if(total>score){score=total;best={...move,expectedScore:total};}
   }
   return best;
 }
 
-export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true, conquerorProfile = "balanced", counterKingPlan = false, ownKingPlan = false }) {
+export function selectAttackChoice(actions, { difficulty, self, enemies, random = Math.random, battle, power, canAttack, effectiveDamage, conquerorSearch = true, conquerorProfile = "balanced", counterKingPlan = false, ownKingPlan = false, researchStyle = "balanced" }) {
   if (difficulty === "conqueror" && conquerorSearch && enemies.length === 1) {
-    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage,conquerorProfile,counterKingPlan,ownKingPlan});
+    return chooseConquerorAttack(actions,{self,enemies,battle,power,canAttack,effectiveDamage,conquerorProfile,counterKingPlan,ownKingPlan,researchStyle});
   }
   if (!actions.length) return null;
   const valued = actions.map(action => {
@@ -339,6 +363,9 @@ export function selectAttackChoice(actions, { difficulty, self, enemies, random 
     if (!userUnit) return { ...action, expectedScore: -Infinity };
     const defender = action.defenderId ? target.field.find(u => u.id === action.defenderId) : null;
     let score = action.score;
+    if(researchStyle!=="balanced")score+=scoreArchetypeAttack({
+      style:researchStyle,self,enemy:target,attacker:userUnit,defender
+    });
     if (difficulty === "easy") {
       if (defender && battle(userUnit, defender) === "defender" && userUnit.type !== "弓兵") score -= 150;
       // Teaching AI favors short, visible battles instead of stopping with unused units.
