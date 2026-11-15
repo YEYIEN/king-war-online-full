@@ -87,6 +87,11 @@ jobs:
           KW_SIMULATION: '1'
           DUEL_EXPLORATION_MATCHES: '250'
         run: node scripts/duel-first-seat-exploration.mjs > duel-first-seat-exploration-output.json
+      - name: Calibrate initial hand, draw and first seat deployment
+        env:
+          KW_SIMULATION: '1'
+          DUEL_CALIBRATION_MATCHES: '250'
+        run: node scripts/duel-first-seat-calibration.mjs > duel-calibration-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -104,5 +109,8 @@ jobs:
             duel-first-seat-exploration.json
             duel-first-seat-exploration.md
             duel-first-seat-exploration-output.json
+            duel-calibration-raw.json
+            duel-calibration-summary.md
+            duel-calibration-output.json
           retention-days: 30
           if-no-files-found: warn
