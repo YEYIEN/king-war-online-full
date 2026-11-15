@@ -10,7 +10,9 @@ test("completed results remain visible until player chooses a return action",()=
 });
 test("mobile browser test rejects nontrivial overflow at four widths",()=>{
  assert.match(smoke,/\[320, 375, 390, 430\]/);
- assert.match(smoke,/assert\.ok\(actual <= 1,/);
+ assert.match(smoke,/assert\.ok\(metrics\.horizontal<=1,/);
+ assert.match(smoke,/metrics\.pageVertical<=3/);
+ assert.match(smoke,/metrics\.mainVertical<=3/);
 });
 
 test("all lobby and gameplay commands use the bounded, deduplicated request path",()=>{
