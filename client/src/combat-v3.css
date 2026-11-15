@@ -53,6 +53,7 @@
   white-space:nowrap !important;
 }
 .kwCombatV3 .topActions .endTurnBtn {
+  order:-1 !important;position:sticky !important;left:0 !important;z-index:2 !important;
   background:#e8bb68 !important;color:#162438 !important;
   font-weight:850 !important;
 }
