@@ -13,21 +13,10 @@ function cardImage(card) {
   return `${ASSET_BASE}/cards/${card.name}_63x88mm_300dpi.png`;
 }
 
-function kingImage(king) {
-  if (!king?.name) return "";
-  return `${ASSET_BASE}/kings/${king.name}.png`;
-}
-
 function CardArt({ card, small = false }) {
   const src = cardImage(card);
   if (!src) return null;
   return <img className={small ? "cardArt small" : "cardArt"} src={src} alt={card.name} onError={(e) => { e.currentTarget.style.display = "none"; }} />;
-}
-
-function KingArt({ king }) {
-  const src = kingImage(king);
-  if (!src) return null;
-  return <img className="kingArt" src={src} alt={king.name} onError={(e) => { e.currentTarget.style.display = "none"; }} />;
 }
 
 function unitEffectText(card) {
@@ -232,68 +221,6 @@ function GuidePanel({ hint }) {
     </section>
   );
 }
-
-function PlayerSummary({ player, isMe, isCurrent, onDetail }) {
-  let pressTimer = null;
-
-  function startPress() {
-    if (!onDetail || !player.king) return;
-    pressTimer = window.setTimeout(() => {
-      onDetail({ ...player.king, kind: "king" }, "國王");
-    }, 450);
-  }
-
-  function cancelPress() {
-    if (pressTimer) {
-      window.clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  }
-
-  return (
-    <article className={`playerSummary ${isMe ? "me" : "opponent"} ${isCurrent ? "current" : ""} ${player.eliminated ? "dead" : ""}`}>
-      <div className="playerSummaryTop">
-        <strong>{player.name}{isMe ? "（你）" : ""}</strong>
-        <span>HP {player.hp}</span>
-      </div>
-
-      {player.king && (
-        <div
-          className="kingMini"
-          role="button"
-          tabIndex={0}
-          aria-label={`查看 ${player.king.name} 的國王能力`}
-          onClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
-          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onDetail?.({ ...player.king, kind: "king" }, "國王"); } }}
-          onDoubleClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            onDetail?.({ ...player.king, kind: "king" }, "國王");
-          }}
-          onMouseDown={startPress}
-          onMouseUp={cancelPress}
-          onMouseLeave={cancelPress}
-          onTouchStart={startPress}
-          onTouchEnd={cancelPress}
-        >
-          <KingArt king={player.king} />
-          <div>
-            <strong>{player.king.name}</strong>
-            <small>{player.king.effectName}：{player.king.effect}</small>
-          </div>
-        </div>
-      )}
-
-      <div className="playerStats">
-        <span>手牌 {player.handCount}</span>
-        <span>魔法 {player.magicCount}</span>
-        <span>場上 {player.field.length}/5</span>
-      </div>
-    </article>
-  );
-}
-
-
 
 function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "" }) {
   return (
@@ -1619,6 +1546,7 @@ function App() {
                   onClick={()=>{setTargetPlayerId(player.id);setAttackerId(null);}}>
                   <span className="kwKingChipLabel">{player.name}{player.eliminated?" · 出局":""}</span>
                   <strong>{player.king?.name || "國王"} <span className="kwHp">HP {player.hp}</span></strong>
+                  <span className="kwKingChipResources">手牌 {player.handCount} · 魔法 {player.magicCount}</span>
                 </button>
                 <button type="button" className="kwEnemyKingInfo" aria-label={`查看 ${player.name} 的國王能力`}
                   title="查看國王能力" onClick={()=>player.king && openCardDetail({...player.king,kind:"king"},"國王")}>?</button>
@@ -1626,29 +1554,6 @@ function App() {
             ))}
           </div>
         </div>
-      <section className="gfEnemyPlayers">
-        {enemies.map((p) => (
-          <PlayerSummary
-            key={p.id}
-            player={p}
-            isMe={false}
-            isCurrent={p.id === room.currentPlayerId}
-            onDetail={openCardDetail}
-          />
-        ))}
-      </section>
-
-      <section className="gfMyPlayer">
-        {me && (
-          <PlayerSummary
-            player={me}
-            isMe
-            isCurrent={me.id === room.currentPlayerId}
-            onDetail={openCardDetail}
-          />
-        )}
-      </section>
-
       <section className="battleActionHub" aria-label="本回合操作導覽">
         <div className="battleActionHeader">
           <div>
@@ -1867,31 +1772,7 @@ function App() {
             </div>
           </section>
 
-          <section className="zoneCard">
-            <h2>兵種相剋</h2>
-            <div className="counterList">
-              <span>步兵 → 弓兵</span>
-              <span>弓兵 → 法師</span>
-              <span>法師 → 騎兵</span>
-              <span>騎兵 → 步兵</span>
-            </div>
-          </section>
-
-          <section className="zoneCard">
-            <h2>遊戲紀錄</h2>
-            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
-          </section>
         </aside>
-      </section>
-
-      <section className="targetBar card" id="kw-target">
-        <div>
-          <h2>選擇對手</h2>
-          <p>多人局先選對手，再選攻擊者與目標兵種。</p>
-        </div>
-        <select aria-label="選擇目標玩家" value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
-          {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
       </section>
 
       <section className="battleGrid">
