@@ -994,6 +994,13 @@ function App() {
   const attacker = me?.field.find((u) => u.id === attackerId);
   const magicTargetPlayer = room.players.find((p) => p.id === magicPlan?.targetPlayerId);
   const hint = actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan });
+  const readyUnits = (me?.field || []).filter(canUnitStillAct).length;
+  const battleInstruction = !isMyTurn
+    ? "目前是對手的回合。可以先查看王權、兵種剋制與戰鬥紀錄。"
+    : magicPlan ? "施法中：依照紫色魔法流程選法師、目標與確認；可以隨時取消。"
+    : attacker ? `已選擇「${attacker.name}」：點擊下方敵方兵種發動攻擊，或在敵人沒有步兵時攻擊國王。`
+    : me?.hand?.length ? "先在「手牌與部署」挑選兵種；要進攻時，先點我方場上可行動的兵種。"
+    : "目前沒有兵種手牌。選擇我方已部署且可行動的兵種進攻，或結束回合等待抽牌。";
 
   const gameEnded = room.status === "ended";
   const winner = gameEnded ? room.players.find((p) => !p.eliminated && p.hp > 0) : null;
@@ -1647,10 +1654,100 @@ function App() {
         )}
       </section>
 
-      <section className="targetBar card">
+      <section className="battleActionHub" aria-label="本回合操作導覽">
+        <div className="battleActionHeader">
+          <div>
+            <span className="battleEyebrow">戰場指揮</span>
+            <h2>{isMyTurn ? "現在輪到你" : "對手行動中"}</h2>
+          </div>
+          <span className="battleReadyCount">可行動兵種 {readyUnits} / {me?.field?.length || 0}</span>
+        </div>
+        <p role="status" aria-live="polite" className="battleInstruction">{battleInstruction}</p>
+        <nav className="battleQuickNav" aria-label="戰鬥區域快速導覽">
+          <a href="#kw-hand">1. 手牌／部署</a>
+          <a href="#kw-field">2. 我方兵種</a>
+          <a href="#kw-enemy">3. 選擇敵人</a>
+        </nav>
+        {attacker && !magicPlan && (
+          <button type="button" className="secondary" onClick={() => setAttackerId(null)}>
+            <span aria-hidden="true">× </span>取消選擇：{attacker.name}
+          </button>
+        )}
+      </section>
+
+      <section className="handAndLog" id="kw-hand">
+        <section className="zoneCard">
+          <div className="zoneHeader">
+            <div>
+              <h2>兵種手牌</h2>
+              <p>選好卡牌後按「確認部署」，部署成功會出現在我方場上；每位玩家最多 5 名兵種。</p>
+            </div>
+          </div>
+
+          <div className="cardGrid">
+            {me?.hand?.length ? (
+              me.hand.map((card) => (
+                <button
+                  key={card.id}
+                  className="gameCard unit handCard"
+                  disabled={!isMyTurn || !!magicPlan}
+                  onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => emit("game:deploy", { cardId: card.id }))}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    openCardDetail(card, "兵種手牌");
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openCardDetail(card, "兵種手牌");
+                  }}
+                  onMouseDown={() => startCardDetailPress(card, "兵種手牌")}
+                  onMouseUp={cancelCardDetailPress}
+                  onMouseLeave={cancelCardDetailPress}
+                  onTouchStart={() => startCardDetailPress(card, "兵種手牌")}
+                  onTouchEnd={cancelCardDetailPress}
+                >
+                  <CardArt card={card} />
+                  <strong>{card.name}</strong>
+                  <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
+                  <span className="powerText">目前戰力：{effectivePower(card)}</span>
+                  <span className="effectText">{unitEffectText(card)}</span>
+                  <span className="actionLabel">部署</span>
+                </button>
+              ))
+            ) : <EmptyState>目前沒有兵種手牌。牌庫抽完後會重新補充；下一回合可再抽牌。</EmptyState>}
+          </div>
+        </section>
+
+        <aside className="sideColumn">
+          <section className="zoneCard">
+            <h2>魔法卡</h2>
+            <p>先點魔法卡，再依提示選法師與目標。</p>
+            <div className="magicList">
+              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+            </div>
+          </section>
+
+          <section className="zoneCard">
+            <h2>兵種相剋</h2>
+            <div className="counterList">
+              <span>步兵 → 弓兵</span>
+              <span>弓兵 → 法師</span>
+              <span>法師 → 騎兵</span>
+              <span>騎兵 → 步兵</span>
+            </div>
+          </section>
+
+          <section className="zoneCard">
+            <h2>遊戲紀錄</h2>
+            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
+          </section>
+        </aside>
+      </section>
+
+      <section className="targetBar card" id="kw-target">
         <div>
-          <h2>目標玩家</h2>
-          <p>選擇你要攻擊或施法的對象。</p>
+          <h2>選擇對手</h2>
+          <p>多人局先選對手，再選攻擊者與目標兵種。</p>
         </div>
         <select aria-label="選擇目標玩家" value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
           {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1658,13 +1755,13 @@ function App() {
       </section>
 
       <section className="battleGrid">
-        <section className="zoneCard enemyZone">
+        <section className="zoneCard enemyZone" id="kw-enemy">
           <div className="zoneHeader">
             <div>
-              <h2>{targetPlayer?.name || "敵方"} 場上</h2>
+              <h2>{targetPlayer?.name || "敵方"} · 敵方戰場</h2>
               <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
             </div>
-            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>攻擊國王</button>
+            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "攻擊敵方國王"}</button>
           </div>
 
           <div className="cardGrid">
@@ -1684,10 +1781,10 @@ function App() {
           </div>
         </section>
 
-        <section className="zoneCard myZone">
+        <section className="zoneCard myZone" id="kw-field">
           <div className="zoneHeader">
             <div>
-              <h2>我方場上</h2>
+              <h2>我方戰場 · 選擇行動兵種</h2>
               <p>先選擇攻擊者，或在施法時選擇法師。</p>
             </div>
           </div>
@@ -1850,74 +1947,7 @@ function App() {
         </section>
       )}
 
-      <section className="handAndLog">
-        <section className="zoneCard">
-          <div className="zoneHeader">
-            <div>
-              <h2>兵種手牌</h2>
-              <p>點選卡牌即可部署。可部署多張，直到場上滿 5 張。</p>
-            </div>
-          </div>
 
-          <div className="cardGrid">
-            {me?.hand?.length ? (
-              me.hand.map((card) => (
-                <button
-                  key={card.id}
-                  className="gameCard unit handCard"
-                  disabled={!isMyTurn || !!magicPlan}
-                  onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => emit("game:deploy", { cardId: card.id }))}
-                  onDoubleClick={(e) => {
-                    e.preventDefault();
-                    openCardDetail(card, "兵種手牌");
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    openCardDetail(card, "兵種手牌");
-                  }}
-                  onMouseDown={() => startCardDetailPress(card, "兵種手牌")}
-                  onMouseUp={cancelCardDetailPress}
-                  onMouseLeave={cancelCardDetailPress}
-                  onTouchStart={() => startCardDetailPress(card, "兵種手牌")}
-                  onTouchEnd={cancelCardDetailPress}
-                >
-                  <CardArt card={card} />
-                  <strong>{card.name}</strong>
-                  <span>傷害 {card.damage}｜剋 {card.counterTarget}</span>
-                  <span className="powerText">目前戰力：{effectivePower(card)}</span>
-                  <span className="effectText">{unitEffectText(card)}</span>
-                  <span className="actionLabel">部署</span>
-                </button>
-              ))
-            ) : <EmptyState>沒有兵種手牌。</EmptyState>}
-          </div>
-        </section>
-
-        <aside className="sideColumn">
-          <section className="zoneCard">
-            <h2>魔法卡</h2>
-            <p>先點魔法卡，再依提示選法師與目標。</p>
-            <div className="magicList">
-              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
-            </div>
-          </section>
-
-          <section className="zoneCard">
-            <h2>兵種相剋</h2>
-            <div className="counterList">
-              <span>步兵 → 弓兵</span>
-              <span>弓兵 → 法師</span>
-              <span>法師 → 騎兵</span>
-              <span>騎兵 → 步兵</span>
-            </div>
-          </section>
-
-          <section className="zoneCard">
-            <h2>遊戲紀錄</h2>
-            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
-          </section>
-        </aside>
-      </section>
     </main>
   );
 }
