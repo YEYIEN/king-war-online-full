@@ -1476,44 +1476,15 @@ io.on("connection", socket => {
     const magicDeck = makeMagic();
 
     function takeCard(deck, cardName) {
-      const index = deck.findIndex((card) => card.name === cardName);
-      if (index >= 0) return deck.splice(index, 1)[0];
-
-      return {
-        id: nanoid(8),
-        kind: "unit",
-        name: cardName,
-        type: cardName.includes("騎兵") ? "騎兵" :
-              cardName.includes("法師") ? "法師" :
-              cardName.includes("弓兵") ? "弓兵" : "步兵",
-        rank: cardName.includes("高級") ? "高級" :
-              cardName.includes("中級") ? "中級" : "初級",
-        damage: cardName.includes("高級") ? 3 :
-                cardName.includes("中級") ? 2 : 1,
-        counterTarget:
-              cardName.includes("步兵") ? "弓兵" :
-              cardName.includes("弓兵") ? "法師" :
-              cardName.includes("法師") ? "騎兵" : "步兵",
-        tapped: false,
-        justDeployed: false,
-        archerBonusUsed: false,
-        status: []
-      };
+      const index = deck.findIndex(card => card.name === cardName);
+      if (index < 0) throw new Error(`教學卡牌不存在：${cardName}`);
+      return deck.splice(index, 1)[0];
     }
 
     function takeMagic(deck, magicName) {
-      const index = deck.findIndex((card) => card.name === magicName);
-      if (index >= 0) return deck.splice(index, 1)[0];
-
-      return {
-        id: nanoid(8),
-        kind: "magic",
-        name: magicName,
-        level: "初級魔法",
-        target: "我方",
-        maxTargets: 1,
-        text: "我方一名兵種戰力+1，直到本回合結束。"
-      };
+      const index = deck.findIndex(card => card.name === magicName);
+      if (index < 0) throw new Error(`教學魔法不存在：${magicName}`);
+      return deck.splice(index, 1)[0];
     }
 
     const player = {
@@ -1526,9 +1497,9 @@ io.on("connection", socket => {
       ready: true,
       hp: 30,
       king: KINGS.find((k) => k.name === "亞歷山大大帝") || KINGS[0],
-      hand: [takeCard(unitDeck, "中級騎兵")],
+      hand: [takeCard(unitDeck, "中級騎兵"), takeCard(unitDeck, "中級步兵")],
       magic: [takeMagic(magicDeck, "力量術")],
-      field: [takeCard(unitDeck, "初級法師")],
+      field: [takeCard(unitDeck, "初級法師"), takeCard(unitDeck, "初級騎兵")],
       eliminated: false,
       magicDrawUsed: false,
       recallUsed: false,
@@ -1566,6 +1537,7 @@ io.on("connection", socket => {
       isPublic: false,
       tutorial: true,
       tutorialProgress: 0,
+      tutorialNextGuard: takeCard(unitDeck, "初級步兵"),
       matchmaking: false,
       singleplayer: false,
       settings: { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true },
@@ -1575,8 +1547,8 @@ io.on("connection", socket => {
       currentPlayerId: pid,
       turnStartedAt: Date.now(),
       log: [
-        "操作教學開始：這是一個固定教學房，請照正式對戰畫面完成部署、攻擊、施法與結束回合。",
-        "教學提示：先部署中級騎兵，再用力量術強化它，才能安全擊敗中級弓兵。"
+        "操作教學：你會親自完成兩個回合，學習部署、施法、兵種攻擊、國王攻擊、布防與回合切換。",
+        "第一步：先從手牌部署中級騎兵，再由法師施放力量術。"
       ]
     };
 
@@ -1940,7 +1912,12 @@ io.on("connection", socket => {
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const i=p.hand.findIndex(c=>c.id===cardId); if(i<0) return reply?.({ok:false,error:"找不到手牌。"});
-    if (room.tutorial && (room.tutorialProgress !== 0 || p.hand[i].name !== "中級騎兵")) return reply?.({ ok: false, error: "教學任務：請先部署中級騎兵。" });
+    if (room.tutorial) {
+      const expected = room.tutorialProgress === 0 ? "中級騎兵"
+        : room.tutorialProgress === 5 ? "中級步兵" : null;
+      if (!expected || p.hand[i].name !== expected)
+        return reply?.({ok:false,error:expected?`教學任務：請部署${expected}。`:"請先完成目前的教學操作。"});
+    }
     if(p.field.length>=5+(p.fieldBonus||0)) return reply?.({ok:false,error:"場上已滿。"});
     const [c]=p.hand.splice(i,1); c.justDeployed=true;
 
@@ -1962,7 +1939,7 @@ io.on("connection", socket => {
 
     p.field.push(c);
     incrementMatchMetric(room,"deploy",1,{playerId:p.id});
-    if (room.tutorial) room.tutorialProgress = 1;
+    if (room.tutorial) room.tutorialProgress = room.tutorialProgress === 0 ? 1 : 6;
     room.log.push(`${p.name} 部署 ${c.name}${c.rank==="高級"?"，進入整備":""}${triggeredReinforcement ? "，觸發急援，本回合可以攻擊" : ""}。`);
     reply?.({ok:true}); broadcast(room);
   });
@@ -1983,10 +1960,12 @@ io.on("connection", socket => {
     if (room.tutorial) {
       const a = player.field.find(u => u.id === attackerId);
       const d = getPlayer(room, targetPlayerId)?.field.find(u => u.id === defenderId);
-      if (room.tutorialProgress !== 2 || a?.name !== "中級騎兵" || d?.name !== "中級弓兵") return reply?.({ ok: false, error: "教學任務：請使用已強化的騎兵攻擊中級弓兵。" });
+      const expected = room.tutorialProgress === 2 ? "中級弓兵" : room.tutorialProgress === 6 ? "初級步兵" : null;
+      if (!expected || a?.name !== "中級騎兵" || d?.name !== expected)
+        return reply?.({ok:false,error:expected?`教學任務：使用中級騎兵攻擊敵方${expected}。`:"請依照教學步驟先完成其他操作。"});
     }
     const result = resolveAttackUnit(room, player, getPlayer(room,targetPlayerId), attackerId, defenderId);
-    if (room.tutorial && result.ok) room.tutorialProgress = 3;
+    if (room.tutorial && result.ok) room.tutorialProgress = room.tutorialProgress === 2 ? 3 : 7;
     reply?.(result.ok ? { ok: true } : result);
     if (result.ok) broadcast(room);
   });
@@ -1995,9 +1974,14 @@ io.on("connection", socket => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
-    if (room.tutorial) return reply?.({ ok: false, error: "這一關先學會用魔法調整戰力，並擊敗敵方兵種。" });
+    if (room.tutorial) {
+      const unit = player.field.find(u=>u.id===attackerId);
+      if (![3,7].includes(room.tutorialProgress) || unit?.name!=="初級騎兵")
+        return reply?.({ok:false,error:"教學任務：請選我方初級騎兵，攻擊沒有步兵守衛的敵方國王。"});
+    }
     if (!requireTurn(room,player)) return reply?.({ ok: false, error: "還沒輪到你。" });
     const result = resolveAttackKing(room, player, getPlayer(room,targetPlayerId), attackerId);
+    if (room.tutorial && result.ok) room.tutorialProgress = room.tutorialProgress===3 ? 4 : 8;
     reply?.(result.ok ? { ok: true } : result);
     if (result.ok) broadcast(room);
   });
@@ -2025,14 +2009,35 @@ io.on("connection", socket => {
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     if (room.tutorial) {
-      if (room.tutorialProgress !== 3) return reply?.({ ok: false, error: "請先完成部署、施法與兵種戰鬥，才能結束教學。" });
-      room.tutorialProgress = 4;
+      if (room.tutorialProgress === 4) {
+        // Script the opponent's guard deployment instead of triggering a real AI turn:
+        // the tutorial remains deterministic and every turn uses the live rules engine.
+        clearTurnTimer(room);
+        clearEndOfTurnBuffs(p);
+        clearEndTurnControl(p);
+        advanceFatigue(p);
+        trimHand(room,p);
+        const opponent=room.players.find(x=>x.id!==p.id);
+        opponent.field.push(room.tutorialNextGuard);
+        delete room.tutorialNextGuard;
+        room.turnsCompleted=(room.turnsCompleted||0)+2;
+        room.currentPlayerId=p.id;
+        room.tutorialProgress=5;
+        room.log.push("對手布下初級步兵守衛，你必須先清除它才能再次攻擊國王。");
+        startTurn(room,p);
+        reply?.({ok:true});
+        broadcast(room);
+        return;
+      }
+      if (room.tutorialProgress !== 8)
+        return reply?.({ok:false,error:"先跟隨畫面引導完成目前的實際操作。"});
+      room.tutorialProgress = 9;
       room.status = "tutorialComplete";
       room.currentPlayerId = null;
       clearTurnTimer(room);
-      room.log.push("實戰教學完成：學會利用魔法改變原本無法獲勝的戰鬥結果。");
+      room.log.push("互動教學完成：你已實際操作部署、魔法、兵種與國王攻擊、守衛及回合切換。");
       scheduleRoomCleanup(room, 300);
-      reply?.({ ok: true });
+      reply?.({ok:true});
       broadcast(room);
       return;
     }
