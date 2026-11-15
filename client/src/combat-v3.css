@@ -278,3 +278,8 @@
 /* Tutorial isn't a single-view competitive board; allow reading its steps without clipping. */
 .kwCombatV3:has(.practiceCoach) {height:auto !important;min-height:100dvh !important;overflow-y:auto !important}
 .kwCombatV3:has(.practiceCoach) .kwBattleFrame {height:auto !important;max-height:none !important;min-height:520px !important;grid-template-rows:52px minmax(280px,1fr) auto minmax(145px,22dvh) !important;overflow:visible !important}
+
+.kwCombatV3 .kwEnemyChipWrap {flex:0 0 auto !important;display:flex !important;min-height:46px !important;position:relative !important}
+.kwCombatV3 .kwEnemyKingInfo {display:grid !important;place-items:center !important;align-self:stretch !important;min-width:29px !important;border:1px solid #526d8c !important;border-radius:0 8px 8px 0 !important;background:#273e54 !important;color:#f5e6bb !important;font-weight:800 !important}
+.kwCombatV3 .kwEnemyChipWrap .kwKingChip {border-radius:8px 0 0 8px !important}
+.kwCombatV3 .kwEnemyKingInfo:hover,.kwCombatV3 .kwEnemyKingInfo:focus-visible {background:#425e76 !important}
