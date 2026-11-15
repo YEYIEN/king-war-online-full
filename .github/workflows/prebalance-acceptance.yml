@@ -107,6 +107,11 @@ jobs:
           KW_SIMULATION: '1'
           DUEL_ADVERSARIAL_MATCHES: '70'
         run: node scripts/duel-adversarial-king-pairs.mjs > duel-adversarial-summary-output.json
+      - name: Independent focused Qin Louis and Mongol Octavian duel seat swap
+        env:
+          KW_SIMULATION: '1'
+          DUEL_FOCUSED_MATCHES_PER_SEED: '400'
+        run: node scripts/duel-focused-king-holdout.mjs > duel-focused-summary-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -136,5 +141,8 @@ jobs:
             duel-adversarial-king-pairs.json
             duel-adversarial-king-pairs.md
             duel-adversarial-summary-output.json
+            duel-focused-king-holdout.json
+            duel-focused-king-holdout.md
+            duel-focused-summary-output.json
           retention-days: 30
           if-no-files-found: warn
