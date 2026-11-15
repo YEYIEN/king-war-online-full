@@ -135,3 +135,18 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
  .battleReadyCount {font-size:.82rem}
  .battleActionHeader {align-items:flex-start}
 }
+
+/* Guided practice, not a quiz: keep the current real game action visible. */
+.practiceCoach {display:grid;gap:12px;max-width:100%}
+.practiceCoach h2 {margin:0;font-size:clamp(1.12rem,3vw,1.5rem)}
+.practiceCoach p {margin:0;line-height:1.65}
+.practiceCoach .lessonTask {font-weight:600;padding:12px 14px;border-left:4px solid var(--kw-gold);border-radius:8px}
+.practiceJump {
+ display:inline-flex;align-items:center;justify-content:center;align-self:start;
+ color:#101925;background:#F7D590;text-decoration:none;font-weight:800;
+ border-radius:11px;padding:12px 18px;min-height:44px;
+}
+.practiceJump:hover,.practiceJump:focus-visible {background:#FFE3AB}
+.practiceCoachNote{font-size:.85rem;color:var(--kw-muted)}
+.practiceCoach .lessonProgress {display:flex;gap:5px;flex-wrap:wrap}
+.practiceCoach .lessonProgress span {width:clamp(18px,7vw,32px);height:7px;border-radius:100px}
