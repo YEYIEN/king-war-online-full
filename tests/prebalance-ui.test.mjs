@@ -65,3 +65,17 @@ test("special abilities are taught contextually through usable controls rather t
  assert.match(ui,/法師與魔法都已就緒/);
  assert.doesNotMatch(ui,/TUTORIAL_RECALL_QUESTIONS/);
 });
+
+test("compact combat V3 retains essential gameplay controls and defers secondary content",()=>{
+ assert.match(ui,/className="page guidedPage kwCombatV3"/);
+ assert.match(ui,/className="kwBattleFrame"/);
+ assert.match(ui,/className="kwScoreStrip"/);
+ assert.match(ui,/className="kwEnemyChips"/);
+ assert.match(ui,/aria-label=\{`選擇對手/);
+ assert.match(ui,/className="kwEnemyKingInfo"/);
+ assert.ok(ui.includes('id="kw-field"'));
+ assert.ok(ui.includes('id="kw-enemy"'));
+ assert.ok(ui.includes('id="kw-hand"'));
+ assert.match(ui,/className="endTurnBtn"/);
+ assert.match(ui,/className="guidedMagicPanel"/);
+});
