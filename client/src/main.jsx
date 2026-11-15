@@ -51,8 +51,8 @@ function effectivePower(card) {
   let value = rankMap[card.rank] || 1;
 
   if (statuses.includes("整備")) value -= 1;
-  if (statuses.includes("階級-1") || statuses.includes("戰力-1") || statuses.includes("階級-1") || statuses.includes("戰力-1")) value -= 1;
-  if (statuses.includes("階級+1") || statuses.includes("戰力+1") || statuses.includes("階級+1") || statuses.includes("戰力+1")) value += 1;
+  if (statuses.includes("階級-1") || statuses.includes("戰力-1")) value -= 1;
+  if (statuses.includes("階級+1") || statuses.includes("戰力+1")) value += 1;
   if (statuses.includes("力量術+1")) value += 1;
   if (statuses.includes("屋大維+1")) value += 1;
 
@@ -73,18 +73,6 @@ function displayStatusLabel(status) {
   if (s === "疲乏" || s === "疲乏待解") return "疲乏：下回合不能攻擊";
 
   return s.replaceAll("階級", "戰力");
-}
-
-function canUnitStillAct(card) {
-  if (!card) return false;
-
-  const statuses = card.status || [];
-
-  return !card.tapped &&
-    !statuses.includes("整備") &&
-    !statuses.includes("不能攻擊") &&
-    !statuses.includes("疲乏") &&
-    !statuses.includes("疲乏待解");
 }
 
 function cardDetailText(card) {
@@ -414,377 +402,6 @@ function EmptyState({ children }) {
   return <div className="emptyState">{children}</div>;
 }
 
-function TutorialModal({ step, setStep, onClose }) {
-  const item = tutorialSteps[step];
-  const isFirst = step === 0;
-  const isLast = step === tutorialSteps.length - 1;
-
-  return (
-    <section className="tutorialOverlay">
-      <div className="tutorialModal">
-        <div className="tutorialTop">
-          <span className="tutorialBadge">新手操作教學</span>
-          <button className="secondary tutorialClose" onClick={onClose}>關閉</button>
-        </div>
-
-        <div className="tutorialProgress">
-          {tutorialSteps.map((_, index) => (
-            <span key={index} className={index === step ? "active" : ""}>
-              {index + 1}
-            </span>
-          ))}
-        </div>
-
-        <div className="tutorialCard">
-          <div className="tutorialTag">{item.tag}</div>
-          <h2>{item.title}</h2>
-          <p>{item.text}</p>
-          <div className="tutorialTip">提示：{item.tip}</div>
-        </div>
-
-        <div className="tutorialPreview">
-          <div className="tutorialBoard enemy">敵方場地</div>
-          <div className="tutorialBoard center">選擇攻擊者 → 選擇目標 → 確認行動</div>
-          <div className="tutorialBoard mine">我方場地 / 手牌</div>
-        </div>
-
-        <div className="tutorialActions">
-          <button className="secondary" disabled={isFirst} onClick={() => setStep(step - 1)}>上一步</button>
-          <button
-            className="primaryBtn"
-            onClick={() => {
-              if (isLast) onClose();
-              else setStep(step + 1);
-            }}
-          >
-            {isLast ? "完成教學" : "下一步"}
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const tutorialSteps = [
-  {
-    title: "第 1 步：部署兵種",
-    tag: "出牌",
-    text: "從手牌選一張兵種卡放到自己的場上。場上最多可以有 5 張兵種。",
-    tip: "剛部署的兵種通常不能立刻攻擊，但騎兵可以。"
-  },
-  {
-    title: "第 2 步：選擇攻擊者",
-    tag: "攻擊",
-    text: "點選我方場上可以行動的兵種，讓它成為攻擊者。",
-    tip: "已行動、整備、疲乏或不能攻擊的兵種，這回合不能攻擊。"
-  },
-  {
-    title: "第 3 步：攻擊敵人",
-    tag: "戰鬥",
-    text: "選好攻擊者後，可以攻擊敵方兵種。如果敵方場上沒有步兵，也可以直接攻擊國王。",
-    tip: "步兵有守衛效果，敵方有步兵時不能直接打國王。"
-  },
-  {
-    title: "第 4 步：使用魔法",
-    tag: "魔法",
-    text: "點選魔法卡後，依序選擇施法者、目標玩家、目標兵種，最後確認施放。",
-    tip: "使用魔法需要法師，而且使用魔法也算一次行動。"
-  },
-  {
-    title: "第 5 步：結束回合",
-    tag: "回合",
-    text: "部署、攻擊、使用魔法都完成後，按下結束回合。系統會提醒你是否還有兵種尚未行動。",
-    tip: "目標是把其他玩家的國王 HP 打到 0。"
-  }
-];
-
-function InteractiveTutorial({ onExit }) {
-  const [step, setStep] = React.useState(0);
-  const [deployed, setDeployed] = React.useState(false);
-  const [attackerSelected, setAttackerSelected] = React.useState(false);
-  const [enemyDefeated, setEnemyDefeated] = React.useState(false);
-  const [magicOpened, setMagicOpened] = React.useState(false);
-  const [casterSelected, setCasterSelected] = React.useState(false);
-  const [magicTargetSelected, setMagicTargetSelected] = React.useState(false);
-  const [magicCast, setMagicCast] = React.useState(false);
-  const [turnEnded, setTurnEnded] = React.useState(false);
-
-  const steps = [
-    {
-      title: "第 1 步：部署兵種",
-      text: "請點選下方手牌中的「初級步兵」，把它放到自己的場上。",
-    },
-    {
-      title: "第 2 步：選擇攻擊者",
-      text: "請點選我方場上的「初級步兵」，讓它成為攻擊者。",
-    },
-    {
-      title: "第 3 步：攻擊敵方兵種",
-      text: "請點選敵方場上的「初級弓兵」，完成一次攻擊。",
-    },
-    {
-      title: "第 4 步：使用魔法卡",
-      text: "請點選下方的「力量術」，進入魔法施放流程。",
-    },
-    {
-      title: "第 5 步：選施法者與目標",
-      text: "請依序選擇法師、選擇我方步兵作為目標，最後確認施放。",
-    },
-    {
-      title: "第 6 步：結束回合",
-      text: "完成部署、攻擊與魔法後，請按「結束回合」。",
-    },
-    {
-      title: "教學完成",
-      text: "你已經完成基本操作。接下來可以創建房間、加入房間，或用隨機匹配開始遊戲。",
-    },
-  ];
-
-  const current = steps[step];
-
-  function deployUnit() {
-    if (step !== 0) return;
-    setDeployed(true);
-    setStep(1);
-  }
-
-  function selectAttacker() {
-    if (step !== 1 || !deployed) return;
-    setAttackerSelected(true);
-    setStep(2);
-  }
-
-  function attackEnemy() {
-    if (step !== 2 || !attackerSelected) return;
-    setEnemyDefeated(true);
-    setStep(3);
-  }
-
-  function openMagic() {
-    if (step !== 3) return;
-    setMagicOpened(true);
-    setStep(4);
-  }
-
-  function selectCaster() {
-    if (step !== 4 || !magicOpened) return;
-    setCasterSelected(true);
-  }
-
-  function selectMagicTarget() {
-    if (step !== 4 || !casterSelected) return;
-    setMagicTargetSelected(true);
-  }
-
-  function confirmMagic() {
-    if (step !== 4 || !casterSelected || !magicTargetSelected) return;
-    setMagicCast(true);
-    setStep(5);
-  }
-
-  function endTutorialTurn() {
-    if (step !== 5) return;
-    setTurnEnded(true);
-    setStep(6);
-  }
-
-  function resetTutorial() {
-    setStep(0);
-    setDeployed(false);
-    setAttackerSelected(false);
-    setEnemyDefeated(false);
-    setMagicOpened(false);
-    setCasterSelected(false);
-    setMagicTargetSelected(false);
-    setMagicCast(false);
-    setTurnEnded(false);
-  }
-
-  return (
-    <main className="page tutorialPlayPage">
-      <header className="tutorialPlayTopbar">
-        <div>
-          <div className="titleBadge">Tutorial</div>
-          <h1>國王戰爭操作教學</h1>
-          <p>照著提示點擊，完成一回合的基本操作。</p>
-        </div>
-
-        <div className="topActions">
-          <button className="secondary" onClick={resetTutorial}>重新教學</button>
-          <button className="secondary" onClick={onExit}>回到主選單</button>
-        </div>
-      </header>
-
-      <section className="tutorialMission">
-        <div className="tutorialMissionText">
-          <span>目前步驟 {Math.min(step + 1, steps.length)} / {steps.length}</span>
-          <h2>{current.title}</h2>
-          <p>{current.text}</p>
-        </div>
-
-        <div className="tutorialStepDots">
-          {steps.map((_, index) => (
-            <b key={index} className={index === step ? "active" : index < step ? "done" : ""}>
-              {index + 1}
-            </b>
-          ))}
-        </div>
-      </section>
-
-      <section className="tutorialBattleTable">
-        <div className="tutorialZone enemy">
-          <div className="zoneHeader">
-            <h2>敵方場地</h2>
-            <p>訓練對手 HP 30</p>
-          </div>
-
-          <div className="tutorialCardRow">
-            {!enemyDefeated ? (
-              <button
-                className={step === 2 ? "tutorialGameCard focus" : "tutorialGameCard"}
-                disabled={step !== 2}
-                onClick={attackEnemy}
-              >
-                <strong>初級弓兵</strong>
-                <span>目前戰力：1</span>
-                <small>{step === 2 ? "點我進行攻擊" : "敵方兵種"}</small>
-              </button>
-            ) : (
-              <div className="tutorialEmpty">敵方兵種已被擊敗</div>
-            )}
-          </div>
-        </div>
-
-        <div className="tutorialCenter">
-          <div className="tutorialInfoCard">
-            <strong>操作提示</strong>
-            <p>
-              {step === 0 && "先從手牌部署兵種。"}
-              {step === 1 && "部署後，選擇我方場上的兵種。"}
-              {step === 2 && "選好攻擊者後，點擊敵方兵種。"}
-              {step === 3 && "接著試著使用一張魔法卡。"}
-              {step === 4 && "魔法需要施法者與目標。"}
-              {step === 5 && "最後按結束回合。"}
-              {step === 6 && "教學完成，可以開始正式遊戲。"}
-            </p>
-          </div>
-        </div>
-
-        <div className="tutorialZone mine">
-          <div className="zoneHeader">
-            <h2>我方場地</h2>
-            <p>你的國王 HP 30</p>
-          </div>
-
-          <div className="tutorialCardRow">
-            <button
-              className={
-                deployed
-                  ? step === 1
-                    ? "tutorialGameCard focus"
-                    : attackerSelected
-                      ? "tutorialGameCard selected"
-                      : "tutorialGameCard"
-                  : "tutorialGameCard placeholder"
-              }
-              disabled={!deployed || step !== 1}
-              onClick={selectAttacker}
-            >
-              <strong>{deployed ? "初級步兵" : "尚未部署"}</strong>
-              <span>{deployed ? "目前戰力：1" : "請先從手牌部署"}</span>
-              <small>
-                {deployed
-                  ? attackerSelected
-                    ? "已選為攻擊者"
-                    : step === 1
-                      ? "點我選為攻擊者"
-                      : "我方兵種"
-                  : "空位"}
-              </small>
-            </button>
-
-            <button
-              className={casterSelected ? "tutorialGameCard selected" : step === 4 ? "tutorialGameCard focusSoft" : "tutorialGameCard"}
-              disabled={step !== 4 || !magicOpened || casterSelected}
-              onClick={selectCaster}
-            >
-              <strong>初級法師</strong>
-              <span>目前戰力：1</span>
-              <small>{casterSelected ? "已選施法者" : "魔法施法者"}</small>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {step === 4 && magicOpened && (
-        <section className="tutorialMagicPanel">
-          <h2>魔法施放流程：力量術</h2>
-
-          <div className="magicStepBar">
-            <span className={casterSelected ? "active" : ""}>1 選施法者</span>
-            <span className={magicTargetSelected ? "active" : ""}>2 選目標</span>
-            <span className={magicCast ? "active" : ""}>3 確認施放</span>
-          </div>
-
-          <div className="panelActions">
-            <button disabled={casterSelected} onClick={selectCaster}>選擇初級法師</button>
-            <button disabled={!casterSelected || magicTargetSelected} onClick={selectMagicTarget}>選擇初級步兵</button>
-            <button disabled={!casterSelected || !magicTargetSelected} onClick={confirmMagic}>確認施放</button>
-          </div>
-        </section>
-      )}
-
-      <section className="tutorialHandBar">
-        <div className="tutorialHandSection">
-          <h2>你的兵種手牌</h2>
-          <div className="tutorialCardRow">
-            <button
-              className={step === 0 ? "tutorialGameCard focus" : "tutorialGameCard"}
-              disabled={step !== 0 || deployed}
-              onClick={deployUnit}
-            >
-              <strong>初級步兵</strong>
-              <span>守衛</span>
-              <small>{step === 0 ? "點我部署" : deployed ? "已部署" : "兵種卡"}</small>
-            </button>
-
-            <button className="tutorialGameCard locked" disabled>
-              <strong>中級騎兵</strong>
-              <span>突擊</span>
-              <small>教學中暫時鎖定</small>
-            </button>
-          </div>
-        </div>
-
-        <div className="tutorialHandSection">
-          <h2>你的魔法卡</h2>
-          <div className="tutorialCardRow">
-            <button
-              className={step === 3 ? "tutorialGameCard magic focus" : "tutorialGameCard magic"}
-              disabled={step !== 3 || magicOpened}
-              onClick={openMagic}
-            >
-              <strong>力量術</strong>
-              <span>戰力 +1</span>
-              <small>{step === 3 ? "點我使用魔法" : magicOpened ? "施放中" : "魔法卡"}</small>
-            </button>
-          </div>
-        </div>
-
-        <div className="tutorialEndBox">
-          <button
-            className="endTurnBtn"
-            disabled={step !== 5 || turnEnded}
-            onClick={endTutorialTurn}
-          >
-            結束回合
-          </button>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 const GUIDED_LESSONS = [
   {
     title: "第一關｜先部署可立即行動的騎兵",
@@ -878,9 +495,6 @@ function App() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [mobileActionModal, setMobileActionModal] = useState(null);
   const [actionCardModal, setActionCardModal] = useState(null);
-  const [tutorialMode, setTutorialMode] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [tutorialStep, setTutorialStep] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [attackFeedback, setAttackFeedback] = useState(null);
   const lastLogRef = useRef("");
@@ -889,24 +503,10 @@ function App() {
   const cardDetailPressTimerRef = useRef(null);
 
   function openCardDetail(card, source = "卡片") {
-    // BLOCK_UNIT_CARD_DETAIL_V2
-    if (shouldBlockUnitCardDetail(card, source)) {
-      setCardDetailModal?.(null);
-      return;
-    }
-    // UNIT_DETAIL_DISABLED_V1
-    // 兵種牌種類不多，避免手機誤觸長按一直跳說明；兵種效果改放規則頁。
-    const isUnitCard =
-      (!card?.kind || card?.kind === "unit") &&
-      source !== "國王" &&
-      source !== "魔法卡";
-
-    if (isUnitCard || String(source).includes("兵種")) {
-      return;
-    }
+    // Unit rules remain on their cards and in the rules reference; prevent accidental long-press overlays.
+    if (shouldBlockUnitCardDetail(card, source)) return;
     const detail = buildCardDetail(card, source);
-    if (!detail) return;
-    setCardDetailModal(detail);
+    if (detail) setCardDetailModal(detail);
   }
 
   function openActionCardModal(card, actionText, runAction, source = "卡片") {
@@ -1260,11 +860,6 @@ function App() {
     setMessage("");
   }
 
-  function playAgainFromResult() {
-    // PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1
-    setMessage("本局結束後會自動回到主選單。");
-  }
-
   function startTutorialRoom() {
     clearSavedSession();
 
@@ -1300,10 +895,6 @@ function App() {
 
   // Keep the completed match visible until the player explicitly leaves.
   // The server retains control over room cleanup and may notify clients if the room expires.
-
-  if (tutorialMode) {
-    return <InteractiveTutorial onExit={() => setTutorialMode(false)} />;
-  }
 
   if (!room) {
     return (
@@ -1368,13 +959,6 @@ function App() {
 
           {message && <p className="error">{message}</p>}
 
-          {showTutorial && (
-            <TutorialModal
-              step={tutorialStep}
-              setStep={setTutorialStep}
-              onClose={() => setShowTutorial(false)}
-            />
-          )}
         </section>
       </main>
     );
@@ -1559,17 +1143,7 @@ function App() {
   function openMobileActionModal(card, source, actionText, runAction) {
     closeCardDetailForAction();
 
-    const detail = typeof buildCardDetail === "function"
-      ? buildCardDetail(card, source)
-      : {
-          source,
-          name: card?.name || source,
-          rank: card?.rank || card?.level || "",
-          type: card?.type || "",
-          text: card?.text || card?.effect || "",
-          power: typeof effectivePower === "function" && card?.kind !== "magic" ? effectivePower(card) : null,
-          status: card?.status || []
-        };
+    const detail = buildCardDetail(card, source);
 
     setMobileActionModal({
       detail,
@@ -2015,7 +1589,7 @@ function App() {
 
             <p>{cardDetailModal.text}</p>
 
-            <small>提示：手機長按卡片、電腦右鍵或雙擊卡片，可以再次查看完整說明。</small>
+            <small>提示：國王及魔法卡可長按或右鍵查看說明；兵種效果請查看卡面及規則頁。</small>
           </div>
         </section>
       )}
