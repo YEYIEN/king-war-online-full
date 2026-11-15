@@ -377,120 +377,81 @@ function EmptyState({ children }) {
 }
 
 const GUIDED_LESSONS = [
-  {
-    title: "第一關｜先部署可立即行動的騎兵",
-    purpose: "我方握有中級騎兵，敵方有中級弓兵。先觀察雙方戰力：都是 2。",
-    action: "點選下方「中級騎兵」並部署。",
-    why: "一般兵種剛部署不能攻擊；騎兵可以。部署只是建立可用的進攻選項。",
-    warning: "雙方戰力相同時，直接互相攻擊通常會兩敗俱傷。先別急著出手。"
-  },
-  {
-    title: "第二關｜運用魔法改變戰鬥結果",
-    purpose: "剛才的騎兵戰力為 2，敵方弓兵也是 2。此時直接攻擊會犧牲騎兵。",
-    action: "點選「力量術」→ 選初級法師 → 選中級騎兵 → 確認施放。",
-    why: "力量術讓騎兵戰力從 2 變成 3，才能在這次戰鬥中存活並消滅敵人。",
-    warning: "施法會消耗法師一次行動，因此應挑選能真正改變結果的目標。"
-  },
-  {
-    title: "第三關｜檢查剋制與損失再進攻",
-    purpose: "現在騎兵戰力 3、弓兵戰力 2；騎兵並不剋制弓兵，但戰力已足以獲勝。",
-    action: "選擇我方中級騎兵，再選敵方中級弓兵進行攻擊。",
-    why: "戰力相等兩敗俱傷；戰力較高的一方獲勝，部分兵種還有特殊保護效果。",
-    warning: "也要檢查敵方步兵：只要對方有步兵存活，就不能直接攻擊國王。"
-  },
-  {
-    title: "第四關｜決定何時結束回合",
-    purpose: "你已經成功利用資源改變原本勢均力敵的戰局，並消滅對手的兵種。",
-    action: "按上方的「結束回合」。",
-    why: "每一回合要權衡部署、魔法與攻擊的先後，而不是看到可以按就立刻按。",
-    warning: "正式遊戲的目標，是清除敵方步兵防線，再將國王 HP 降到 0。"
-  }
+  { title:"部署第一名兵種", where:"#kw-hand", location:"手牌與部署",
+    purpose:"先認識手牌與戰場：牌在手上不能攻擊，要部署到我方戰場才能使用。",
+    action:"到手牌區點選「中級騎兵」，閱讀卡牌資訊後按「確認部署」。",
+    why:"騎兵能在部署當回合進攻；其他兵種通常要等待下一回合。", warning:"先別攻擊，下一步會用魔法強化它。" },
+  { title:"用法師施放力量術", where:"#kw-hand", location:"魔法卡",
+    purpose:"場上已放好法師，手上有一張力量術。魔法需要法師，並消耗法師本回合的行動。",
+    action:"在魔法卡區點「力量術」，依次選初級法師、我方中級騎兵，再確認施放。",
+    why:"騎兵原戰力 2，強化後變 3，能避免在對決中與戰力 2 的弓兵同歸於盡。",
+    warning:"施法的法師本回合不能再次攻擊。魔法介面每一步都可取消。" },
+  { title:"選攻擊者，再選敵方兵種", where:"#kw-field", location:"我方與敵方戰場",
+    purpose:"騎兵已獲得力量術加成，現在親自用它擊敗敵方中級弓兵。",
+    action:"點我方「中級騎兵」，再點敵方「中級弓兵」；注意顯示的戰力與行動狀態。",
+    why:"攻擊時比較雙方戰力，還要考慮兵種相剋與特殊能力。",
+    warning:"攻擊一次通常消耗一次行動，已行動的兵種不可重複出手。" },
+  { title:"直接攻擊敵方國王", where:"#kw-enemy", location:"敵方戰場",
+    purpose:"敵人場上已沒有步兵守衛。你可以看見敵方 HP 和國王能力。",
+    action:"點我方場上的「初級騎兵」，再按敵方戰場的「攻擊敵方國王」。",
+    why:"戰鬥的最終目標是把敵方國王 HP 降至 0；有步兵守衛時必須先清除步兵。",
+    warning:"可以直接點國王名稱查看王權，點「規則」查看兵種相剋。" },
+  { title:"結束第一個回合", where:"#kw-top-actions", location:"回合操作區",
+    purpose:"你已部署、施法、攻擊兵種和國王。現在體驗回合結束與下一回合抽牌。",
+    action:"點上方「結束回合」，觀察對手部署步兵，以及自己的兵種重新可以行動。",
+    why:"回合開始會抽兵種牌；有法師時也可能抽魔法。每回合須決定資源使用順序。",
+    warning:"正式對局中可自由決定何時結束回合，但本教學會引導你完成所有必經步驟。" },
+  { title:"先部署步兵保護國王", where:"#kw-hand", location:"手牌與部署",
+    purpose:"對手場上出現步兵，這正是守衛機制。你也可以部署步兵保護自己的國王。",
+    action:"點手牌裡的「中級步兵」，確認部署到我方戰場。",
+    why:"只要場上仍有步兵守衛，敵人通常無法直接攻擊你的國王。",
+    warning:"非騎兵一般剛部署無法立刻攻擊；防守仍然會生效。" },
+  { title:"利用騎兵剋制清除步兵", where:"#kw-field", location:"我方與敵方戰場",
+    purpose:"敵方步兵擋住國王攻擊。兵種有相剋關係：騎兵剋步兵。",
+    action:"點重新可行動的「中級騎兵」，再點敵方「初級步兵」進攻。",
+    why:"四種相剋循環是：步兵→弓兵→法師→騎兵→步兵。選對目標能降低損失。",
+    warning:"戰力不是唯一條件，對手兵種特殊能力與狀態也會影響戰果。" },
+  { title:"防線突破後繼續攻擊國王", where:"#kw-enemy", location:"敵方戰場",
+    purpose:"敵方步兵已被清除，現在再次體驗攻擊國王與 HP 下降。",
+    action:"點我方「初級騎兵」，再按「攻擊敵方國王」。",
+    why:"真正的勝利條件是擊敗國王，不是只消滅敵方所有場上兵種。",
+    warning:"多人局要先選擇目標玩家；特殊能力請查看國王卡及規則。" },
+  { title:"完成一整輪攻防操作", where:"#kw-top-actions", location:"回合操作區",
+    purpose:"你已體驗兩個回合的部署、攻擊、守衛、施法、兵種剋制及國王 HP。",
+    action:"點「結束回合」完成實戰教學；沒有考題，也不需要背誦答案。",
+    why:"正式遊戲還有五位國王的不同被動、弓兵追加攻擊、成吉思汗撤回、背水一戰和多人選敵。",
+    warning:"這些功能在正常對戰條件符合時可直接操作，遊戲中隨時可以打開規則查看。" }
 ];
 
-const TUTORIAL_RECALL_QUESTIONS = [
-  {
-    prompt: "剛部署的中級騎兵面對同戰力的弓兵，為什麼先用力量術？",
-    options: [
-      "因為騎兵剛部署完全不能行動",
-      "讓戰力從 2 提升到 3，避免直接交換造成的損失",
-      "因為弓兵只能被魔法直接消滅"
-    ],
-    correct: 1,
-    explanation: "騎兵可以立即攻擊，但要先考慮戰力相等時的交換結果。力量術能使這次交換更有利。"
-  },
-  {
-    prompt: "敵方場上還有步兵守衛時，你能直接攻擊國王嗎？",
-    options: [
-      "不行，必須先處理敵方步兵防線",
-      "可以，只要我方有騎兵",
-      "可以，只要國王 HP 低於 10"
-    ],
-    correct: 0,
-    explanation: "步兵是國王的守衛。先清除步兵，才能依照規則攻擊國王。"
-  },
-  {
-    prompt: "你手上有魔法卡，但場上沒有可以施法的法師時，應該怎麼做？",
-    options: [
-      "直接選魔法卡就能施放",
-      "由任意弓兵代替施法",
-      "先部署或準備能合法施法的法師，不能跳過施法者條件"
-    ],
-    correct: 2,
-    explanation: "魔法需要可行動的法師；施法也會消耗法師一次行動。"
-  }
-];
-
-function GuidedTutorialCoach({ progress = 0, onExit }) {
-  const [questionIndex, setQuestionIndex] = React.useState(0);
-  const [answer, setAnswer] = React.useState(null);
-  const index = Math.min(progress, GUIDED_LESSONS.length - 1);
-  const lesson = GUIDED_LESSONS[index];
-  const complete = progress >= GUIDED_LESSONS.length;
-  const question = TUTORIAL_RECALL_QUESTIONS[questionIndex];
-  const correct = answer === question.correct;
-  function nextQuestion() {
-    setQuestionIndex((current) => Math.min(current + 1, TUTORIAL_RECALL_QUESTIONS.length - 1));
-    setAnswer(null);
-  }
-
+function GuidedTutorialCoach({ progress=0, onExit }) {
+  const complete=progress>=GUIDED_LESSONS.length;
+  const index=Math.min(progress,GUIDED_LESSONS.length-1);
+  const step=GUIDED_LESSONS[index];
   return (
-    <section className="guidedLesson" aria-label="互動新手實戰教學">
+    <section className="guidedLesson practiceCoach" aria-label="逐步實戰教學" aria-live="polite">
       <div className="guidedLessonTop">
-        <strong>實戰教學 · {complete ? "理解驗收" : `任務 ${progress + 1}/${GUIDED_LESSONS.length}`}</strong>
-        <span>{complete ? `情境確認 ${questionIndex + 1}/${TUTORIAL_RECALL_QUESTIONS.length}` : "請親自操作正式遊戲卡牌"}</span>
+        <strong>{complete?"實戰教學完成":`實戰導覽 · 第 ${progress+1} / ${GUIDED_LESSONS.length} 步`}</strong>
+        <span>{complete?"自由對戰準備完成":step.location}</span>
       </div>
       {complete ? (
         <>
-          <h2>實戰回合完成！確認你理解關鍵規則</h2>
-          <p className="lessonTask">{question.prompt}</p>
-          <div className="lessonChoiceGroup" role="group" aria-label={`情境理解題 ${questionIndex + 1}`}>
-            {question.options.map((choice, i) => (
-              <button type="button" key={choice}
-                aria-pressed={answer === i}
-                className={answer === i ? "selected" : "secondary"}
-                onClick={() => setAnswer(i)}>{choice}</button>
-            ))}
-          </div>
-          {answer !== null && (
-            <p role="status" aria-live="polite" className={correct ? "lessonCorrect" : "lessonWrong"}>
-              {correct ? "判斷正確。" : "這個選擇可能導致不利行動，請重新選擇。"} {question.explanation}
-            </p>
-          )}
-          {correct && (questionIndex === TUTORIAL_RECALL_QUESTIONS.length - 1
-            ? <button type="button" className="primaryBtn" onClick={onExit}>完成理解驗收，返回主選單</button>
-            : <button type="button" className="primaryBtn" onClick={nextQuestion}>下一個情境</button>)}
-          <p className="lessonAssessmentNote">這是即時理解確認，不代表已掌握獨立對戰策略。進入正式對局後仍可查閱規則。</p>
+          <h2>你已經親手完成兩個戰鬥回合！</h2>
+          <p className="lessonTask">你實際操作了部署、施法、攻擊兵種、攻擊國王、步兵守衛、兵種剋制與結束回合。</p>
+          <p>正式對局還可以體驗不同王權、弓兵追加攻擊、騎兵撤回、背水一戰與多人攻擊目標。遇到陌生功能時，直接開啟「規則」查看說明。</p>
+          <button type="button" className="primaryBtn" onClick={onExit}>結束教學，開始自由對戰</button>
         </>
       ) : (
         <>
-          <h2>{lesson.title}</h2>
-          <p><strong>局勢：</strong>{lesson.purpose}</p>
-          <p className="lessonTask"><strong>現在請做：</strong>{lesson.action}</p>
-          <p><strong>為什麼：</strong>{lesson.why}</p>
-          <p className="lessonWarning"><strong>策略提醒：</strong>{lesson.warning}</p>
-          <div className="lessonProgress" aria-label={`已完成 ${progress} 個實戰操作`}>
-            {GUIDED_LESSONS.map((_, i) => <span key={i} className={i <= progress ? "active" : ""} />)}
+          <h2>{step.title}</h2>
+          <p><strong>這一步在學：</strong>{step.purpose}</p>
+          <p className="lessonTask"><strong>現在親手操作：</strong>{step.action}</p>
+          <p><strong>為什麼：</strong>{step.why}</p>
+          <p className="lessonWarning"><strong>戰術提醒：</strong>{step.warning}</p>
+          <a className="practiceJump" href={step.where}>前往「{step.location}」操作</a>
+          <div className="lessonProgress" aria-label={`已完成 ${progress} 個實際操作`}>
+            {GUIDED_LESSONS.map((_,i)=><span key={i} className={i<=progress?"active":""}/>)}
           </div>
+          <p className="practiceCoachNote">不需要回答考題。只有在正式戰場成功完成目前動作，才會自動進入下一步。</p>
         </>
       )}
     </section>
@@ -890,7 +851,7 @@ function App() {
         rememberSession(res.playerId, res.room, res.resumeToken);
       }
 
-      setMessage("操作教學：請依照畫面提示完成部署、攻擊、施法與結束回合。");
+      setMessage("互動教學：跟著九個操作步驟，親自完成兩個戰鬥回合。");
     });
   }
 
@@ -995,7 +956,7 @@ function App() {
   const magicTargetPlayer = room.players.find((p) => p.id === magicPlan?.targetPlayerId);
   const hint = actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan });
   const readyUnits = (me?.field || []).filter(canUnitStillAct).length;
-  const battleInstruction = !isMyTurn
+  const battleInstruction = room.status === "tutorialComplete" ? "教學已完成，請按引導面板的按鈕返回主選單。" : !isMyTurn
     ? "目前是對手的回合。可以先查看王權、兵種剋制與戰鬥紀錄。"
     : magicPlan ? "施法中：依照紫色魔法流程選法師、目標與確認；可以隨時取消。"
     : attacker ? `已選擇「${attacker.name}」：點擊下方敵方兵種發動攻擊，或在敵人沒有步兵時攻擊國王。`
@@ -1387,11 +1348,11 @@ function App() {
 
   return (
     <main className="page guidedPage">
-      <header className="topbar guidedTopbar">
+      <header className="topbar guidedTopbar" id="kw-top-actions">
         <div>
           <div className="titleBadge">Room {room.roomCode}</div>
           <h1>國王戰爭</h1>
-          <p>{isMyTurn ? "輪到你行動" : "等待其他玩家行動"}</p>
+          <p>{room.status === "tutorialComplete" ? "新手操作教學已完成" : isMyTurn ? "輪到你行動" : "等待其他玩家行動"}</p>
           {turnRemaining !== null && (
             <div className={turnRemaining <= 10 ? "turnTimer danger" : "turnTimer"}>
               回合倒數：{turnRemaining} 秒
@@ -1629,7 +1590,7 @@ function App() {
         </section>
       )}
 
-      {showHelp && !gameEnded && <GuidePanel hint={hint} />}
+      {showHelp && !gameEnded && !room.tutorial && <GuidePanel hint={hint} />}
 
       <section className="gfEnemyPlayers">
         {enemies.map((p) => (
