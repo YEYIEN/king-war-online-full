@@ -259,6 +259,11 @@ function PlayerSummary({ player, isMe, isCurrent, onDetail }) {
       {player.king && (
         <div
           className="kingMini"
+          role="button"
+          tabIndex={0}
+          aria-label={`查看 ${player.king.name} 的國王能力`}
+          onClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onDetail?.({ ...player.king, kind: "king" }, "國王"); } }}
           onDoubleClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -289,48 +294,12 @@ function PlayerSummary({ player, isMe, isCurrent, onDetail }) {
 
 
 
-function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "", onDetail, onAction }) {
-  let pressTimer = null;
-
-  function startPress() {
-    // UNIT_CARD_LONG_PRESS_DISABLED_V2
-    return;
-  }
-
-  function cancelPress() {
-    if (pressTimer) {
-      window.clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  }
-
-  function handleClick() {
-    if (disabled) return;
-
-    if (onAction) {
-      onAction(card, actionLabel || "執行這張卡的操作", onClick, "兵種卡");
-      return;
-    }
-
-    onClick?.();
-  }
-
+function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "" }) {
   return (
     <button
       className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`}
       disabled={disabled}
-      onClick={handleClick}
-      onDoubleClick={(e) => {
-        e.preventDefault();
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-      }}
-      onMouseDown={startPress}
-      onMouseUp={cancelPress}
-      onMouseLeave={cancelPress}
-      onTouchStart={startPress}
-      onTouchEnd={cancelPress}
+      onClick={onClick}
     >
       <CardArt card={card} small={compact} />
       <strong>{card.name}</strong>
@@ -343,7 +312,6 @@ function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = fa
     </button>
   );
 }
-
 
 
 function MagicCard({ card, onClick, disabled, selected, onDetail, onAction }) {
