@@ -1628,6 +1628,7 @@ function App() {
           <a href="#kw-hand">1. 手牌／部署</a>
           <a href="#kw-field">2. 我方兵種</a>
           <a href="#kw-enemy">3. 選擇敵人</a>
+          {magicPlan && <a href="#kw-magic">魔法施放步驟</a>}
         </nav>
         {attacker && !magicPlan && (
           <button type="button" className="secondary" onClick={() => setAttackerId(null)}>
@@ -1705,73 +1706,8 @@ function App() {
         </aside>
       </section>
 
-      <section className="targetBar card" id="kw-target">
-        <div>
-          <h2>選擇對手</h2>
-          <p>多人局先選對手，再選攻擊者與目標兵種。</p>
-        </div>
-        <select aria-label="選擇目標玩家" value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
-          {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </section>
-
-      <section className="battleGrid">
-        <section className="zoneCard enemyZone" id="kw-enemy">
-          <div className="zoneHeader">
-            <div>
-              <h2>{targetPlayer?.name || "敵方"} · 敵方戰場</h2>
-              <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
-            </div>
-            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "攻擊敵方國王"}</button>
-          </div>
-
-          <div className="cardGrid">
-            {targetPlayer?.field?.length ? (
-              targetPlayer.field.map((card) => (
-                <UnitCard onDetail={openCardDetail}
-                  key={card.id}
-                  card={card}
-                  selected={magicPlan?.targetUnitIds.includes(card.id)}
-                  disabled={!isMyTurn || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
-                  onClick={() => (magicPlan ? chooseMagicTarget(card.id) : attackUnit(card.id))}
-                  actionLabel={enemyCardActionLabel(card)}
-                  highlight={attackerId && !magicPlan ? "attackable" : ""}
-                />
-              ))
-            ) : <EmptyState>敵方場上沒有兵種。</EmptyState>}
-          </div>
-        </section>
-
-        <section className="zoneCard myZone" id="kw-field">
-          <div className="zoneHeader">
-            <div>
-              <h2>我方戰場 · 選擇行動兵種</h2>
-              <p>先選擇攻擊者，或在施法時選擇法師。</p>
-            </div>
-          </div>
-
-          <div className="cardGrid">
-            {me?.field?.length ? (
-              me.field.map((card) => (
-                <div key={card.id} className="unitWrap">
-                  <UnitCard onDetail={openCardDetail}
-                    card={card}
-                    selected={attackerId === card.id || magicPlan?.casterId === card.id || magicPlan?.targetUnitIds.includes(card.id)}
-                    disabled={!isMyTurn || (magicPlan && magicPlan.casterId && magicPlan.magic.target !== "我方")}
-                    onClick={() => selectOwnUnit(card)}
-                    actionLabel={ownCardActionLabel(card)}
-                    highlight={!card.tapped && !magicPlan ? "ready" : ""}
-                  />
-                  {me?.king?.name === "成吉思汗" && isMyTurn && !magicPlan && <button className="smallBtn" onClick={() => emit("game:recall", { unitId: card.id })}>撤回</button>}
-                </div>
-              ))
-            ) : <EmptyState>你目前沒有場上兵種。可以先從手牌部署。</EmptyState>}
-          </div>
-        </section>
-      </section>
-
       {magicPlan && (
-        <section className="magicPanel guidedMagicPanel">
+        <section className="magicPanel guidedMagicPanel" id="kw-magic">
           <div>
             <div className="titleBadge">MAGIC STEP</div>
             <h2>施放魔法：{magicPlan.magic.name}</h2>
@@ -1907,6 +1843,71 @@ function App() {
           </div>
         </section>
       )}
+
+      <section className="targetBar card" id="kw-target">
+        <div>
+          <h2>選擇對手</h2>
+          <p>多人局先選對手，再選攻擊者與目標兵種。</p>
+        </div>
+        <select aria-label="選擇目標玩家" value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
+          {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </section>
+
+      <section className="battleGrid">
+        <section className="zoneCard enemyZone" id="kw-enemy">
+          <div className="zoneHeader">
+            <div>
+              <h2>{targetPlayer?.name || "敵方"} · 敵方戰場</h2>
+              <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
+            </div>
+            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "攻擊敵方國王"}</button>
+          </div>
+
+          <div className="cardGrid">
+            {targetPlayer?.field?.length ? (
+              targetPlayer.field.map((card) => (
+                <UnitCard onDetail={openCardDetail}
+                  key={card.id}
+                  card={card}
+                  selected={magicPlan?.targetUnitIds.includes(card.id)}
+                  disabled={!isMyTurn || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
+                  onClick={() => (magicPlan ? chooseMagicTarget(card.id) : attackUnit(card.id))}
+                  actionLabel={enemyCardActionLabel(card)}
+                  highlight={attackerId && !magicPlan ? "attackable" : ""}
+                />
+              ))
+            ) : <EmptyState>敵方場上沒有兵種。</EmptyState>}
+          </div>
+        </section>
+
+        <section className="zoneCard myZone" id="kw-field">
+          <div className="zoneHeader">
+            <div>
+              <h2>我方戰場 · 選擇行動兵種</h2>
+              <p>先選擇攻擊者，或在施法時選擇法師。</p>
+            </div>
+          </div>
+
+          <div className="cardGrid">
+            {me?.field?.length ? (
+              me.field.map((card) => (
+                <div key={card.id} className="unitWrap">
+                  <UnitCard onDetail={openCardDetail}
+                    card={card}
+                    selected={attackerId === card.id || magicPlan?.casterId === card.id || magicPlan?.targetUnitIds.includes(card.id)}
+                    disabled={!isMyTurn || (magicPlan && magicPlan.casterId && magicPlan.magic.target !== "我方")}
+                    onClick={() => selectOwnUnit(card)}
+                    actionLabel={ownCardActionLabel(card)}
+                    highlight={!card.tapped && !magicPlan ? "ready" : ""}
+                  />
+                  {me?.king?.name === "成吉思汗" && isMyTurn && !magicPlan && <button className="smallBtn" onClick={() => emit("game:recall", { unitId: card.id })}>撤回</button>}
+                </div>
+              ))
+            ) : <EmptyState>你目前沒有場上兵種。可以先從手牌部署。</EmptyState>}
+          </div>
+        </section>
+      </section>
 
 
     </main>
