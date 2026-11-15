@@ -154,3 +154,13 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
 .battleHandPrimary {min-width:0;display:grid;align-content:start;gap:14px}
 .battleHandPrimary > .zoneCard {min-width:0}
 .battleHandPrimary .guidedMagicPanel {margin:0}
+
+.battleKingHelp {
+ justify-self:start;text-align:left;min-height:44px;padding:9px 14px;
+ background:#30485D;color:#F5F9FF;border:1px solid #9CB4C9;
+ border-radius:10px;font-weight:750;
+}
+.battleMechanicTip {
+ margin:0;padding:11px 14px;background:#302C42;color:#ECE6FF;
+ border-left:4px solid #C2A4F9;border-radius:8px;line-height:1.65;
+}
