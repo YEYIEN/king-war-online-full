@@ -400,7 +400,7 @@ function App() {
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
-  const [showHelp, setShowHelp] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
@@ -1543,7 +1543,7 @@ function App() {
                   className={`kwKingChip enemy ${targetPlayer?.id===player.id?"active":""}`}
                   aria-pressed={targetPlayer?.id===player.id}
                   aria-label={`選擇對手 ${player.name}，國王 ${player.king?.name || ""}，血量 ${player.hp}`}
-                  onClick={()=>{setTargetPlayerId(player.id);setAttackerId(null);}}>
+                  onClick={()=>setTargetPlayerId(player.id)}>
                   <span className="kwKingChipLabel">{player.name}{player.eliminated?" · 出局":""}</span>
                   <strong>{player.king?.name || "國王"} <span className="kwHp">HP {player.hp}</span></strong>
                   <span className="kwKingChipResources">手牌 {player.handCount} · 魔法 {player.magicCount}</span>
