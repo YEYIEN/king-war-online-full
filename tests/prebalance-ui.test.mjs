@@ -19,3 +19,24 @@ test("all lobby and gameplay commands use the bounded, deduplicated request path
  assert.match(ui,/pendingRequestsRef\.current\.has\(event\)/);
  assert.match(ui,/connectionWarning.*role="status".*aria-live="polite"/s);
 });
+
+test("the shipped beginner entry goes through the server-authoritative tutorial",()=>{
+ assert.match(ui,/requestNow\("tutorial:start"/);
+ assert.match(ui,/<GuidedTutorialCoach key=\{room\.roomCode\} progress=\{room\.tutorialProgress \|\| 0\}/);
+ assert.doesNotMatch(ui,/function TutorialModal\(/);
+ assert.doesNotMatch(ui,/function InteractiveTutorial\(/);
+ assert.doesNotMatch(ui,/tutorialMode|showTutorial|tutorialSteps|tutorialStep/);
+});
+test("tutorial requires three contextual answers and supplies corrective explanations",()=>{
+ assert.equal((ui.match(/prompt: "/g)||[]).length,3);
+ assert.match(ui,/const TUTORIAL_RECALL_QUESTIONS = \[/);
+ assert.match(ui,/questionIndex === TUTORIAL_RECALL_QUESTIONS\.length - 1/);
+ assert.match(ui,/answer === question\.correct/);
+ assert.match(ui,/aria-live="polite"/);
+ assert.match(ui,/這是即時理解確認，不代表已掌握獨立對戰策略/);
+});
+test("card details have a single rule and instructions match the actual gesture behavior",()=>{
+ assert.match(ui,/if \(shouldBlockUnitCardDetail\(card, source\)\) return;/);
+ assert.match(ui,/兵種效果請查看卡面及規則頁/);
+ assert.doesNotMatch(ui,/PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1/);
+});
