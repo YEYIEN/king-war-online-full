@@ -78,9 +78,36 @@ try {
   assert.ok(overflow <= 1, `Mobile view has ${overflow}px horizontal overflow`);
   for (const width of [320, 375, 390, 430]) {
     await guest.setViewportSize({width, height:844});
-    const actual = await guest.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    assert.ok(actual <= 1, `Mobile ${width}px viewport overflow: ${actual}px`);
+    const metrics = await guest.evaluate(() => {
+      const main=document.querySelector(".kwCombatV3");
+      const frame=document.querySelector(".kwBattleFrame");
+      const required=[".kwScoreStrip",".battleGrid",".battleActionHub",".handAndLog"];
+      const bounds=required.map(sel=>{
+        const el=document.querySelector(sel);
+        if(!el)return {selector:sel,missing:true};
+        const b=el.getBoundingClientRect();
+        return {selector:sel,top:b.top,bottom:b.bottom,left:b.left,right:b.right,missing:false};
+      });
+      return {
+        horizontal:document.documentElement.scrollWidth-window.innerWidth,
+        pageVertical:document.documentElement.scrollHeight-window.innerHeight,
+        mainVertical:main.scrollHeight-main.clientHeight,
+        frameVertical:frame.scrollHeight-frame.clientHeight,
+        bounds,
+        grid:window.getComputedStyle(frame).gridTemplateAreas
+      };
+    });
+    assert.ok(metrics.horizontal<=1,`Mobile ${width}px horizontal overflow: ${metrics.horizontal}px`);
+    assert.ok(metrics.pageVertical<=3,`Mobile ${width}px vertical page scroll: ${JSON.stringify(metrics)}`);
+    assert.ok(metrics.mainVertical<=3,`Mobile ${width}px combat scroll: ${JSON.stringify(metrics)}`);
+    assert.ok(metrics.frameVertical<=3,`Mobile ${width}px combat frame overflow: ${JSON.stringify(metrics)}`);
+    assert.match(metrics.grid,/score.*arena.*command.*hand/,`Mobile ${width}px missing focused combat grid`);
+    for(const el of metrics.bounds){
+      assert.ok(!el.missing,`Mobile missing ${el.selector}`);
+      assert.ok(el.top>=-2&&el.bottom<=846,`Mobile ${width}px element ${el.selector} out of viewport: ${JSON.stringify(el)}`);
+    }
   }
+  await guest.setViewportSize({width:390,height:844});
   // The tutorial now uses actual game actions rather than static click-through slides.
   const trainee = await mobile.newPage();
   trainee.on("pageerror", error => runtimeErrors.push(error.message));
