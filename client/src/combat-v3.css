@@ -329,3 +329,125 @@
  .kwCombatV3 .kwUnitCardShell {flex-basis:78px !important;width:78px !important}
  .kwCombatV3 .kwUnitInfo {width:35px !important;height:35px !important}
 }
+
+
+/* LAYOUT_REFINEMENT_2026_11_15
+   Keep battle logic unchanged; correct squashed help, magic wizard and wide board. */
+.kwCombatV3 > .guidePanel {
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) !important;
+  align-items:start !important;
+  align-content:start !important;
+  gap:10px !important;
+  width:min(440px,calc(100vw - 24px)) !important;
+  max-height:min(65dvh,460px) !important;
+  padding:16px 18px !important;
+  overflow-x:hidden !important;
+  overflow-y:auto !important;
+}
+.kwCombatV3 > .guidePanel > div {min-width:0 !important}
+.kwCombatV3 > .guidePanel .guideLabel {display:block !important;margin-bottom:4px !important}
+.kwCombatV3 > .guidePanel h2 {
+  display:block !important;font-size:20px !important;line-height:1.35 !important;
+  margin:0 !important;overflow-wrap:break-word !important;word-break:normal !important;
+}
+.kwCombatV3 > .guidePanel ol {
+  display:grid !important;grid-template-columns:minmax(0,1fr) !important;
+  gap:7px !important;margin:0 !important;padding-left:24px !important;
+  list-style:decimal outside !important;min-width:0 !important;
+}
+.kwCombatV3 > .guidePanel li,
+.kwCombatV3 > .guidePanel li:first-child {
+  display:list-item !important;white-space:normal !important;
+  overflow-wrap:break-word !important;word-break:normal !important;
+  font-size:14px !important;line-height:1.55 !important;
+}
+.kwCombatV3 .guidedMagicPanel {
+  display:flex !important;flex-direction:column !important;
+  gap:14px !important;
+  width:min(760px,calc(100vw - 24px)) !important;
+  max-height:min(88dvh,760px) !important;
+  padding:20px 24px !important;
+  overflow-x:hidden !important;overflow-y:auto !important;
+}
+.kwCombatV3 .guidedMagicPanel > div,
+.kwCombatV3 .guidedMagicPanel .magicControls {width:100% !important;min-width:0 !important}
+.kwCombatV3 .guidedMagicPanel h2 {
+  font-size:clamp(19px,2.3vw,24px) !important;line-height:1.35 !important;margin:6px 0 8px !important;
+}
+.kwCombatV3 .guidedMagicPanel h3 {
+  font-size:17px !important;line-height:1.4 !important;margin:0 0 4px !important;
+}
+.kwCombatV3 .guidedMagicPanel p {
+  display:block !important;margin:6px 0 !important;
+  line-height:1.6 !important;white-space:normal !important;
+}
+.kwCombatV3 .guidedMagicPanel .magicStepBar {
+  display:flex !important;flex-wrap:wrap !important;
+  gap:8px !important;margin:12px 0 !important;
+}
+.kwCombatV3 .guidedMagicPanel .magicStepBar span {
+  white-space:nowrap !important;flex:0 0 auto !important;
+}
+.kwCombatV3 .guidedMagicPanel .magicControls {display:flex !important;flex-direction:column !important;gap:10px !important}
+.kwCombatV3 .guidedMagicPanel .cardGrid {
+  display:flex !important;flex-wrap:wrap !important;align-items:flex-start !important;
+  gap:12px !important;min-height:0 !important;max-height:260px !important;
+  overflow-x:hidden !important;overflow-y:auto !important;padding:4px !important;
+}
+.kwCombatV3 .guidedMagicPanel .kwUnitCardShell {
+  flex:0 0 118px !important;width:118px !important;
+  height:215px !important;max-height:none !important;
+}
+.kwCombatV3 .guidedMagicPanel .kwUnitCardShell > .gameCard {
+  height:100% !important;max-height:none !important;
+  min-width:0 !important;overflow:hidden !important;
+}
+.kwCombatV3 .guidedMagicPanel .gameCard .cardArt {height:95px !important;max-height:95px !important}
+.kwCombatV3 .guidedMagicPanel .panelActions {
+  display:flex !important;flex-wrap:wrap !important;
+  justify-content:flex-end !important;gap:10px !important;
+  margin-top:4px !important;
+}
+.kwCombatV3 .guidedMagicPanel .panelActions button {
+  min-height:42px !important;min-width:108px !important;
+  padding:9px 14px !important;margin:0 !important;
+  white-space:nowrap !important;
+}
+.kwCombatV3 .guidedMagicPanel select {min-height:44px !important}
+@media (min-width:1100px) {
+  .kwCombatV3 .kwBattleFrame {
+    grid-template-rows:auto minmax(0,1fr) auto minmax(170px,25dvh) !important;
+  }
+  .kwCombatV3 .battleGrid {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+    grid-template-rows:minmax(0,1fr) !important;gap:10px !important;
+  }
+  .kwCombatV3 .battleGrid .zoneCard {padding:10px 12px !important;gap:8px !important}
+  .kwCombatV3 .battleGrid .gameCard,
+  .kwCombatV3 .handAndLog .gameCard {
+    flex-basis:clamp(104px,8.5vw,138px) !important;
+    width:clamp(104px,8.5vw,138px) !important;
+  }
+  .kwCombatV3 .battleGrid .kwUnitCardShell,
+  .kwCombatV3 .battleGrid .unitWrap {
+    flex-basis:clamp(104px,8.5vw,138px) !important;
+    width:clamp(104px,8.5vw,138px) !important;
+  }
+  .kwCombatV3 .battleGrid .gameCard .cardArt {height:min(62%,126px) !important;max-height:126px !important}
+  .kwCombatV3 .handAndLog .gameCard .cardArt {height:min(60%,105px) !important;max-height:105px !important}
+  .kwCombatV3 .gameCard strong {font-size:12px !important}
+}
+@media(max-width:700px) {
+  .kwCombatV3 > .guidePanel {top:50px !important;right:8px !important;width:calc(100vw - 16px) !important;max-height:52dvh !important;padding:12px 14px !important}
+  .kwCombatV3 > .guidePanel h2 {font-size:17px !important}
+  .kwCombatV3 > .guidePanel li {font-size:13px !important}
+  .kwCombatV3 .guidedMagicPanel {width:calc(100vw - 16px) !important;padding:15px !important;max-height:88dvh !important}
+  .kwCombatV3 .guidedMagicPanel .cardGrid {gap:8px !important}
+  .kwCombatV3 .guidedMagicPanel .kwUnitCardShell {flex-basis:102px !important;width:102px !important;height:192px !important}
+  .kwCombatV3 .guidedMagicPanel .panelActions button {flex:1 1 120px !important}
+}
+@media(max-height:620px) {
+  .kwCombatV3 .guidedMagicPanel {max-height:94dvh !important;top:50% !important}
+  .kwCombatV3 .guidedMagicPanel .cardGrid {max-height:180px !important}
+}
