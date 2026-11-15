@@ -102,6 +102,11 @@ jobs:
           KW_SIMULATION: '1'
           DUEL_REFINEMENT_MATCHES: '1000'
         run: node scripts/duel-first-seat-refinement.mjs > duel-refinement-output.json
+      - name: Adversarial duels and directed king-pair seat swaps
+        env:
+          KW_SIMULATION: '1'
+          DUEL_ADVERSARIAL_MATCHES: '70'
+        run: node scripts/duel-adversarial-king-pairs.mjs > duel-adversarial-summary-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -128,5 +133,8 @@ jobs:
             duel-refinement-results.json
             duel-refinement-results.md
             duel-refinement-output.json
+            duel-adversarial-king-pairs.json
+            duel-adversarial-king-pairs.md
+            duel-adversarial-summary-output.json
           retention-days: 30
           if-no-files-found: warn
