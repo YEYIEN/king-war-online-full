@@ -92,6 +92,11 @@ jobs:
           KW_SIMULATION: '1'
           DUEL_CALIBRATION_MATCHES: '250'
         run: node scripts/duel-first-seat-calibration.mjs > duel-calibration-output.json
+      - name: Independent fresh-seed duel opening holdout (36000 games)
+        env:
+          KW_SIMULATION: '1'
+          DUEL_HOLDOUT_MATCHES_PER_SEED: '1000'
+        run: node scripts/duel-first-seat-holdout.mjs > duel-holdout-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -112,5 +117,8 @@ jobs:
             duel-calibration-raw.json
             duel-calibration-summary.md
             duel-calibration-output.json
+            duel-holdout-results.json
+            duel-holdout-results.md
+            duel-holdout-output.json
           retention-days: 30
           if-no-files-found: warn
