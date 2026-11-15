@@ -587,3 +587,88 @@
   .kwCombatV3 .kwKingAttackStatus {max-width:none !important}
   .kwCombatV3 .enemyZone .kwKingAttackBtn {flex:1 1 100% !important}
 }
+
+
+/* COMBAT_READABILITY_V5 — increase text legibility on actual playable battlefield */
+.kwCombatV3 .zoneHeader h2,
+.kwCombatV3 .handAndLog .zoneCard > h2 {
+  font-size:clamp(15px,1vw,17px) !important;
+  line-height:1.35 !important;
+  letter-spacing:.01em !important;
+}
+.kwCombatV3 .battleGrid .gameCard strong,
+.kwCombatV3 .handAndLog .gameCard strong,
+.kwCombatV3 .gameCard strong {
+  font-size:clamp(13px,.9vw,15px) !important;
+  line-height:1.3 !important;
+  overflow-wrap:anywhere !important;
+  white-space:normal !important;
+  text-overflow:clip !important;
+}
+.kwCombatV3 .battleGrid .gameCard .miniLine,
+.kwCombatV3 .battleGrid .gameCard .powerText,
+.kwCombatV3 .handAndLog .gameCard .miniLine,
+.kwCombatV3 .handAndLog .gameCard .powerText,
+.kwCombatV3 .gameCard .miniLine,
+.kwCombatV3 .gameCard .powerText {
+  font-size:clamp(12px,.82vw,14px) !important;
+  line-height:1.35 !important;
+  white-space:normal !important;
+}
+.kwCombatV3 .gameCard .actionLabel {
+  font-size:12px !important;
+  line-height:1.35 !important;
+  padding:3px 5px !important;
+  text-align:center !important;
+  white-space:normal !important;
+}
+.kwCombatV3 .gameCard .statusPill {
+  font-size:11px !important;
+  line-height:1.25 !important;
+  padding:2px 5px !important;
+}
+.kwCombatV3 .battleActionHeader h2 {
+  font-size:15px !important;
+  line-height:1.35 !important;
+}
+.kwCombatV3 .battleInstruction {
+  font-size:14px !important;
+  line-height:1.45 !important;
+}
+.kwCombatV3 .kwKingChipLabel {font-size:12px !important}
+.kwCombatV3 .kwKingChip strong {font-size:14px !important}
+.kwCombatV3 .kwKingChipResources {font-size:12px !important}
+.kwCombatV3 .battleGrid .gameCard,
+.kwCombatV3 .handAndLog .gameCard {
+  gap:4px !important;
+  padding:7px 5px !important;
+}
+.kwCombatV3 .battleGrid .cardGrid,
+.kwCombatV3 .handAndLog .cardGrid {
+  gap:9px !important;
+}
+@media (min-width:1100px) {
+  .kwCombatV3 .battleGrid .kwUnitCardShell,
+  .kwCombatV3 .battleGrid .unitWrap,
+  .kwCombatV3 .battleGrid .gameCard {
+    flex-basis:clamp(130px,9vw,156px) !important;
+    width:clamp(130px,9vw,156px) !important;
+  }
+  .kwCombatV3 .handAndLog .kwUnitCardShell,
+  .kwCombatV3 .handAndLog .gameCard {
+    flex-basis:clamp(120px,8vw,148px) !important;
+    width:clamp(120px,8vw,148px) !important;
+  }
+  .kwCombatV3 .battleGrid .gameCard .cardArt {
+    height:min(54%,148px) !important;
+    max-height:148px !important;
+  }
+}
+@media (max-width:700px) {
+  .kwCombatV3 .battleGrid .gameCard strong,
+  .kwCombatV3 .handAndLog .gameCard strong {font-size:12px !important}
+  .kwCombatV3 .gameCard .miniLine,
+  .kwCombatV3 .gameCard .powerText {font-size:11px !important}
+  .kwCombatV3 .gameCard .actionLabel {font-size:11px !important}
+  .kwCombatV3 .battleInstruction {font-size:12px !important}
+}
