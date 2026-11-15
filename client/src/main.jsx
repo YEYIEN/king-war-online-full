@@ -1611,13 +1611,18 @@ function App() {
           </button>
           <div className="kwEnemyChips" role="group" aria-label="選擇對手並查看血量">
             {enemies.map(player=>(
-              <button type="button" key={player.id}
-                className={`kwKingChip enemy ${targetPlayer?.id===player.id?"active":""}`}
-                aria-pressed={targetPlayer?.id===player.id}
-                onClick={()=>{setTargetPlayerId(player.id);setAttackerId(null);}}>
-                <span className="kwKingChipLabel">{player.name}{player.eliminated?" · 出局":""}</span>
-                <strong>{player.king?.name || "國王"} <span className="kwHp">HP {player.hp}</span></strong>
-              </button>
+              <div className="kwEnemyChipWrap" key={player.id}>
+                <button type="button"
+                  className={`kwKingChip enemy ${targetPlayer?.id===player.id?"active":""}`}
+                  aria-pressed={targetPlayer?.id===player.id}
+                  aria-label={`選擇對手 ${player.name}，國王 ${player.king?.name || ""}，血量 ${player.hp}`}
+                  onClick={()=>{setTargetPlayerId(player.id);setAttackerId(null);}}>
+                  <span className="kwKingChipLabel">{player.name}{player.eliminated?" · 出局":""}</span>
+                  <strong>{player.king?.name || "國王"} <span className="kwHp">HP {player.hp}</span></strong>
+                </button>
+                <button type="button" className="kwEnemyKingInfo" aria-label={`查看 ${player.name} 的國王能力`}
+                  title="查看國王能力" onClick={()=>player.king && openCardDetail({...player.king,kind:"king"},"國王")}>?</button>
+              </div>
             ))}
           </div>
         </div>
