@@ -56,3 +56,12 @@ test("king ability is keyboard-discoverable while unit cards retain normal click
  assert.doesNotMatch(ui,/function openActionCardModal\(/);
  assert.doesNotMatch(ui,/actionCardModal/);
 });
+
+test("special abilities are taught contextually through usable controls rather than quiz answers",()=>{
+ assert.match(ui,/特殊功能實戰提示/);
+ assert.match(ui,/查看我的王權/);
+ assert.match(ui,/成吉思汗可將場上騎兵撤回手牌/);
+ assert.match(ui,/背水一戰現在可以使用/);
+ assert.match(ui,/法師與魔法都已就緒/);
+ assert.doesNotMatch(ui,/TUTORIAL_RECALL_QUESTIONS/);
+});
