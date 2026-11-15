@@ -283,3 +283,22 @@
 .kwCombatV3 .kwEnemyKingInfo {display:grid !important;place-items:center !important;align-self:stretch !important;min-width:29px !important;border:1px solid #526d8c !important;border-radius:0 8px 8px 0 !important;background:#273e54 !important;color:#f5e6bb !important;font-weight:800 !important}
 .kwCombatV3 .kwEnemyChipWrap .kwKingChip {border-radius:8px 0 0 8px !important}
 .kwCombatV3 .kwEnemyKingInfo:hover,.kwCombatV3 .kwEnemyKingInfo:focus-visible {background:#425e76 !important}
+
+.kwCombatV3 .kwKingChipResources {display:block !important;font-size:9px !important;line-height:1.1 !important;opacity:.78 !important}
+.kwCombatV3 .kwScoreStrip {max-height:60px !important}
+.kwCombatV3 .kwKingChip {min-height:50px !important}
+.kwCombatV3 > .guidePanel {
+ position:fixed !important;z-index:2000 !important;top:58px !important;right:12px !important;
+ width:min(420px,calc(100vw - 24px)) !important;max-height:60dvh !important;overflow-y:auto !important;
+ padding:14px !important;margin:0 !important;
+ box-shadow:0 10px 45px rgba(0,0,0,.6) !important;
+ border:1px solid #98afc8 !important;border-radius:12px !important;
+}
+.kwCombatV3 > .guidedLesson:not(.practiceCoach) {
+ position:absolute !important;z-index:50 !important;top:53px !important;left:50% !important;
+ transform:translateX(-50%) !important;
+ max-width:min(660px,92vw) !important;padding:8px 12px !important;
+ margin:0 !important;font-size:12px !important;pointer-events:none !important;
+}
+.kwCombatV3 > .guidedLesson:not(.practiceCoach) h2 {font-size:13px !important;margin:0 !important}
+.kwCombatV3 > .guidedLesson:not(.practiceCoach) p {font-size:11px !important;margin:0 !important}
