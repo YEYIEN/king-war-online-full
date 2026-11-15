@@ -98,3 +98,69 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
   line-height: 1.5;
 }
 .connectionWarning strong { color: #fff2d8; }
+
+/* Battle UI v2: the hand is encountered before the field on both desktop and mobile. */
+.battleActionHub {
+  margin: 12px 0 16px;
+  padding: clamp(14px,2.4vw,22px);
+  background: linear-gradient(120deg,#22374A,#182635);
+  border: 1px solid #63809B;
+  border-radius:16px;
+  color:var(--kw-ink);
+  display:grid;
+  gap:12px;
+}
+.battleActionHeader {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.battleActionHeader h2{margin:4px 0 0;font-size:clamp(1.16rem,2.8vw,1.5rem)}
+.battleEyebrow {font-size:.77rem;font-weight:800;letter-spacing:.09em;color:#F5D18A}
+.battleReadyCount {border-radius:999px;border:1px solid #7093AB;background:#304B5E;padding:7px 12px;font-weight:700}
+.battleInstruction {margin:0;max-width:78ch;line-height:1.65;font-weight:600;color:#F0F7FF}
+.battleQuickNav {display:flex;gap:8px;flex-wrap:wrap}
+.battleQuickNav a {
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;padding:8px 12px;
+  border:1px solid #7699B5;border-radius:10px;
+  background:#293F53;color:#fff;text-decoration:none;font-weight:700;
+}
+.battleQuickNav a:hover,.battleQuickNav a:focus-visible {background:#415D76}
+#kw-hand,#kw-enemy,#kw-field {scroll-margin-top:16px}
+#kw-hand {margin-bottom:16px}
+#kw-hand .handCard:focus-visible,#kw-field .gameCard.selected {outline:3px solid var(--kw-focus);outline-offset:2px}
+#kw-enemy .gameCard.attackable {outline:2px solid #DA9185;outline-offset:2px}
+.targetBar select {min-height:46px;font-weight:700}
+@media(max-width:760px){
+ .battleActionHub {gap:10px;margin-top:8px}
+ .battleQuickNav {display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .battleQuickNav a {padding:7px 5px;font-size:.77rem;text-align:center}
+ .battleReadyCount {font-size:.82rem}
+ .battleActionHeader {align-items:flex-start}
+}
+
+/* Guided practice, not a quiz: keep the current real game action visible. */
+.practiceCoach {display:grid;gap:12px;max-width:100%}
+.practiceCoach h2 {margin:0;font-size:clamp(1.12rem,3vw,1.5rem)}
+.practiceCoach p {margin:0;line-height:1.65}
+.practiceCoach .lessonTask {font-weight:600;padding:12px 14px;border-left:4px solid var(--kw-gold);border-radius:8px}
+.practiceJump {
+ display:inline-flex;align-items:center;justify-content:center;align-self:start;
+ color:#101925;background:#F7D590;text-decoration:none;font-weight:800;
+ border-radius:11px;padding:12px 18px;min-height:44px;
+}
+.practiceJump:hover,.practiceJump:focus-visible {background:#FFE3AB}
+.practiceCoachNote{font-size:.85rem;color:var(--kw-muted)}
+.practiceCoach .lessonProgress {display:flex;gap:5px;flex-wrap:wrap}
+.practiceCoach .lessonProgress span {width:clamp(18px,7vw,32px);height:7px;border-radius:100px}
+
+.battleHandPrimary {min-width:0;display:grid;align-content:start;gap:14px}
+.battleHandPrimary > .zoneCard {min-width:0}
+.battleHandPrimary .guidedMagicPanel {margin:0}
+
+.battleKingHelp {
+ justify-self:start;text-align:left;min-height:44px;padding:9px 14px;
+ background:#30485D;color:#F5F9FF;border:1px solid #9CB4C9;
+ border-radius:10px;font-weight:750;
+}
+.battleMechanicTip {
+ margin:0;padding:11px 14px;background:#302C42;color:#ECE6FF;
+ border-left:4px solid #C2A4F9;border-radius:8px;line-height:1.65;
+}
