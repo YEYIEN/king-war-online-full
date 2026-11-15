@@ -548,7 +548,6 @@ function App() {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
   const [mobileActionModal, setMobileActionModal] = useState(null);
-  const [actionCardModal, setActionCardModal] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [attackFeedback, setAttackFeedback] = useState(null);
   const lastLogRef = useRef("");
@@ -561,12 +560,6 @@ function App() {
     if (shouldBlockUnitCardDetail(card, source)) return;
     const detail = buildCardDetail(card, source);
     if (detail) setCardDetailModal(detail);
-  }
-
-  function openActionCardModal(card, actionText, runAction, source = "卡片") {
-    // DEPLOY_MOBILE_MODAL_FINAL_V1
-    setActionCardModal(null);
-    openMobileActionModal(card, source, actionText, runAction);
   }
 
   function startCardDetailPress(card, source = "卡片") {
@@ -1569,49 +1562,6 @@ function App() {
               {[...(room?.log || [])].reverse().map((item, index) => (
                 <div key={index}>{item}</div>
               ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {actionCardModal && (
-        <section className="actionCardOverlay" onClick={() => setActionCardModal(null)}>
-          <div className="actionCardPanel" onClick={(e) => e.stopPropagation()}>
-            <div className="cardDetailTop">
-              <span>{actionCardModal.detail.source}</span>
-              <button className="secondary" onClick={() => setActionCardModal(null)}>關閉</button>
-            </div>
-
-            <h2>{actionCardModal.detail.name}</h2>
-
-            <div className="cardDetailMeta">
-              {actionCardModal.detail.rank && <b>{actionCardModal.detail.rank}</b>}
-              {actionCardModal.detail.type && <b>{actionCardModal.detail.type}</b>}
-              {actionCardModal.detail.power !== null && <b>目前戰力 {actionCardModal.detail.power}</b>}
-            </div>
-
-            <p>{actionCardModal.detail.text}</p>
-
-            <div className="actionCardButtons">
-              <button
-                className="primaryBtn"
-                onClick={() => {
-                  actionCardModal.runAction?.();
-                  setActionCardModal(null);
-                }}
-              >
-                {actionCardModal.actionText}
-              </button>
-
-              <button
-                className="secondary"
-                onClick={() => {
-                  setCardDetailModal(actionCardModal.detail);
-                  setActionCardModal(null);
-                }}
-              >
-                查看完整說明
-              </button>
             </div>
           </div>
         </section>
