@@ -9,6 +9,7 @@ import { listPublicAttackCandidates } from "./ai-legal-actions.js";
 import { chooseRationalAttack } from "./ai-rational-planner.js";
 import {shouldUseKingAwarePolicy,shouldUseRationalConqueror} from "./ai-policy-gates.js";
 import { nextLivingPlayer } from "./turn-order.js";
+import { replenishDeckIfEmpty } from "./deck-cycle.js";
 import { canUseLastStand, mitigateKingDamage } from "./comeback-rules.js";
 import { observeTurnStart, analyzeFinalOutcome } from "./simulation-outcomes.js";
 import { createMatchMetrics, incrementMatchMetric, recordTurnDuration, finalizeMatchMetrics } from "./game-metrics.js";
@@ -111,14 +112,6 @@ function trimHand(room, p) {
     room.unitDeck.push(c);
     room.log.push(`${p.name} 手牌超過上限，將 ${c.name} 放回牌堆底。`);
   }
-}
-function replenishDeckIfEmpty(room, deckKey, makeDeck, label) {
-  if (!Array.isArray(room[deckKey])) room[deckKey] = [];
-  if (room[deckKey].length) return;
-  // Each cycle mints independent cards with fresh IDs. Cards in hands/fields
-  // are never taken away, and an exhausted deck never stalls the match.
-  room[deckKey] = makeDeck();
-  room.log.push(`${label}抽牌堆已用盡，自動洗出新一輪牌庫。`);
 }
 function drawUnits(room, p, n) {
   for (let i = 0; i < n; i++) {
