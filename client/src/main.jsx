@@ -1638,6 +1638,7 @@ function App() {
       </section>
 
       <section className="handAndLog" id="kw-hand">
+        <div className="battleHandPrimary">
         <section className="zoneCard">
           <div className="zoneHeader">
             <div>
@@ -1679,32 +1680,6 @@ function App() {
             ) : <EmptyState>目前沒有兵種手牌。牌庫抽完後會重新補充；下一回合可再抽牌。</EmptyState>}
           </div>
         </section>
-
-        <aside className="sideColumn">
-          <section className="zoneCard">
-            <h2>魔法卡</h2>
-            <p>先點魔法卡，再依提示選法師與目標。</p>
-            <div className="magicList">
-              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
-            </div>
-          </section>
-
-          <section className="zoneCard">
-            <h2>兵種相剋</h2>
-            <div className="counterList">
-              <span>步兵 → 弓兵</span>
-              <span>弓兵 → 法師</span>
-              <span>法師 → 騎兵</span>
-              <span>騎兵 → 步兵</span>
-            </div>
-          </section>
-
-          <section className="zoneCard">
-            <h2>遊戲紀錄</h2>
-            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
-          </section>
-        </aside>
-      </section>
 
       {magicPlan && (
         <section className="magicPanel guidedMagicPanel" id="kw-magic">
@@ -1843,6 +1818,33 @@ function App() {
           </div>
         </section>
       )}
+        </div>
+
+        <aside className="sideColumn">
+          <section className="zoneCard">
+            <h2>魔法卡</h2>
+            <p>先點魔法卡，再依提示選法師與目標。</p>
+            <div className="magicList">
+              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+            </div>
+          </section>
+
+          <section className="zoneCard">
+            <h2>兵種相剋</h2>
+            <div className="counterList">
+              <span>步兵 → 弓兵</span>
+              <span>弓兵 → 法師</span>
+              <span>法師 → 騎兵</span>
+              <span>騎兵 → 步兵</span>
+            </div>
+          </section>
+
+          <section className="zoneCard">
+            <h2>遊戲紀錄</h2>
+            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
+          </section>
+        </aside>
+      </section>
 
       <section className="targetBar card" id="kw-target">
         <div>
