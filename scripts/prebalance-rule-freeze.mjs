@@ -23,7 +23,16 @@ for(const [label,begin,end] of slices){
    const from=baseSlice.indexOf("function rankValue(rank) {");
    assert.ok(from>0,"missing original combat section");
    baseSlice=baseSlice.slice(0,from);
-   const newSlice=extract(current);
+   let newSlice=extract(current);
+   // Research-only opening draw penalty must never affect the live/default rules.
+   const openingGuard=String.raw`  const openingDrawPenalty=(process.env.KW_SIMULATION==="1" && room.players.length===2 &&`;
+   assert.ok(newSlice.includes(openingGuard),"opening compensation missing its simulation-only guard");
+   const fromOpening=newSlice.indexOf(openingGuard);
+   const endOpening=newSlice.indexOf("  drawUnits(room, p, ud);",fromOpening);
+   assert.ok(endOpening>fromOpening,"opening guard calculation not found");
+   newSlice=newSlice.slice(0,fromOpening)+
+     `  const ud = p.king?.name === "秦始皇" ? 2 : 1;\n  drawUnits(room, p, ud);`+
+     newSlice.slice(endOpening+"  drawUnits(room, p, ud);".length);
    assert.equal(newSlice,baseSlice,`balance-affecting turn rule changed: ${label}`);
  } else {
    assert.equal(extract(current),baseSlice,`balance-affecting rule changed without design review: ${label}`);
