@@ -62,6 +62,10 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
 }
 .lessonProgress span {background:#3F5367;}
 .lessonProgress span.active {background:var(--kw-gold);}
+.lessonAssessmentNote { color:var(--kw-muted); font-size:.88rem; line-height:1.5; }
+.lessonChoiceGroup button { min-height:44px; text-align:left; }
+.kingMini[role="button"] { cursor:pointer; border-radius:8px; }
+.kingMini[role="button"]:focus-visible { outline:3px solid var(--kw-focus); outline-offset:3px; }
 @media(max-width:760px){
   :where(.guidedPage button,.tutorialPlayPage button,.hero button) {
     min-height:44px;
@@ -81,3 +85,16 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
 .endTurnBtn{background:var(--kw-warn);}
 .dangerBtn{background:var(--kw-attack);}
 .matchBtn{background:var(--kw-magic);}
+
+/* Persistent multiplayer connectivity feedback, independent of transient action toasts. */
+.connectionWarning {
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: 2px solid var(--kw-warn);
+  border-radius: 12px;
+  background: #39291f;
+  color: #ffe4ba;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.connectionWarning strong { color: #fff2d8; }

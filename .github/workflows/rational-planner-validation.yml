@@ -1,0 +1,47 @@
+name: Conqueror rational search validation
+on:
+  push:
+    branches:
+      - feature/prebalance-hardening-ai-20261114
+    paths:
+      - 'server/ai-rational-planner.js'
+      - 'server/ai-strategies.js'
+      - 'server/index.js'
+      - 'scripts/rational-planner-ab.mjs'
+      - 'tests/ai-rational-planner.test.mjs'
+      - '.github/workflows/rational-planner-validation.yml'
+  workflow_dispatch:
+concurrency:
+  group: rational-planner-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  rational:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Policy and rational-planner safety tests
+        env:
+          KW_SIMULATION: '1'
+        run: |
+          node --test tests/ai-rational-planner.test.mjs tests/king-specific-ai-policy.test.mjs
+          npm test
+      - name: Research A-B across 2–5 players
+        env:
+          KW_SIMULATION: '1'
+          RATIONAL_GAMES_PER_SEED: '12'
+        run: node scripts/rational-planner-ab.mjs > rational-planner-ab-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rational-planner-validation
+          path: |
+            rational-planner-ab.json
+            rational-planner-ab-output.json
+          retention-days: 30
+          if-no-files-found: ignore

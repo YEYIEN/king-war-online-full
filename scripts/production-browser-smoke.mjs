@@ -75,8 +75,12 @@ try {
     await guest.screenshot({path:"test-artifacts/ui/mobile-battle.png",fullPage:true});
   }
   const overflow = await guest.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  // A small amount of horizontal scroll is tolerable on mobile; large overflow is not.
-  assert.ok(overflow < 100, `Mobile view has ${overflow}px horizontal overflow`);
+  assert.ok(overflow <= 1, `Mobile view has ${overflow}px horizontal overflow`);
+  for (const width of [320, 375, 390, 430]) {
+    await guest.setViewportSize({width, height:844});
+    const actual = await guest.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(actual <= 1, `Mobile ${width}px viewport overflow: ${actual}px`);
+  }
   // The tutorial now uses actual game actions rather than static click-through slides.
   const trainee = await mobile.newPage();
   trainee.on("pageerror", error => runtimeErrors.push(error.message));

@@ -51,3 +51,21 @@ export function applyMagicFieldEffect(name, target, ids) {
   }
   return { destroyed: 0 };
 }
+
+/**
+ * Immutable local-field preview. Uses the identical effect executor as live
+ * magic resolution, without touching ownership, hands, HP or card consumption.
+ * NOT a full spell simulation (e.g. blood magic's self-HP cost is external).
+ */
+export function previewMagicFieldEffect(name,owner,ids=[]) {
+  if(!owner || !Array.isArray(owner.field) || !Array.isArray(ids))
+    return {ok:false,error:"invalid target field"};
+  const target={field:owner.field.map(unit=>({
+    id:unit.id,type:unit.type,rank:unit.rank,damage:unit.damage,
+    counterTarget:unit.counterTarget,tapped:!!unit.tapped,
+    archerBonusUsed:!!unit.archerBonusUsed,
+    status:[...(unit.status||[])]
+  }))};
+  const {destroyed}=applyMagicFieldEffect(name,target,ids);
+  return {ok:true,target,destroyed};
+}

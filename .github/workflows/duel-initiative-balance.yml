@@ -1,0 +1,37 @@
+name: Duel initiative fairness A-B research
+concurrency:
+  group: duel-initiative-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  push:
+    branches: [feature/prebalance-hardening-ai-20261114]
+    paths:
+      - 'scripts/duel-first-seat-exploration.mjs'
+      - '.github/workflows/duel-initiative-balance.yml'
+  workflow_dispatch:
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Run hard and conqueror duel opening experiments
+        env:
+          KW_SIMULATION: '1'
+          DUEL_EXPLORATION_MATCHES: '250'
+        run: node scripts/duel-first-seat-exploration.mjs > duel-first-seat-exploration-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: duel-first-seat-exploration
+          path: |
+            duel-first-seat-exploration.json
+            duel-first-seat-exploration.md
+            duel-first-seat-exploration-output.json
+          retention-days: 30
+          if-no-files-found: warn
