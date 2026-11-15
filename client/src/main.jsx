@@ -963,6 +963,16 @@ function App() {
     : me?.hand?.length ? "先在「手牌與部署」挑選兵種；要進攻時，先點我方場上可行動的兵種。"
     : "目前沒有兵種手牌。選擇我方已部署且可行動的兵種進攻，或結束回合等待抽牌。";
 
+  const contextualTraining = !isMyTurn ? null
+    : me?.comebackAvailable ? "背水一戰現在可以使用：查看上方「突圍」或「固守」的實際代價，選擇其中一種反擊。"
+    : me?.king?.name === "成吉思汗" && me.field.some(u=>u.type==="騎兵") && !me.recallUsed
+      ? "成吉思汗可將場上騎兵撤回手牌：請在我方騎兵卡下方按「撤回」，留意手牌上限。"
+    : me?.field?.some(u=>u.type==="弓兵" && canUnitStillAct(u))
+      ? "弓兵可以依實際交戰結果取得特殊保護或追加攻擊；查看卡牌狀態，選擇值得交戰的敵人。"
+    : me?.field?.some(u=>u.type==="法師" && canUnitStillAct(u)) && me?.magic?.length
+      ? "法師與魔法都已就緒：點選手上的魔法卡，親自完成施法者、目標與確認流程。"
+      : null;
+
   const gameEnded = room.status === "ended";
   const winner = gameEnded ? room.players.find((p) => !p.eliminated && p.hp > 0) : null;
   const didWin = gameEnded && winner?.id === playerId;
@@ -1624,6 +1634,10 @@ function App() {
           <span className="battleReadyCount">可行動兵種 {readyUnits} / {me?.field?.length || 0}</span>
         </div>
         <p role="status" aria-live="polite" className="battleInstruction">{battleInstruction}</p>
+        {me?.king && <button type="button" className="battleKingHelp" onClick={()=>openCardDetail({...me.king,kind:"king"},"國王")}>
+          查看我的王權：{me.king.name}
+        </button>}
+        {contextualTraining && <p className="battleMechanicTip"><strong>特殊功能實戰提示：</strong>{contextualTraining}</p>}
         <nav className="battleQuickNav" aria-label="戰鬥區域快速導覽">
           <a href="#kw-hand">1. 手牌／部署</a>
           <a href="#kw-field">2. 我方兵種</a>
