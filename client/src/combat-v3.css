@@ -1,0 +1,279 @@
+/**
+ * King War V3 — single-viewport combat.
+ * Loaded last; scoped to battle only so lobby, modals and result stay intact.
+ * Focus: persistent combat board, compact HP, one-line action hint, bottom hand.
+ */
+.kwCombatV3 {
+  box-sizing:border-box !important;
+  width:100% !important;
+  max-width:none !important;
+  height:100dvh !important;
+  min-height:0 !important;
+  padding:6px clamp(6px,1vw,14px) !important;
+  margin:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:5px !important;
+  overflow:hidden !important;
+  background:linear-gradient(140deg,#0b1725,#102237) !important;
+}
+.kwCombatV3 * {box-sizing:border-box}
+.kwCombatV3 .guidedTopbar {
+  position:relative !important;
+  flex:0 0 auto !important;
+  order:0 !important;
+  height:auto !important;
+  min-height:44px !important;
+  margin:0 !important;
+  padding:3px 8px !important;
+  display:flex !important;
+  flex-flow:row nowrap !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:8px !important;
+  border-radius:9px !important;
+}
+.kwCombatV3 .guidedTopbar > div:first-child {min-width:0 !important}
+.kwCombatV3 .guidedTopbar h1 {display:none !important}
+.kwCombatV3 .guidedTopbar p {margin:0 !important;font-size:12px !important;line-height:1.2 !important}
+.kwCombatV3 .guidedTopbar .titleBadge {display:none !important}
+.kwCombatV3 .guidedTopbar .turnTimer {font-size:11px !important;padding:1px 4px !important;margin:2px 0 0 !important}
+.kwCombatV3 .topActions {
+  position:static !important; width:auto !important; max-width:72% !important;
+  padding:0 !important; margin:0 !important;
+  display:flex !important;flex-wrap:nowrap !important; gap:5px !important;
+  align-items:center !important;
+  overflow-x:auto !important;overflow-y:hidden !important;
+  background:none !important;box-shadow:none !important;border:0 !important;
+}
+.kwCombatV3 .topActions button {
+  flex:0 0 auto !important; min-width:0 !important;
+  min-height:40px !important; padding:7px 10px !important;
+  font-size:12px !important;border-radius:9px !important;
+  white-space:nowrap !important;
+}
+.kwCombatV3 .topActions .endTurnBtn {
+  background:#e8bb68 !important;color:#162438 !important;
+  font-weight:850 !important;
+}
+.kwCombatV3 .kwBattleFrame {
+  flex:1 1 auto !important;
+  order:1 !important;
+  min-height:0 !important;max-height:100% !important;
+  width:100% !important;
+  display:grid !important;
+  grid-template-areas:"score" "arena" "command" "hand" !important;
+  grid-template-columns:minmax(0,1fr) !important;
+  grid-template-rows:auto minmax(0,1fr) auto minmax(142px,24dvh) !important;
+  gap:6px !important;
+  overflow:hidden !important;
+}
+.kwCombatV3 .kwScoreStrip {
+  grid-area:score !important;
+  min-width:0 !important;
+  display:flex !important;
+  gap:6px !important;
+  align-items:stretch !important;
+  max-height:56px !important;
+  overflow:hidden !important;
+}
+.kwCombatV3 .kwKingChip {
+  flex:0 0 auto !important;
+  display:flex !important;flex-direction:column !important;
+  gap:2px !important;
+  justify-content:center !important;align-items:flex-start !important;
+  padding:7px 11px !important;
+  min-height:46px !important;
+  border:1px solid #526d8c !important;
+  border-radius:9px !important;
+  background:#172b40 !important;
+  color:#f0f5fa !important;
+  text-align:left !important;
+  white-space:nowrap !important;
+  cursor:pointer !important;
+}
+.kwCombatV3 .kwKingChip.own {border-color:#c9a768 !important;background:#2c302c !important}
+.kwCombatV3 .kwKingChip.enemy.active {border-color:#e9b366 !important;box-shadow:inset 0 0 0 1px #e9b366 !important}
+.kwCombatV3 .kwKingChip:focus-visible {outline:3px solid #f4d18a !important;outline-offset:2px !important}
+.kwCombatV3 .kwKingChipLabel {font-size:10px !important;opacity:.8 !important}
+.kwCombatV3 .kwKingChip strong {font-size:12px !important;line-height:1.2 !important}
+.kwCombatV3 .kwHp {color:#f3cc7a !important;font-variant-numeric:tabular-nums !important;margin-left:4px !important}
+.kwCombatV3 .kwEnemyChips {
+  display:flex !important;align-items:stretch !important;
+  flex:1 1 auto !important;min-width:0 !important;
+  gap:5px !important;overflow-x:auto !important;overscroll-behavior-inline:contain !important;
+}
+.kwCombatV3 .gfEnemyPlayers, .kwCombatV3 .gfMyPlayer {display:none !important}
+.kwCombatV3 .battleGrid {
+  grid-area:arena !important;order:0 !important;
+  min-height:0 !important;height:100% !important;max-height:100% !important;
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) !important;
+  grid-template-rows:minmax(0,1fr) minmax(0,1fr) !important;
+  gap:5px !important;
+  overflow:hidden !important;
+}
+.kwCombatV3 .battleGrid .zoneCard {
+  min-height:0 !important;height:100% !important;
+  max-height:100% !important;min-width:0 !important;
+  padding:5px 8px !important;margin:0 !important;
+  border-radius:10px !important;
+  display:flex !important;flex-direction:column !important;
+  gap:3px !important;
+  overflow:hidden !important;
+}
+.kwCombatV3 .battleGrid .enemyZone {order:0 !important;border-color:#815b65 !important;background:#251f2a !important}
+.kwCombatV3 .battleGrid .myZone {order:1 !important;border-color:#52738d !important;background:#182a3b !important}
+.kwCombatV3 .zoneHeader {display:flex !important;align-items:center !important;justify-content:space-between !important;gap:6px !important;flex:0 0 auto !important;margin:0 !important}
+.kwCombatV3 .zoneHeader h2 {font-size:12px !important;line-height:1.25 !important;margin:0 !important}
+.kwCombatV3 .zoneHeader p {display:none !important}
+.kwCombatV3 .enemyZone .dangerBtn {min-height:29px !important;padding:4px 9px !important;font-size:11px !important;border-radius:7px !important;white-space:nowrap !important}
+.kwCombatV3 .battleGrid .cardGrid,
+.kwCombatV3 .handAndLog .cardGrid,
+.kwCombatV3 .magicList {
+  display:flex !important;
+  flex:1 1 auto !important;
+  flex-flow:row nowrap !important;
+  align-items:stretch !important;
+  gap:6px !important;min-height:0 !important;min-width:0 !important;
+  overflow-x:auto !important;overflow-y:hidden !important;
+  padding:2px 3px 4px !important;margin:0 !important;
+  touch-action:pan-x !important;
+  overscroll-behavior-inline:contain !important;
+  scrollbar-width:thin !important;
+}
+.kwCombatV3 .battleGrid .gameCard,
+.kwCombatV3 .handAndLog .gameCard {
+  flex:0 0 clamp(75px,8vw,104px) !important;
+  width:clamp(75px,8vw,104px) !important;
+  min-width:0 !important;max-width:none !important;
+  height:100% !important;
+  min-height:0 !important;max-height:100% !important;
+  padding:4px 3px !important;gap:2px !important;
+  border-radius:8px !important;
+  display:flex !important;flex-direction:column !important;
+  justify-content:flex-start !important;align-items:center !important;
+  overflow:hidden !important;
+  white-space:normal !important;
+}
+.kwCombatV3 .gameCard .cardArt {
+  width:auto !important;max-width:100% !important;
+  height:min(55%,84px) !important;max-height:84px !important;
+  object-fit:contain !important;flex-shrink:1 !important;
+}
+.kwCombatV3 .gameCard strong {font-size:11px !important;line-height:1.16 !important;margin:0 !important;white-space:normal !important}
+.kwCombatV3 .gameCard .miniLine,.kwCombatV3 .gameCard .powerText {font-size:10px !important;line-height:1.12 !important;margin:0 !important}
+.kwCombatV3 .gameCard .effectText,.kwCombatV3 .gameCard .status {display:none !important}
+.kwCombatV3 .gameCard .actionLabel {font-size:10px !important;line-height:1.2 !important;padding:2px !important;margin-top:auto !important}
+.kwCombatV3 .gameCard .statusPill {font-size:9px !important;padding:1px 3px !important}
+.kwCombatV3 .unitWrap {flex:0 0 clamp(75px,8vw,104px) !important;min-width:0 !important;max-width:none !important;height:100% !important;display:flex !important;flex-direction:column !important}
+.kwCombatV3 .unitWrap .gameCard {flex:1 1 auto !important;width:100% !important}
+.kwCombatV3 .unitWrap .smallBtn {flex:0 0 24px !important;font-size:10px !important;min-height:22px !important}
+.kwCombatV3 .battleActionHub {
+  grid-area:command !important;order:0 !important;
+  min-height:0 !important;max-height:66px !important;
+  margin:0 !important;padding:7px 12px !important;
+  border-radius:9px !important;
+  display:flex !important;flex-direction:row !important;
+  align-items:center !important;justify-content:space-between !important;
+  gap:12px !important;
+  background:#23374a !important;
+}
+.kwCombatV3 .battleActionHeader {flex:0 0 auto !important;display:block !important;min-width:0 !important}
+.kwCombatV3 .battleEyebrow,.kwCombatV3 .battleReadyCount {display:none !important}
+.kwCombatV3 .battleActionHeader h2 {font-size:12px !important;white-space:nowrap !important;margin:0 !important}
+.kwCombatV3 .battleInstruction {font-size:12px !important;line-height:1.25 !important;flex:1 1 auto !important;min-width:0 !important;max-width:none !important;display:-webkit-box !important;-webkit-line-clamp:2 !important;-webkit-box-orient:vertical !important;overflow:hidden !important}
+.kwCombatV3 .battleQuickNav,.kwCombatV3 .battleKingHelp,.kwCombatV3 .battleMechanicTip {display:none !important}
+.kwCombatV3 .battleActionHub > button {font-size:11px !important;padding:6px !important;min-height:36px !important;flex:0 0 auto !important}
+.kwCombatV3 .targetBar {display:none !important}
+.kwCombatV3 .handAndLog {
+  grid-area:hand !important;order:0 !important;
+  display:grid !important;
+  grid-template-columns:minmax(0,2fr) minmax(0,1fr) !important;
+  gap:6px !important;
+  width:100% !important;
+  min-height:0 !important;height:100% !important;max-height:100% !important;
+  overflow:hidden !important;
+  margin:0 !important;padding:0 !important;
+}
+.kwCombatV3 .battleHandPrimary,.kwCombatV3 .sideColumn {
+  min-width:0 !important;min-height:0 !important;max-height:100% !important;
+  display:block !important;overflow:hidden !important;
+  padding:0 !important;margin:0 !important;
+}
+.kwCombatV3 .handAndLog .zoneCard {
+  min-height:0 !important;max-height:100% !important;height:100% !important;
+  padding:5px 7px !important;margin:0 !important;
+  display:flex !important;flex-direction:column !important;
+  border-radius:10px !important;overflow:hidden !important;
+  gap:2px !important;
+}
+.kwCombatV3 .handAndLog .zoneHeader {min-height:21px !important}
+.kwCombatV3 .handAndLog h2 {font-size:12px !important;margin:0 !important;line-height:1.2 !important}
+.kwCombatV3 .handAndLog h2 small {font-size:11px !important;opacity:.7 !important}
+.kwCombatV3 .handAndLog p {display:none !important}
+.kwCombatV3 .handAndLog .cardGrid,.kwCombatV3 .handAndLog .magicList {flex:1 1 auto !important;min-height:0 !important}
+.kwCombatV3 .handAndLog .sideColumn .zoneCard:not(:first-child) {display:none !important}
+.kwCombatV3 .handAndLog .sideColumn {display:block !important}
+.kwCombatV3 .handAndLog .zoneCard:has(.guidedMagicPanel) {overflow:visible !important}
+.kwCombatV3 .guidedMagicPanel {
+  position:fixed !important;z-index:2100 !important;
+  left:50% !important;top:50% !important;transform:translate(-50%,-50%) !important;
+  width:min(92vw,640px) !important;max-height:84dvh !important;
+  overflow-y:auto !important;padding:16px !important;
+  border:2px solid #bfa3f0 !important;background:#17243a !important;
+  box-shadow:0 0 0 100vmax rgba(0,0,0,.72),0 18px 55px rgba(0,0,0,.5) !important;
+  border-radius:16px !important;
+}
+.kwCombatV3 .guidedMagicPanel .cardGrid {min-height:120px !important;max-height:180px !important}
+.kwCombatV3 .guidedMagicPanel p {display:block !important}
+.kwCombatV3 .connectionWarning,.kwCombatV3 .floatingError {
+  position:fixed !important;top:58px !important;left:50% !important;
+  transform:translateX(-50%) !important;
+  width:min(92vw,600px) !important;z-index:2200 !important;
+  margin:0 !important;padding:9px !important;
+}
+.kwCombatV3 .reinforcementNotice {display:none !important}
+.kwCombatV3 .turnOrderOverlay,.kwCombatV3 .resultOverlay {z-index:2400 !important}
+.kwCombatV3 button:focus-visible,.kwCombatV3 a:focus-visible {outline:3px solid #ffd48e !important;outline-offset:2px !important}
+@media(max-width:700px) {
+ .kwCombatV3 {padding:3px !important;gap:3px !important}
+ .kwCombatV3 .guidedTopbar {padding:2px 5px !important;min-height:42px !important}
+ .kwCombatV3 .topActions {max-width:80% !important}
+ .kwCombatV3 .topActions button {font-size:10px !important;padding:5px 7px !important;min-height:38px !important}
+ .kwCombatV3 .kwBattleFrame {grid-template-rows:auto minmax(0,1fr) auto minmax(128px,23dvh) !important;gap:4px !important}
+ .kwCombatV3 .kwScoreStrip {max-height:48px !important;gap:4px !important}
+ .kwCombatV3 .kwKingChip {min-height:42px !important;padding:4px 6px !important;border-radius:7px !important}
+ .kwCombatV3 .kwKingChip strong {font-size:11px !important}
+ .kwCombatV3 .battleGrid {gap:4px !important}
+ .kwCombatV3 .battleGrid .zoneCard {padding:4px !important}
+ .kwCombatV3 .gameCard .cardArt {height:min(49%,70px) !important}
+ .kwCombatV3 .battleGrid .gameCard,.kwCombatV3 .handAndLog .gameCard,.kwCombatV3 .unitWrap {
+  flex-basis:78px !important;width:78px !important;min-width:78px !important
+ }
+ .kwCombatV3 .battleActionHub {padding:5px 8px !important;max-height:54px !important;gap:7px !important}
+ .kwCombatV3 .battleInstruction {font-size:11px !important}
+ .kwCombatV3 .handAndLog {grid-template-columns:minmax(0,1.85fr) minmax(108px,1fr) !important;gap:4px !important}
+ .kwCombatV3 .handAndLog .zoneCard {padding:4px !important}
+ .kwCombatV3 .handAndLog .gameCard .cardArt {height:min(47%,65px) !important}
+ .kwCombatV3 .sideColumn .magicList {gap:4px !important}
+}
+@media(max-height:680px) {
+ .kwCombatV3 .kwBattleFrame {grid-template-rows:43px minmax(0,1fr) 43px minmax(108px,23dvh) !important}
+ .kwCombatV3 .battleGrid .zoneCard {padding:3px !important}
+ .kwCombatV3 .gameCard .effectText,.kwCombatV3 .gameCard .miniLine {display:none !important}
+ .kwCombatV3 .gameCard .cardArt {height:min(50%,59px) !important}
+ .kwCombatV3 .battleActionHeader {display:none !important}
+}
+@media(max-height:540px) {
+ .kwCombatV3 .kwBattleFrame {grid-template-rows:38px minmax(0,1fr) 37px minmax(88px,22dvh) !important;gap:3px !important}
+ .kwCombatV3 .battleGrid .zoneHeader {display:none !important}
+ .kwCombatV3 .gameCard .cardArt {height:42% !important}
+ .kwCombatV3 .gameCard .miniLine,.kwCombatV3 .gameCard .statusPill {display:none !important}
+}
+@media(prefers-reduced-motion:reduce){
+ .kwCombatV3 *, .kwCombatV3 *::before, .kwCombatV3 *::after {scroll-behavior:auto !important;transition:none !important;animation:none !important}
+}
+/* Tutorial isn't a single-view competitive board; allow reading its steps without clipping. */
+.kwCombatV3:has(.practiceCoach) {height:auto !important;min-height:100dvh !important;overflow-y:auto !important}
+.kwCombatV3:has(.practiceCoach) .kwBattleFrame {height:auto !important;max-height:none !important;min-height:520px !important;grid-template-rows:52px minmax(280px,1fr) auto minmax(145px,22dvh) !important;overflow:visible !important}
