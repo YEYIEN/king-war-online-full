@@ -75,6 +75,12 @@ function displayStatusLabel(status) {
   return s.replaceAll("階級", "戰力");
 }
 
+function canUnitStillAct(card) {
+  if (!card || card.tapped) return false;
+  const status = card.status || [];
+  return !["整備", "不能攻擊", "疲乏", "疲乏待解"].some(flag => status.includes(flag));
+}
+
 function cardDetailText(card) {
   if (!card) return "";
 
