@@ -45,13 +45,15 @@ test("combat interface starts from the hand and keeps the next action visible",(
  assert.ok(ui.includes("取消選擇：{attacker.name}"));
 });
 test("card details have a single rule and instructions match the actual gesture behavior",()=>{
- assert.match(ui,/if \(shouldBlockUnitCardDetail\(card, source\)\) return;/);
+ assert.match(ui,/if \(!allowUnitInfo && shouldBlockUnitCardDetail\(card, source\)\) return;/);
+ assert.match(ui,/className="kwUnitInfo"/);
+ assert.match(ui,/onClick=\{\(\)=>onDetail\(card,"兵種",true\)\}/);
  assert.match(ui,/兵種效果請查看卡面及規則頁/);
  assert.doesNotMatch(ui,/PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1/);
 });
 
 test("king ability is keyboard-discoverable while unit cards retain normal click handling",()=>{
- assert.match(ui,/aria-label=\{`查看 \$\{player\.king\.name\} 的國王能力`\}/);
+ assert.match(ui,/aria-label=\{`查看 \$\{player\.name\} 的國王能力`\}/);
  assert.match(ui,/event\.key === "Enter" \|\| event\.key === " "/);
  assert.match(ui,/function canUnitStillAct\(card\)/);
  assert.match(ui,/me\?\.field\?\.filter\(canUnitStillAct\)/);
