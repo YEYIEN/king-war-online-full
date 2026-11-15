@@ -86,8 +86,10 @@ try {
   trainee.on("pageerror", error => runtimeErrors.push(error.message));
   await trainee.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await trainee.getByRole("button", { name: "開始操作教學" }).click();
-  await trainee.getByRole("heading", { name: /第一關｜先部署可立即行動的騎兵/ }).waitFor({ timeout: 10000 });
-  await trainee.getByText("我方握有中級騎兵", { exact: false }).first().waitFor();
+  await trainee.getByRole("heading", { name: "部署第一名兵種" }).waitFor({ timeout: 10000 });
+  await trainee.getByText("現在親手操作", { exact: false }).first().waitFor();
+  await trainee.getByRole("link",{name:/前往「手牌與部署」操作/}).waitFor();
+  assert.equal(await trainee.locator(".lessonChoiceGroup").count(),0,"no tutorial quizzes");
   if(process.env.KW_CAPTURE_UI==="1") await trainee.screenshot({path:"test-artifacts/ui/mobile-tutorial.png",fullPage:true});
   await trainee.close();
 
