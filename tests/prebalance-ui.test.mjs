@@ -40,3 +40,12 @@ test("card details have a single rule and instructions match the actual gesture 
  assert.match(ui,/兵種效果請查看卡面及規則頁/);
  assert.doesNotMatch(ui,/PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1/);
 });
+
+test("king ability is keyboard-discoverable while unit cards retain normal click handling",()=>{
+ assert.match(ui,/aria-label=\{`查看 \$\{player\.king\.name\} 的國王能力`\}/);
+ assert.match(ui,/event\.key === "Enter" \|\| event\.key === " "/);
+ assert.match(ui,/function canUnitStillAct\(card\)/);
+ assert.match(ui,/me\?\.field\?\.filter\(canUnitStillAct\)/);
+ assert.doesNotMatch(ui,/function openActionCardModal\(/);
+ assert.doesNotMatch(ui,/actionCardModal/);
+});
