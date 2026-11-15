@@ -29,8 +29,8 @@ test("the shipped beginner entry goes through the server-authoritative tutorial"
 });
 test("beginner experience requires nine real game actions and has no multiple-choice quiz",()=>{
  assert.equal((ui.match(/where:"#kw-/g)||[]).length,9);
- assert.match(ui,/第 \\$\\{progress\\+1\\} \\/ \\$\\{GUIDED_LESSONS.length\\} 步/);
- assert.match(ui,/room\\.tutorialProgress \\|\\| 0/);
+ assert.ok(ui.includes('第 ${progress+1} / ${GUIDED_LESSONS.length} 步'));
+ assert.ok(ui.includes('room.tutorialProgress || 0'));
  assert.match(ui,/不需要回答考題/);
  assert.match(ui,/只有在正式戰場成功完成目前動作/);
  assert.doesNotMatch(ui,/TUTORIAL_RECALL_QUESTIONS|lessonChoiceGroup|questionIndex/);
@@ -40,7 +40,7 @@ test("combat interface starts from the hand and keeps the next action visible",(
  assert.match(ui,/className="battleInstruction"/);
  assert.match(ui,/可行動兵種/);
  assert.ok(ui.indexOf('id="kw-hand"') < ui.indexOf('id="kw-enemy"'));
- assert.match(ui,/取消選擇：\\{attacker.name\\}/);
+ assert.ok(ui.includes("取消選擇：{attacker.name}"));
 });
 test("card details have a single rule and instructions match the actual gesture behavior",()=>{
  assert.match(ui,/if \(shouldBlockUnitCardDetail\(card, source\)\) return;/);
