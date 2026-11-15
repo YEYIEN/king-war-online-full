@@ -77,5 +77,5 @@ test("compact combat V3 retains essential gameplay controls and defers secondary
  assert.ok(ui.includes('id="kw-enemy"'));
  assert.ok(ui.includes('id="kw-hand"'));
  assert.match(ui,/className="endTurnBtn"/);
- assert.match(ui,/className="guidedMagicPanel"/);
+ assert.match(ui,/className="magicPanel guidedMagicPanel"/);
 });
