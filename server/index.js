@@ -948,7 +948,8 @@ async function aiAttackPhase(room, ai, preferredEnemy) {
       : selectAttackChoice(publicActions, { difficulty, self: ai, enemies: publicEnemies,
           battle, power, canAttack, effectiveDamage, conquerorSearch: room.settings?.conquerorSearch !== false,
           conquerorProfile: room.settings?.conquerorProfile || "resource",
-          ownKingPlan: useKingAwarePolicy(room, ai), counterKingPlan: ai.simCounterPlan === true });
+          ownKingPlan: useKingAwarePolicy(room, ai), counterKingPlan: ai.simCounterPlan === true,
+          researchStyle: process.env.KW_SIMULATION==="1" ? ai.simResearchStyle||"balanced" : "balanced" });
     if (room.simMetrics && ai.simRationalSearch === true) {
       const m=room.simMetrics;
       m.rationalCalls=(m.rationalCalls||0)+1;
