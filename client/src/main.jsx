@@ -1788,7 +1788,10 @@ function App() {
               <h2>敵方兵種 · {targetPlayer?.name || "對手"}</h2>
               <p>{targetHasInfantry ? "步兵守衛" : "國王可攻擊"}</p>
             </div>
-            <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "攻擊敵方國王"}</button>
+            <div className="kwKingAttackAction" aria-label="攻擊敵方國王操作">
+              <span className="kwKingAttackStatus">{targetHasInfantry ? "敵方步兵仍在守衛國王" : !isMyTurn ? "目前不是你的回合" : !attackerId ? "請先點選我方可行動兵種" : "已選攻擊者，可以攻擊國王"}</span>
+              <button className="dangerBtn kwKingAttackBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "⚔ 攻擊敵方國王"}</button>
+            </div>
           </div>
 
           <div className="cardGrid">
