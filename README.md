@@ -1,3 +1,17 @@
+# 正式版本與維護規範（2026-11-15）
+
+**本專案唯一正式開發儲存庫：`YEYIEN/king-war-online-full`，正式分支：`main`。**
+
+- 正式前端入口：`client/index.html` → `client/src/main.jsx`。
+- 正式戰鬥介面樣式：`client/src/style.css`、`client/src/design-system.css`、`client/src/combat-v3.css`。
+- 正式後端入口：`server/index.js`；保留 `client/public/` 素材、`tests/`、`scripts/` 和 `.github/workflows/`。
+- `YEYIEN/king-war-online-starter` 是早期骨架，`YEYIEN/king-war-online` 是空儲存庫；兩者**不是目前遊戲原始碼來源**，請勿在其上開發、修復或部署。
+- 已移除舊版未使用的 `App_v7*`、`App.jsx` 與 `main.online-backup.jsx`；歷史版本仍可從 Git 提交紀錄還原。
+- 功能開發請從最新 `main` 建立短期分支，驗證後合併；不將舊版檔案再次複製回正式原始碼目錄。
+- 刪除其他分支與舊儲存庫屬獨立清理程序；在確認部署及歷史保存需求前不應誤刪。
+
+---
+
 # 國王戰爭 Online Full v2 with New Card Images
 
 這是《國王戰爭》線上版 v2，已整理新版卡圖素材並放入：
