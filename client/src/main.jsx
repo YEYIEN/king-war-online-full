@@ -222,25 +222,31 @@ function GuidePanel({ hint }) {
   );
 }
 
-function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "" }) {
+function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "", onDetail }) {
   return (
-    <button
-      className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <CardArt card={card} small={compact} />
-      <strong>{card.name}</strong>
-      <span className="miniLine">傷害 {card.damage}｜剋 {card.counterTarget}</span>
-      <span className="powerText">戰力 {effectivePower(card)}</span>
-      <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
-      <span className="effectText">{unitEffectText(card)}</span>
-      {card.status?.length > 0 && <span className="status">{card.status.map(displayStatusLabel).join("、")}</span>}
-      {actionLabel && <span className="actionLabel">{actionLabel}</span>}
-    </button>
+    <div className="kwUnitCardShell">
+      <button
+        className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        <CardArt card={card} small={compact} />
+        <strong>{card.name}</strong>
+        <span className="miniLine">傷害 {card.damage}｜剋 {card.counterTarget}</span>
+        <span className="powerText">戰力 {effectivePower(card)}</span>
+        <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
+        <span className="effectText">{unitEffectText(card)}</span>
+        {card.status?.length > 0 && <span className="status">{card.status.map(displayStatusLabel).join("、")}</span>}
+        {actionLabel && <span className="actionLabel">{actionLabel}</span>}
+      </button>
+      {onDetail && (
+        <button type="button" className="kwUnitInfo"
+          aria-label={`查看${card.name}的完整能力`}
+          title="查看兵種效果" onClick={()=>onDetail(card,"兵種",true)}>i</button>
+      )}
+    </div>
   );
 }
-
 
 function MagicCard({ card, onClick, disabled, selected, onDetail, onAction }) {
   let pressTimer = null;
@@ -412,9 +418,9 @@ function App() {
   const previousRoomStatusRef = useRef(null);
   const cardDetailPressTimerRef = useRef(null);
 
-  function openCardDetail(card, source = "卡片") {
-    // Unit rules remain on their cards and in the rules reference; prevent accidental long-press overlays.
-    if (shouldBlockUnitCardDetail(card, source)) return;
+  function openCardDetail(card, source = "卡片", allowUnitInfo = false) {
+    // Only an explicit info control opens unit details; action taps stay unchanged.
+    if (!allowUnitInfo && shouldBlockUnitCardDetail(card, source)) return;
     const detail = buildCardDetail(card, source);
     if (detail) setCardDetailModal(detail);
   }
