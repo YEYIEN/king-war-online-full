@@ -150,3 +150,7 @@ body {background:var(--kw-bg);color:var(--kw-ink);}
 .practiceCoachNote{font-size:.85rem;color:var(--kw-muted)}
 .practiceCoach .lessonProgress {display:flex;gap:5px;flex-wrap:wrap}
 .practiceCoach .lessonProgress span {width:clamp(18px,7vw,32px);height:7px;border-radius:100px}
+
+.battleHandPrimary {min-width:0;display:grid;align-content:start;gap:14px}
+.battleHandPrimary > .zoneCard {min-width:0}
+.battleHandPrimary .guidedMagicPanel {margin:0}
