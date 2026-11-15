@@ -82,6 +82,11 @@ jobs:
         run: node scripts/balance-factorial-research.mjs > balance-factorial-output.json
       - name: Analyze experimental effects and opening-hand associations
         run: node scripts/balance-factorial-analysis.mjs > balance-factorial-analysis-output.json
+      - name: Duel fairness research across nine opening candidates
+        env:
+          KW_SIMULATION: '1'
+          DUEL_EXPLORATION_MATCHES: '250'
+        run: node scripts/duel-first-seat-exploration.mjs > duel-first-seat-exploration-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -96,5 +101,8 @@ jobs:
             balance-factorial-analysis.json
             balance-factorial-analysis.md
             balance-factorial-analysis-output.json
+            duel-first-seat-exploration.json
+            duel-first-seat-exploration.md
+            duel-first-seat-exploration-output.json
           retention-days: 30
           if-no-files-found: warn
