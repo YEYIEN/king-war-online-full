@@ -97,7 +97,7 @@ jobs:
           KW_SIMULATION: '1'
           DUEL_HOLDOUT_MATCHES_PER_SEED: '1000'
         run: node scripts/duel-first-seat-holdout.mjs > duel-holdout-output.json
-      - name: Refinement: compare primary and one stronger second-seat card compensation
+      - name: "Refinement: compare primary and one stronger second-seat card compensation"
         env:
           KW_SIMULATION: '1'
           DUEL_REFINEMENT_MATCHES: '1000'
