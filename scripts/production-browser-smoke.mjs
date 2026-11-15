@@ -91,6 +91,43 @@ try {
   await trainee.getByRole("link",{name:/前往「手牌與部署」操作/}).waitFor();
   assert.equal(await trainee.locator(".lessonChoiceGroup").count(),0,"no tutorial quizzes");
   if(process.env.KW_CAPTURE_UI==="1") await trainee.screenshot({path:"test-artifacts/ui/mobile-tutorial.png",fullPage:true});
+  // Click the real UI through every tutorial step, including magic confirmation,
+  // unit and king attacks, a scripted opponent turn and a second defensive round.
+  const step=async name=>trainee.getByRole("heading",{name}).waitFor({timeout:10000});
+  const tapCard=(zone,name)=>trainee.locator(zone).locator(".gameCard").filter({hasText:name}).first().click();
+  await trainee.locator(".handCard").filter({hasText:"中級騎兵"}).first().click();
+  await trainee.locator(".mobileActionPanel .primaryBtn").click();
+  await step("用法師施放力量術");
+  await tapCard(".magicList","力量術");
+  await trainee.locator(".mobileActionPanel .primaryBtn").click();
+  await tapCard(".guidedMagicPanel .cardGrid","初級法師");
+  await trainee.getByRole("button",{name:"確認施法者"}).click();
+  await tapCard(".guidedMagicPanel .cardGrid","中級騎兵");
+  await trainee.getByRole("button",{name:"確認目標"}).click();
+  await trainee.getByRole("button",{name:"確認施放"}).click();
+  await step("選攻擊者，再選敵方兵種");
+  await tapCard(".myZone","中級騎兵");
+  await tapCard(".enemyZone","中級弓兵");
+  await step("直接攻擊敵方國王");
+  await tapCard(".myZone","初級騎兵");
+  await trainee.locator(".enemyZone .dangerBtn").click();
+  await step("結束第一個回合");
+  await trainee.getByRole("button",{name:"結束回合",exact:true}).click();
+  await step("先部署步兵保護國王");
+  await trainee.locator(".handCard").filter({hasText:"中級步兵"}).first().click();
+  await trainee.locator(".mobileActionPanel .primaryBtn").click();
+  await step("利用騎兵剋制清除步兵");
+  await tapCard(".myZone","中級騎兵");
+  await tapCard(".enemyZone","初級步兵");
+  await step("防線突破後繼續攻擊國王");
+  await tapCard(".myZone","初級騎兵");
+  await trainee.locator(".enemyZone .dangerBtn").click();
+  await step("完成一整輪攻防操作");
+  trainee.once("dialog",dialog=>dialog.accept());
+  await trainee.getByRole("button",{name:"結束回合",exact:true}).click();
+  await trainee.getByRole("heading",{name:"你已經親手完成兩個戰鬥回合！"}).waitFor({timeout:10000});
+  assert.equal(await trainee.locator(".lessonChoiceGroup").count(),0,"tutorial has no quizzes");
+  if(process.env.KW_CAPTURE_UI==="1") await trainee.screenshot({path:"test-artifacts/ui/mobile-tutorial-complete.png",fullPage:true});
   await trainee.close();
 
   const aiMenu = await desktop.newPage();
