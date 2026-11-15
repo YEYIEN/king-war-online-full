@@ -1357,7 +1357,7 @@ function App() {
   const targetHasInfantry = targetPlayer?.field?.some((u) => u.type === "步兵");
 
   return (
-    <main className="page guidedPage">
+    <main className="page guidedPage kwCombatV3">
       <header className="topbar guidedTopbar" id="kw-top-actions">
         <div>
           <div className="titleBadge">Room {room.roomCode}</div>
@@ -1602,6 +1602,24 @@ function App() {
 
       {showHelp && !gameEnded && !room.tutorial && <GuidePanel hint={hint} />}
 
+      <div className="kwBattleFrame" aria-label="集中戰鬥介面">
+        <div className="kwScoreStrip" aria-label="國王血量與目標玩家">
+          <button type="button" className="kwKingChip own" onClick={()=>me?.king && openCardDetail({...me.king,kind:"king"},"國王")}>
+            <span className="kwKingChipLabel">我方 · {me?.name || "玩家"}</span>
+            <strong>{me?.king?.name || "國王"} <span className="kwHp">HP {me?.hp ?? "—"}</span></strong>
+          </button>
+          <div className="kwEnemyChips" role="group" aria-label="選擇對手並查看血量">
+            {enemies.map(player=>(
+              <button type="button" key={player.id}
+                className={`kwKingChip enemy ${targetPlayer?.id===player.id?"active":""}`}
+                aria-pressed={targetPlayer?.id===player.id}
+                onClick={()=>{setTargetPlayerId(player.id);setAttackerId(null);}}>
+                <span className="kwKingChipLabel">{player.name}{player.eliminated?" · 出局":""}</span>
+                <strong>{player.king?.name || "國王"} <span className="kwHp">HP {player.hp}</span></strong>
+              </button>
+            ))}
+          </div>
+        </div>
       <section className="gfEnemyPlayers">
         {enemies.map((p) => (
           <PlayerSummary
@@ -1628,8 +1646,8 @@ function App() {
       <section className="battleActionHub" aria-label="本回合操作導覽">
         <div className="battleActionHeader">
           <div>
-            <span className="battleEyebrow">戰場指揮</span>
-            <h2>{isMyTurn ? "現在輪到你" : "對手行動中"}</h2>
+            <span className="battleEyebrow">操作提示</span>
+            <h2>{isMyTurn ? (magicPlan ? "施法" : attacker ? "選擇攻擊目標" : "部署或攻擊") : "等待對手"}</h2>
           </div>
           <span className="battleReadyCount">可行動兵種 {readyUnits} / {me?.field?.length || 0}</span>
         </div>
@@ -1656,8 +1674,8 @@ function App() {
         <section className="zoneCard">
           <div className="zoneHeader">
             <div>
-              <h2>兵種手牌</h2>
-              <p>選好卡牌後按「確認部署」，部署成功會出現在我方場上；每位玩家最多 5 名兵種。</p>
+              <h2>兵種手牌 <small>({me?.hand?.length || 0})</small></h2>
+              <p>點選卡牌部署（場上最多 5 名）。</p>
             </div>
           </div>
 
@@ -1836,8 +1854,8 @@ function App() {
 
         <aside className="sideColumn">
           <section className="zoneCard">
-            <h2>魔法卡</h2>
-            <p>先點魔法卡，再依提示選法師與目標。</p>
+            <h2>魔法 <small>({me?.magic?.length || 0})</small></h2>
+            <p>點選魔法開始施放。</p>
             <div className="magicList">
               {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
             </div>
@@ -1874,8 +1892,8 @@ function App() {
         <section className="zoneCard enemyZone" id="kw-enemy">
           <div className="zoneHeader">
             <div>
-              <h2>{targetPlayer?.name || "敵方"} · 敵方戰場</h2>
-              <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
+              <h2>敵方兵種 · {targetPlayer?.name || "對手"}</h2>
+              <p>{targetHasInfantry ? "步兵守衛" : "國王可攻擊"}</p>
             </div>
             <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "攻擊敵方國王"}</button>
           </div>
@@ -1900,8 +1918,8 @@ function App() {
         <section className="zoneCard myZone" id="kw-field">
           <div className="zoneHeader">
             <div>
-              <h2>我方戰場 · 選擇行動兵種</h2>
-              <p>先選擇攻擊者，或在施法時選擇法師。</p>
+              <h2>我方兵種</h2>
+              <p>點兵種選攻擊者。</p>
             </div>
           </div>
 
@@ -1924,7 +1942,7 @@ function App() {
           </div>
         </section>
       </section>
-
+      </div>
 
     </main>
   );
