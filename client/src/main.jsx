@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
 import "./style.css";
 import "./design-system.css";
+import "./combat-v3.css";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV ? "http://localhost:3001" : window.location.origin);
 const ASSET_BASE = "/king-war-assets";
@@ -12,21 +13,10 @@ function cardImage(card) {
   return `${ASSET_BASE}/cards/${card.name}_63x88mm_300dpi.png`;
 }
 
-function kingImage(king) {
-  if (!king?.name) return "";
-  return `${ASSET_BASE}/kings/${king.name}.png`;
-}
-
 function CardArt({ card, small = false }) {
   const src = cardImage(card);
   if (!src) return null;
   return <img className={small ? "cardArt small" : "cardArt"} src={src} alt={card.name} onError={(e) => { e.currentTarget.style.display = "none"; }} />;
-}
-
-function KingArt({ king }) {
-  const src = kingImage(king);
-  if (!src) return null;
-  return <img className="kingArt" src={src} alt={king.name} onError={(e) => { e.currentTarget.style.display = "none"; }} />;
 }
 
 function unitEffectText(card) {
@@ -232,87 +222,31 @@ function GuidePanel({ hint }) {
   );
 }
 
-function PlayerSummary({ player, isMe, isCurrent, onDetail }) {
-  let pressTimer = null;
-
-  function startPress() {
-    if (!onDetail || !player.king) return;
-    pressTimer = window.setTimeout(() => {
-      onDetail({ ...player.king, kind: "king" }, "國王");
-    }, 450);
-  }
-
-  function cancelPress() {
-    if (pressTimer) {
-      window.clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  }
-
+function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "", onDetail }) {
   return (
-    <article className={`playerSummary ${isMe ? "me" : "opponent"} ${isCurrent ? "current" : ""} ${player.eliminated ? "dead" : ""}`}>
-      <div className="playerSummaryTop">
-        <strong>{player.name}{isMe ? "（你）" : ""}</strong>
-        <span>HP {player.hp}</span>
-      </div>
-
-      {player.king && (
-        <div
-          className="kingMini"
-          role="button"
-          tabIndex={0}
-          aria-label={`查看 ${player.king.name} 的國王能力`}
-          onClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
-          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onDetail?.({ ...player.king, kind: "king" }, "國王"); } }}
-          onDoubleClick={() => onDetail?.({ ...player.king, kind: "king" }, "國王")}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            onDetail?.({ ...player.king, kind: "king" }, "國王");
-          }}
-          onMouseDown={startPress}
-          onMouseUp={cancelPress}
-          onMouseLeave={cancelPress}
-          onTouchStart={startPress}
-          onTouchEnd={cancelPress}
-        >
-          <KingArt king={player.king} />
-          <div>
-            <strong>{player.king.name}</strong>
-            <small>{player.king.effectName}：{player.king.effect}</small>
-          </div>
-        </div>
+    <div className="kwUnitCardShell">
+      <button
+        className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        <CardArt card={card} small={compact} />
+        <strong>{card.name}</strong>
+        <span className="miniLine">傷害 {card.damage}｜剋 {card.counterTarget}</span>
+        <span className="powerText">戰力 {effectivePower(card)}</span>
+        <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
+        <span className="effectText">{unitEffectText(card)}</span>
+        {card.status?.length > 0 && <span className="status">{card.status.map(displayStatusLabel).join("、")}</span>}
+        {actionLabel && <span className="actionLabel">{actionLabel}</span>}
+      </button>
+      {onDetail && (
+        <button type="button" className="kwUnitInfo"
+          aria-label={`查看${card.name}的完整能力`}
+          title="查看兵種效果" onClick={()=>onDetail(card,"兵種",true)}>i</button>
       )}
-
-      <div className="playerStats">
-        <span>手牌 {player.handCount}</span>
-        <span>魔法 {player.magicCount}</span>
-        <span>場上 {player.field.length}/5</span>
-      </div>
-    </article>
+    </div>
   );
 }
-
-
-
-function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = false, highlight = "" }) {
-  return (
-    <button
-      className={`gameCard unit ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${highlight}`}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <CardArt card={card} small={compact} />
-      <strong>{card.name}</strong>
-      <span className="miniLine">傷害 {card.damage}｜剋 {card.counterTarget}</span>
-      <span className="powerText">戰力 {effectivePower(card)}</span>
-      <span className={`statusPill ${unitStatusText(card)}`}>{unitStatusText(card)}</span>
-      <span className="effectText">{unitEffectText(card)}</span>
-      {card.status?.length > 0 && <span className="status">{card.status.map(displayStatusLabel).join("、")}</span>}
-      {actionLabel && <span className="actionLabel">{actionLabel}</span>}
-    </button>
-  );
-}
-
 
 function MagicCard({ card, onClick, disabled, selected, onDetail, onAction }) {
   let pressTimer = null;
@@ -472,7 +406,7 @@ function App() {
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
-  const [showHelp, setShowHelp] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
@@ -484,9 +418,9 @@ function App() {
   const previousRoomStatusRef = useRef(null);
   const cardDetailPressTimerRef = useRef(null);
 
-  function openCardDetail(card, source = "卡片") {
-    // Unit rules remain on their cards and in the rules reference; prevent accidental long-press overlays.
-    if (shouldBlockUnitCardDetail(card, source)) return;
+  function openCardDetail(card, source = "卡片", allowUnitInfo = false) {
+    // Only an explicit info control opens unit details; action taps stay unchanged.
+    if (!allowUnitInfo && shouldBlockUnitCardDetail(card, source)) return;
     const detail = buildCardDetail(card, source);
     if (detail) setCardDetailModal(detail);
   }
@@ -1357,7 +1291,7 @@ function App() {
   const targetHasInfantry = targetPlayer?.field?.some((u) => u.type === "步兵");
 
   return (
-    <main className="page guidedPage">
+    <main className="page guidedPage kwCombatV3">
       <header className="topbar guidedTopbar" id="kw-top-actions">
         <div>
           <div className="titleBadge">Room {room.roomCode}</div>
@@ -1602,34 +1536,35 @@ function App() {
 
       {showHelp && !gameEnded && !room.tutorial && <GuidePanel hint={hint} />}
 
-      <section className="gfEnemyPlayers">
-        {enemies.map((p) => (
-          <PlayerSummary
-            key={p.id}
-            player={p}
-            isMe={false}
-            isCurrent={p.id === room.currentPlayerId}
-            onDetail={openCardDetail}
-          />
-        ))}
-      </section>
-
-      <section className="gfMyPlayer">
-        {me && (
-          <PlayerSummary
-            player={me}
-            isMe
-            isCurrent={me.id === room.currentPlayerId}
-            onDetail={openCardDetail}
-          />
-        )}
-      </section>
-
+      <div className="kwBattleFrame" aria-label="集中戰鬥介面">
+        <div className="kwScoreStrip" aria-label="國王血量與目標玩家">
+          <button type="button" className="kwKingChip own" onClick={()=>me?.king && openCardDetail({...me.king,kind:"king"},"國王")}>
+            <span className="kwKingChipLabel">我方 · {me?.name || "玩家"}</span>
+            <strong>{me?.king?.name || "國王"} <span className="kwHp">HP {me?.hp ?? "—"}</span></strong>
+          </button>
+          <div className="kwEnemyChips" role="group" aria-label="選擇對手並查看血量">
+            {enemies.map(player=>(
+              <div className="kwEnemyChipWrap" key={player.id}>
+                <button type="button"
+                  className={`kwKingChip enemy ${targetPlayer?.id===player.id?"active":""}`}
+                  aria-pressed={targetPlayer?.id===player.id}
+                  aria-label={`選擇對手 ${player.name}，國王 ${player.king?.name || ""}，血量 ${player.hp}`}
+                  onClick={()=>setTargetPlayerId(player.id)}>
+                  <span className="kwKingChipLabel">{player.name}{player.eliminated?" · 出局":""}</span>
+                  <strong>{player.king?.name || "國王"} <span className="kwHp">HP {player.hp}</span></strong>
+                  <span className="kwKingChipResources">手牌 {player.handCount} · 魔法 {player.magicCount}</span>
+                </button>
+                <button type="button" className="kwEnemyKingInfo" aria-label={`查看 ${player.name} 的國王能力`}
+                  title="查看國王能力" onClick={()=>player.king && openCardDetail({...player.king,kind:"king"},"國王")}>?</button>
+              </div>
+            ))}
+          </div>
+        </div>
       <section className="battleActionHub" aria-label="本回合操作導覽">
         <div className="battleActionHeader">
           <div>
-            <span className="battleEyebrow">戰場指揮</span>
-            <h2>{isMyTurn ? "現在輪到你" : "對手行動中"}</h2>
+            <span className="battleEyebrow">操作提示</span>
+            <h2>{isMyTurn ? (magicPlan ? "施法" : attacker ? "選擇攻擊目標" : "部署或攻擊") : "等待對手"}</h2>
           </div>
           <span className="battleReadyCount">可行動兵種 {readyUnits} / {me?.field?.length || 0}</span>
         </div>
@@ -1656,8 +1591,8 @@ function App() {
         <section className="zoneCard">
           <div className="zoneHeader">
             <div>
-              <h2>兵種手牌</h2>
-              <p>選好卡牌後按「確認部署」，部署成功會出現在我方場上；每位玩家最多 5 名兵種。</p>
+              <h2>兵種手牌 <small>({me?.hand?.length || 0})</small></h2>
+              <p>點選卡牌部署（場上最多 5 名）。</p>
             </div>
           </div>
 
@@ -1836,46 +1771,22 @@ function App() {
 
         <aside className="sideColumn">
           <section className="zoneCard">
-            <h2>魔法卡</h2>
-            <p>先點魔法卡，再依提示選法師與目標。</p>
+            <h2>魔法 <small>({me?.magic?.length || 0})</small></h2>
+            <p>點選魔法開始施放。</p>
             <div className="magicList">
               {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
             </div>
           </section>
 
-          <section className="zoneCard">
-            <h2>兵種相剋</h2>
-            <div className="counterList">
-              <span>步兵 → 弓兵</span>
-              <span>弓兵 → 法師</span>
-              <span>法師 → 騎兵</span>
-              <span>騎兵 → 步兵</span>
-            </div>
-          </section>
-
-          <section className="zoneCard">
-            <h2>遊戲紀錄</h2>
-            <div className="log">{room.log.slice().reverse().map((line, i) => <div key={i}>{line}</div>)}</div>
-          </section>
         </aside>
-      </section>
-
-      <section className="targetBar card" id="kw-target">
-        <div>
-          <h2>選擇對手</h2>
-          <p>多人局先選對手，再選攻擊者與目標兵種。</p>
-        </div>
-        <select aria-label="選擇目標玩家" value={targetPlayer?.id || ""} onChange={(e) => setTargetPlayerId(e.target.value)}>
-          {enemies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
       </section>
 
       <section className="battleGrid">
         <section className="zoneCard enemyZone" id="kw-enemy">
           <div className="zoneHeader">
             <div>
-              <h2>{targetPlayer?.name || "敵方"} · 敵方戰場</h2>
-              <p>{targetHasInfantry ? "有步兵保護國王" : "可以攻擊國王"}</p>
+              <h2>敵方兵種 · {targetPlayer?.name || "對手"}</h2>
+              <p>{targetHasInfantry ? "步兵守衛" : "國王可攻擊"}</p>
             </div>
             <button className="dangerBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "攻擊敵方國王"}</button>
           </div>
@@ -1900,8 +1811,8 @@ function App() {
         <section className="zoneCard myZone" id="kw-field">
           <div className="zoneHeader">
             <div>
-              <h2>我方戰場 · 選擇行動兵種</h2>
-              <p>先選擇攻擊者，或在施法時選擇法師。</p>
+              <h2>我方兵種</h2>
+              <p>點兵種選攻擊者。</p>
             </div>
           </div>
 
@@ -1924,7 +1835,7 @@ function App() {
           </div>
         </section>
       </section>
-
+      </div>
 
     </main>
   );

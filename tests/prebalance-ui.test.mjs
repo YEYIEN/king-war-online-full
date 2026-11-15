@@ -10,7 +10,9 @@ test("completed results remain visible until player chooses a return action",()=
 });
 test("mobile browser test rejects nontrivial overflow at four widths",()=>{
  assert.match(smoke,/\[320, 375, 390, 430\]/);
- assert.match(smoke,/assert\.ok\(actual <= 1,/);
+ assert.match(smoke,/assert\.ok\(metrics\.horizontal<=1,/);
+ assert.match(smoke,/metrics\.pageVertical<=3/);
+ assert.match(smoke,/metrics\.mainVertical<=3/);
 });
 
 test("all lobby and gameplay commands use the bounded, deduplicated request path",()=>{
@@ -43,14 +45,17 @@ test("combat interface starts from the hand and keeps the next action visible",(
  assert.ok(ui.includes("取消選擇：{attacker.name}"));
 });
 test("card details have a single rule and instructions match the actual gesture behavior",()=>{
- assert.match(ui,/if \(shouldBlockUnitCardDetail\(card, source\)\) return;/);
+ assert.match(ui,/if \(!allowUnitInfo && shouldBlockUnitCardDetail\(card, source\)\) return;/);
+ assert.match(ui,/className="kwUnitInfo"/);
+ assert.match(ui,/onClick=\{\(\)=>onDetail\(card,"兵種",true\)\}/);
  assert.match(ui,/兵種效果請查看卡面及規則頁/);
  assert.doesNotMatch(ui,/PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1/);
 });
 
 test("king ability is keyboard-discoverable while unit cards retain normal click handling",()=>{
- assert.match(ui,/aria-label=\{`查看 \$\{player\.king\.name\} 的國王能力`\}/);
- assert.match(ui,/event\.key === "Enter" \|\| event\.key === " "/);
+ assert.match(ui,/aria-label=\{`查看 \$\{player\.name\} 的國王能力`\}/);
+ assert.match(ui,/className="kwEnemyKingInfo"/);
+ assert.match(ui,/type="button" className="kwKingChip own"/);
  assert.match(ui,/function canUnitStillAct\(card\)/);
  assert.match(ui,/me\?\.field\?\.filter\(canUnitStillAct\)/);
  assert.doesNotMatch(ui,/function openActionCardModal\(/);
@@ -64,4 +69,18 @@ test("special abilities are taught contextually through usable controls rather t
  assert.match(ui,/背水一戰現在可以使用/);
  assert.match(ui,/法師與魔法都已就緒/);
  assert.doesNotMatch(ui,/TUTORIAL_RECALL_QUESTIONS/);
+});
+
+test("compact combat V3 retains essential gameplay controls and defers secondary content",()=>{
+ assert.match(ui,/className="page guidedPage kwCombatV3"/);
+ assert.match(ui,/className="kwBattleFrame"/);
+ assert.match(ui,/className="kwScoreStrip"/);
+ assert.match(ui,/className="kwEnemyChips"/);
+ assert.match(ui,/aria-label=\{`選擇對手/);
+ assert.match(ui,/className="kwEnemyKingInfo"/);
+ assert.ok(ui.includes('id="kw-field"'));
+ assert.ok(ui.includes('id="kw-enemy"'));
+ assert.ok(ui.includes('id="kw-hand"'));
+ assert.match(ui,/className="endTurnBtn"/);
+ assert.match(ui,/className="magicPanel guidedMagicPanel"/);
 });
