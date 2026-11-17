@@ -1912,7 +1912,7 @@ io.on("connection", socket => {
     if (room.tutorial) {
       const expected = room.tutorialProgress === 0 ? "中級騎兵"
         : room.tutorialProgress === 5 ? "中級步兵" : null;
-      if (!expected || p.hand[i].name !== expected)
+      if (room.tutorialProgress !== 10 && (!expected || p.hand[i].name !== expected))
         return reply?.({ok:false,error:expected?`教學任務：請部署${expected}。`:"請先完成目前的教學操作。"});
     }
     if(p.field.length>=5+(p.fieldBonus||0)) return reply?.({ok:false,error:"場上已滿。"});
@@ -1936,7 +1936,8 @@ io.on("connection", socket => {
 
     p.field.push(c);
     incrementMatchMetric(room,"deploy",1,{playerId:p.id});
-    if (room.tutorial) room.tutorialProgress = room.tutorialProgress === 0 ? 1 : 6;
+    if (room.tutorial && room.tutorialProgress === 0) room.tutorialProgress = 1;
+    else if (room.tutorial && room.tutorialProgress === 5) room.tutorialProgress = 6;
     room.log.push(`${p.name} 部署 ${c.name}${c.rank==="高級"?"，進入整備":""}${triggeredReinforcement ? "，觸發急援，本回合可以攻擊" : ""}。`);
     reply?.({ok:true}); broadcast(room);
   });
