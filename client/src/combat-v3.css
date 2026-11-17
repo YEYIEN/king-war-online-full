@@ -672,3 +672,86 @@
   .kwCombatV3 .gameCard .actionLabel {font-size:11px !important}
   .kwCombatV3 .battleInstruction {font-size:12px !important}
 }
+
+
+/* KINGDOM_TRIALS_AND_LAST_STAND_20261117 */
+.kwCombatV3 .trialCoach {
+  position:relative !important; z-index:3 !important;
+  display:flex !important; flex-direction:column !important;
+  gap:10px !important; flex:0 0 auto !important;
+  width:100% !important; max-width:none !important;
+  margin:0 !important; padding:16px 20px !important;
+  border:1px solid #718ab4 !important; border-radius:14px !important;
+  background:linear-gradient(135deg,#13263d,#152840) !important;
+  color:#eef4ff !important; font-size:14px !important;
+}
+.kwCombatV3 .trialCoach h2,.kwCombatV3 .trialCoach h3 {
+  color:#fff0cb !important; margin:3px 0 !important;
+}
+.kwCombatV3 .trialChapterHeader {
+  display:flex !important; flex-wrap:wrap !important;
+  align-items:flex-start !important; justify-content:space-between !important;
+  gap:10px !important;
+}
+.kwCombatV3 .trialEyebrow {font-size:12px !important;color:#eacb89 !important;font-weight:800 !important}
+.kwCombatV3 .trialGoal {margin:3px 0 !important;color:#d4e1f1 !important}
+.kwCombatV3 .trialCounter {
+  padding:6px 12px !important;background:#223b5a !important;
+  border:1px solid #58789e !important;border-radius:20px !important;
+  font-size:13px !important;
+}
+.kwCombatV3 .trialChapters {display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:7px !important}
+.kwCombatV3 .trialChapters > span {
+  padding:5px !important;min-height:28px !important;text-align:center !important;
+  background:#2b3d53 !important;border:1px solid #53667e !important;
+  border-radius:8px !important;color:#d2dce9 !important;
+}
+.kwCombatV3 .trialChapters > span.current {background:#513779 !important;border-color:#c4a4f3 !important;color:#fff !important}
+.kwCombatV3 .trialChapters > span.cleared {background:#164d43 !important;border-color:#57c59e !important;color:#c8ffdb !important}
+.kwCombatV3 .trialTaskHeading {display:flex !important;flex-wrap:wrap !important;gap:8px !important;justify-content:space-between !important;align-items:center !important}
+.kwCombatV3 .trialTaskHeading strong {font-size:17px !important;color:#fff0c6 !important}
+.kwCombatV3 .trialTaskHeading span {font-size:12px !important;color:#c8d5e6 !important}
+.kwCombatV3 .trialCoach .lessonTask {
+  margin:5px 0 !important;background:#203b59 !important;color:#eef4ff !important;
+  border-left:4px solid #e9bc65 !important;border-radius:7px !important;
+  padding:10px 14px !important;font-size:15px !important;
+}
+.kwCombatV3 .trialExplain {border:1px solid #465c77 !important;border-radius:8px !important;padding:8px 12px !important;color:#d5e4fa !important}
+.kwCombatV3 .trialExplain summary {cursor:pointer !important;font-weight:700 !important}
+.kwCombatV3 .trialExplain p {font-size:13px !important;color:#d4e1f1 !important}
+.kwCombatV3 .trialCoach .practiceJump {display:inline-block !important;align-self:flex-start !important;padding:8px 12px !important;border-radius:8px !important;background:#8065b4 !important;color:#fff !important;text-decoration:none !important}
+.kwCombatV3 .trialFeedback {font-size:12px !important;color:#a8d8c5 !important}
+.kwCombatV3 .trialReward {
+  background:#274d37 !important;border:1px solid #78d1a4 !important;
+  color:#f4ffe3 !important;border-radius:10px !important;padding:10px 14px !important;
+  font-size:15px !important;font-weight:800 !important;
+}
+.kwCombatV3 .trialMedals {display:flex !important;flex-wrap:wrap !important;gap:8px !important;margin:10px 0 !important}
+.kwCombatV3 .trialMedals span {padding:7px 10px !important;border-radius:8px !important;background:#443a31 !important;border:1px solid #c5a35e !important;color:#ffe2a0 !important}
+.kwCombatV3 .lastStandEntry {
+  min-height:40px !important;flex:0 0 auto !important;
+  border:1px solid #7183a5 !important;background:#253348 !important;
+  color:#dce7f9 !important;border-radius:9px !important;
+  font-size:12px !important;font-weight:800 !important;
+  white-space:nowrap !important;cursor:pointer !important;
+}
+.kwCombatV3 .lastStandEntry.unlocked {
+  border-color:#f2bf70 !important;color:#231c13 !important;
+  background:linear-gradient(100deg,#e6b868,#f3d991) !important;
+}
+.rulesLogPanel.lastStandGuide {max-width:740px !important;width:min(740px,calc(100vw - 24px)) !important;max-height:90dvh !important;overflow-y:auto !important;background:#13223a !important;color:#edf5ff !important}
+.lastStandRequirements {display:grid !important;gap:6px !important;margin:12px 0 !important}
+.lastStandRequirements > div {display:flex !important;justify-content:space-between !important;gap:12px !important;padding:9px 12px !important;border:1px solid #405a79 !important;border-radius:7px !important}
+.lastStandRequirements strong {white-space:nowrap !important;color:#e6c483 !important}
+.lastStandStrategyGrid {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:12px !important;margin:14px 0 !important}
+.lastStandStrategy {display:flex !important;flex-direction:column !important;gap:8px !important;padding:15px !important;border:1px solid #697c9a !important;border-radius:12px !important;background:#1c304b !important}
+.lastStandStrategy h3 {font-size:20px !important;color:#ffe2a0 !important;margin:0 !important}
+.lastStandStrategy p {flex:1 1 auto !important;line-height:1.55 !important}
+.lastStandStrategy button:disabled {opacity:.48 !important;cursor:not-allowed !important}
+.lastStandFinePrint {font-size:12px !important;color:#cbd5e1 !important;line-height:1.55 !important}
+@media (max-width:700px) {
+  .kwCombatV3 .trialCoach {padding:12px !important;gap:8px !important}
+  .kwCombatV3 .trialTaskHeading strong {font-size:15px !important}
+  .lastStandStrategyGrid {grid-template-columns:1fr !important}
+  .kwCombatV3 .trialCoach .lessonTask {font-size:13px !important}
+}
