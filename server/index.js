@@ -1897,6 +1897,10 @@ io.on("connection", socket => {
     const { room, player } = found;
     if (!requireTurn(room, player)) return reply?.({ ok: false, error: "還沒輪到你。" });
     const result = useLastStand(room, player, mode);
+    if (result.ok && room.tutorial && room.tutorialProgress === 9) {
+      room.tutorialProgress = 10;
+      room.log.push("★ 第四章任務成功：你已啟用逆境戰術。觀察手牌及國王護盾，然後結束回合。");
+    }
     reply?.(result);
     if (result.ok) broadcast(room);
   });
@@ -2022,13 +2026,40 @@ io.on("connection", socket => {
         broadcast(room);
         return;
       }
-      if (room.tutorialProgress !== 8)
-        return reply?.({ok:false,error:"先跟隨畫面引導完成目前的實際操作。"});
-      room.tutorialProgress = 9;
+      if (room.tutorialProgress === 8) {
+        // Final trial is a controlled disadvantage scenario. The normal combat
+        // engine still resolves the real last-stand action on the next step.
+        clearTurnTimer(room);
+        clearEndOfTurnBuffs(p);
+        clearEndTurnControl(p);
+        advanceFatigue(p);
+        trimHand(room,p);
+        const opponent = room.players.find(x => x.id !== p.id);
+        p.hp = 10;
+        p.field = p.field.slice(0,1);
+        p.lastStandUsed = false;
+        p.lastStandShield = 0;
+        opponent.hp = 22;
+        while (opponent.field.length < 3) {
+          const card = room.unitDeck.shift();
+          if (!card) break;
+          card.tapped = true;
+          opponent.field.push(card);
+        }
+        room.currentPlayerId = p.id;
+        room.tutorialProgress = 9;
+        room.log.push("⚠ 第四章「絕境」：我方 HP 10、敵方 HP 22；敵軍兵種佔優。背水一戰已解鎖！");
+        reply?.({ok:true});
+        broadcast(room);
+        return;
+      }
+      if (room.tutorialProgress !== 10)
+        return reply?.({ok:false,error:"請先完成本章的逆境戰術任務。"});
+      room.tutorialProgress = 11;
       room.status = "tutorialComplete";
       room.currentPlayerId = null;
       clearTurnTimer(room);
-      room.log.push("互動教學完成：你已實際操作部署、魔法、兵種與國王攻擊、守衛及回合切換。");
+      room.log.push("🏆 王國試煉四章全部完成：你已掌握部署、施法、攻防與逆境戰術。");
       scheduleRoomCleanup(room, 300);
       reply?.({ok:true});
       broadcast(room);
