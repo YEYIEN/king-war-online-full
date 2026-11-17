@@ -350,43 +350,80 @@ const GUIDED_LESSONS = [
     action:"點我方「初級騎兵」，再按「攻擊敵方國王」。",
     why:"真正的勝利條件是擊敗國王，不是只消滅敵方所有場上兵種。",
     warning:"多人局要先選擇目標玩家；特殊能力請查看國王卡及規則。" },
-  { title:"完成一整輪攻防操作", where:"#kw-top-actions", location:"回合操作區",
-    purpose:"你已體驗兩個回合的部署、攻擊、守衛、施法、兵種剋制及國王 HP。",
-    action:"點「結束回合」完成實戰教學；沒有考題，也不需要背誦答案。",
-    why:"正式遊戲還有五位國王的不同被動、弓兵追加攻擊、成吉思汗撤回、背水一戰和多人選敵。",
-    warning:"這些功能在正常對戰條件符合時可直接操作，遊戲中隨時可以打開規則查看。" }
+  { title:"迎接最後的挑戰", where:"#kw-top-actions", location:"回合操作區",
+    purpose:"你已學會部署、魔法與攻防，現在要面對故意安排的劣勢戰局。",
+    action:"按「結束回合」，進入最後的逆境試煉。",
+    why:"戰場不會永遠順利。落後時要重新評估能用的資源與勝利機會。",
+    warning:"下一章將示範每局一次的逆境戰術。" },
+  { title:"啟動逆境戰術", where:"#kw-top-actions", location:"逆境戰術",
+    purpose:"我方國王 HP 低、兵力不足；逆境戰術符合條件才會解鎖。",
+    action:"開啟上方「逆境戰術」，比較突圍與固守後選擇一種並確認。",
+    why:"突圍偏向奪回主動，固守偏向爭取下一回合；兩者都需要支付 2 HP。",
+    warning:"此能力每局只能使用一次，護盾不是永久生命值。" },
+  { title:"重整戰線，完成試煉", where:"#kw-top-actions", location:"戰場與回合區",
+    purpose:"你已在不利局面下使用逆境戰術，現在觀察新增的手牌和國王護盾。",
+    action:"可視情況部署剛抽到的兵種，確認效果後按「結束回合」完成四章試煉。",
+    why:"逆境戰術提供的是一次重整機會，後續決策仍由玩家自己掌握。",
+    warning:"只要在合法回合內完成即可，不要求特定卡牌或固定戰術。" }
+];
+
+const TRIAL_CHAPTERS = [
+  {title:"初陣：踏上戰場",goal:"學會部署兵種",start:0,end:1,medal:"初陣徽章"},
+  {title:"魔導：破局之力",goal:"透過法師強化兵種並攻擊國王",start:1,end:4,medal:"魔導徽章"},
+  {title:"鐵壁：破解守衛",goal:"理解回合、步兵守衛與兵種剋制",start:4,end:9,medal:"破陣徽章"},
+  {title:"絕境：背水一戰",goal:"在真正劣勢下選擇逆境戰術",start:9,end:11,medal:"逆境徽章"}
 ];
 
 function GuidedTutorialCoach({ progress=0, onExit }) {
-  const complete=progress>=GUIDED_LESSONS.length;
-  const index=Math.min(progress,GUIDED_LESSONS.length-1);
-  const step=GUIDED_LESSONS[index];
+  const complete = progress >= GUIDED_LESSONS.length;
+  const chapterIndex = TRIAL_CHAPTERS.findIndex(ch => progress < ch.end);
+  const chapter = TRIAL_CHAPTERS[chapterIndex < 0 ? TRIAL_CHAPTERS.length - 1 : chapterIndex];
+  const step = GUIDED_LESSONS[Math.min(progress, GUIDED_LESSONS.length - 1)];
+  const chapterDone = Math.max(0, Math.min(progress - chapter.start, chapter.end - chapter.start));
+  const chapterCount = chapter.end - chapter.start;
+  const newlyCleared = TRIAL_CHAPTERS.find(ch => ch.end === progress);
   return (
-    <section className="guidedLesson practiceCoach" aria-label="逐步實戰教學" aria-live="polite">
-      <div className="guidedLessonTop">
-        <strong>{complete?"實戰教學完成":`實戰導覽 · 第 ${progress+1} / ${GUIDED_LESSONS.length} 步`}</strong>
-        <span>{complete?"自由對戰準備完成":step.location}</span>
+    <section className="guidedLesson practiceCoach trialCoach" aria-label="王國試煉任務追蹤" aria-live="polite">
+      <div className="trialChapterHeader">
+        <div>
+          <span className="trialEyebrow">王國試煉 · 第 {Math.min(chapterIndex + 1, 4)} / 4 章</span>
+          <h2>{complete ? "🏆 王國試煉完成" : chapter.title}</h2>
+          <p className="trialGoal">{complete ? "你已具備自由對戰的基礎能力" : chapter.goal}</p>
+        </div>
+        <strong className="trialCounter">{complete ? "4 / 4" : `${chapterDone} / ${chapterCount}`} 任務</strong>
       </div>
+      <div className="trialChapters" aria-label="戰役完成進度">
+        {TRIAL_CHAPTERS.map((ch,i) => (
+          <span key={ch.title} className={progress >= ch.end ? "cleared" : i === chapterIndex ? "current" : ""} title={ch.title}>
+            {progress >= ch.end ? "✓" : i+1}
+          </span>
+        ))}
+      </div>
+      {newlyCleared && !complete && (
+        <div className="trialReward" role="status">★ 章節完成！獲得「{newlyCleared.medal}」· 已解鎖下一章</div>
+      )}
       {complete ? (
-        <>
-          <h2>你已經親手完成兩個戰鬥回合！</h2>
-          <p className="lessonTask">你實際操作了部署、施法、攻擊兵種、攻擊國王、步兵守衛、兵種剋制與結束回合。</p>
-          <p>正式對局還可以體驗不同王權、弓兵追加攻擊、騎兵撤回、背水一戰與多人攻擊目標。遇到陌生功能時，直接開啟「規則」查看說明。</p>
-          <button type="button" className="primaryBtn" onClick={onExit}>結束教學，開始自由對戰</button>
-        </>
+        <div className="trialFinish">
+          <h3>恭喜通過四章試煉！</h3>
+          <p>你已實際完成部署、施法、攻王、守衛突破、回合切換及一次逆境戰術。</p>
+          <div className="trialMedals">{TRIAL_CHAPTERS.map(ch=><span key={ch.medal}>★ {ch.medal}</span>)}</div>
+          <p>接下來可以在一般對戰自主選擇國王、兵種與戰術。</p>
+          <button type="button" className="primaryBtn" onClick={onExit}>完成試煉 · 前往自由對戰</button>
+        </div>
       ) : (
-        <>
-          <h2>{step.title}</h2>
-          <p><strong>這一步在學：</strong>{step.purpose}</p>
-          <p className="lessonTask"><strong>現在親手操作：</strong>{step.action}</p>
-          <p><strong>為什麼：</strong>{step.why}</p>
-          <p className="lessonWarning"><strong>戰術提醒：</strong>{step.warning}</p>
-          <a className="practiceJump" href={step.where}>前往「{step.location}」操作</a>
-          <div className="lessonProgress" aria-label={`已完成 ${progress} 個實際操作`}>
-            {GUIDED_LESSONS.map((_,i)=><span key={i} className={i<=progress?"active":""}/>)}
+        <div className="trialTaskBody">
+          <div className="trialTaskHeading">
+            <strong>🎯 本次任務：{step.title}</strong>
+            <span>{step.location}</span>
           </div>
-          <p className="practiceCoachNote">不需要回答考題。只有在正式戰場成功完成目前動作，才會自動進入下一步。</p>
-        </>
+          <p className="lessonTask">{step.action}</p>
+          <details className="trialExplain">
+            <summary>為什麼要這樣做？查看戰術提示</summary>
+            <p>{step.purpose}</p><p>{step.why}</p><p>{step.warning}</p>
+          </details>
+          <a className="practiceJump" href={step.where}>前往「{step.location}」執行任務</a>
+          <p className="trialFeedback">✓ 完成 {progress} / {GUIDED_LESSONS.length} 項實戰任務；成功操作將自動更新戰況與進度。</p>
+        </div>
       )}
     </section>
   );
@@ -409,6 +446,7 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  const [showComebackGuide, setShowComebackGuide] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
   const [mobileActionModal, setMobileActionModal] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -1309,20 +1347,10 @@ function App() {
           <button className="secondary" onClick={() => setShowRulesModal(true)}>規則</button>
           <button className="secondary" onClick={() => setShowLogModal(true)}>紀錄</button>
           <button className="secondary" onClick={returnToMainMenu}>回到主選單</button>
-          {me?.comebackAvailable && isMyTurn && (
-            <div className="lastStandChoices" role="group" aria-label="背水一戰策略">
-              <button className="secondary lastStandButton" onClick={() => {
-                if (window.confirm("突圍：每局一次、消耗2HP，抽2張兵種、緊急部署一次、獲得3點臨時國王護盾。確定嗎？")) {
-                  emit("game:lastStand", { mode: "assault" });
-                }
-              }}>背水突圍（-2HP）</button>
-              <button className="secondary lastStandButton" onClick={() => {
-                if (window.confirm("固守：每局一次、消耗2HP，抽1張兵種、獲得7點臨時國王護盾；不會額外獲得緊急部署。確定嗎？")) {
-                  emit("game:lastStand", { mode: "defense" });
-                }
-              }}>堅守反擊（-2HP）</button>
-            </div>
-          )}
+          <button type="button" className={me?.comebackAvailable ? "lastStandEntry unlocked" : "lastStandEntry"}
+            onClick={() => setShowComebackGuide(true)}>
+            {me?.lastStandUsed ? "逆境戰術 ✓ 已使用" : me?.comebackAvailable ? "⚔ 逆境戰術 · 可啟動" : "逆境戰術 · 查看條件"}
+          </button>
           <button className="endTurnBtn" disabled={!isMyTurn} onClick={handleEndTurn}>結束回合</button>
         </div>
       </header>
@@ -1377,6 +1405,37 @@ function App() {
                 取消
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {showComebackGuide && (
+        <section className="rulesLogOverlay" onClick={() => setShowComebackGuide(false)}>
+          <div className="rulesLogPanel lastStandGuide" role="dialog" aria-modal="true" aria-label="逆境戰術" onClick={(e)=>e.stopPropagation()}>
+            <div className="rulesLogTop">
+              <strong>⚔ 逆境戰術 · 背水一戰</strong>
+              <button type="button" className="secondary" onClick={()=>setShowComebackGuide(false)}>關閉</button>
+            </div>
+            <p>每局最多一次。當我方國王生命危急、場上兵力不足且對手有明顯優勢時，可以犧牲 2 HP 換取反攻機會。</p>
+            <div className="lastStandRequirements">
+              <div><span>國王 HP 介於 4～12</span><strong>{me?.hp >= 4 && me?.hp <= 12 ? "✓ 符合" : "尚未符合"}</strong></div>
+              <div><span>我方場上兵種 ≤ 2</span><strong>{(me?.field?.length || 0) <= 2 ? "✓ 符合" : "尚未符合"}</strong></div>
+              <div><span>敵方 HP 領先至少 6，或兵力多至少 2</span><strong>{enemies.some(e => e.hp >= (me?.hp || 0)+6 || (e.field?.length || 0) >= (me?.field?.length || 0)+2) ? "✓ 符合" : "尚未符合"}</strong></div>
+              <div><span>尚未使用、輪到自己且此局開啟該規則</span><strong>{me?.comebackAvailable ? "✓ 可使用" : me?.lastStandUsed ? "本局已使用" : "目前未開放"}</strong></div>
+            </div>
+            <div className="lastStandStrategyGrid">
+              <div className="lastStandStrategy">
+                <h3>⚔ 突圍</h3><p>消耗 2 HP · 抽 2 張兵種 · 獲得一次緊急部署 · 國王護盾 3 點</p>
+                <button type="button" className="primaryBtn" disabled={!me?.comebackAvailable || !isMyTurn}
+                  onClick={()=>{if(window.confirm("確定發動突圍？此局只能使用一次，消耗 2 HP。")){emit("game:lastStand",{mode:"assault"});setShowComebackGuide(false);}}}>選擇突圍</button>
+              </div>
+              <div className="lastStandStrategy">
+                <h3>🛡 固守</h3><p>消耗 2 HP · 抽 1 張兵種 · 國王護盾 7 點</p>
+                <button type="button" className="primaryBtn" disabled={!me?.comebackAvailable || !isMyTurn}
+                  onClick={()=>{if(window.confirm("確定發動固守？此局只能使用一次，消耗 2 HP。")){emit("game:lastStand",{mode:"defense"});setShowComebackGuide(false);}}}>選擇固守</button>
+              </div>
+            </div>
+            <p className="lastStandFinePrint">護盾僅持續到自己下一回合開始前；成功命中的攻王攻擊至少仍造成 1 HP 傷害。戰術開關可由房主在開局前設定。</p>
           </div>
         </section>
       )}
