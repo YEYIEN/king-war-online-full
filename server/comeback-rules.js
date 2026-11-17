@@ -4,7 +4,7 @@
  */
 export function canUseLastStand(room, player) {
   if (!room || !player || room.status !== "playing") return false;
-  if (room.tutorial || room.settings?.comebackEnabled === false) return false;
+  if ((room.tutorial && room.tutorialProgress !== 9) || room.settings?.comebackEnabled === false) return false;
   if (room.currentPlayerId !== player.id || player.eliminated || player.lastStandUsed) return false;
   if (player.hp <= 3 || player.hp > 12 || player.field.length > 2) return false;
   return room.players.some(opponent =>
