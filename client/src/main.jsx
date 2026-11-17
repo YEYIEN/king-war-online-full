@@ -374,7 +374,7 @@ const TRIAL_CHAPTERS = [
   {title:"絕境：背水一戰",goal:"在真正劣勢下選擇逆境戰術",start:9,end:11,medal:"逆境徽章"}
 ];
 
-function GuidedTutorialCoach({ progress=0, onExit }) {
+function GuidedTutorialCoach({ progress=0, onExit, onShowComeback }) {
   const complete = progress >= GUIDED_LESSONS.length;
   const chapterIndex = TRIAL_CHAPTERS.findIndex(ch => progress < ch.end);
   const chapter = TRIAL_CHAPTERS[chapterIndex < 0 ? TRIAL_CHAPTERS.length - 1 : chapterIndex];
@@ -421,7 +421,7 @@ function GuidedTutorialCoach({ progress=0, onExit }) {
             <summary>為什麼要這樣做？查看戰術提示</summary>
             <p>{step.purpose}</p><p>{step.why}</p><p>{step.warning}</p>
           </details>
-          <a className="practiceJump" href={step.where}>前往「{step.location}」執行任務</a>
+          {progress === 9 ? <button type="button" className="practiceJump trialStandJump" onClick={onShowComeback}>⚔ 開啟逆境戰術，選擇突圍或固守</button> : <a className="practiceJump" href={step.where}>前往「{step.location}」執行任務</a>}
           <p className="trialFeedback">✓ 完成 {progress} / {GUIDED_LESSONS.length} 項實戰任務；成功操作將自動更新戰況與進度。</p>
         </div>
       )}
@@ -893,7 +893,7 @@ function App() {
             <strong>遊戲目標：</strong>把其他玩家國王 HP 打到 0。<br />
             <strong>每回合：</strong>部署兵種、攻擊、使用魔法，最後結束回合。<br />
             <strong>急援：</strong>若回合開始時場上沒有兵種，第一張部署的初級或中級兵種可以立刻攻擊。<br />
-            <strong>背水一戰：</strong>嚴重落後時每局一次，耗費2HP，選擇「突圍」（2張兵種＋緊急部署＋3點護盾）或「固守」（1張兵種＋7點護盾）。
+            <strong>逆境戰術（背水一戰）：</strong>戰鬥時可隨時查看啟動條件。符合嚴重落後條件後，每局可耗費2HP選擇一次「突圍」或「固守」。
           </div>
 
           <button
@@ -902,7 +902,7 @@ function App() {
               startTutorialRoom();
             }}
           >
-            開始操作教學
+            開始王國試煉（四章實戰任務）
           </button>
 
           {message && <p className="error">{message}</p>}
@@ -1543,7 +1543,7 @@ function App() {
           <p>所有玩家先完成一次布陣；本輪禁止攻擊及對敵方使用魔法。請先決定自己的兵種防線。</p>
         </section>
       )}
-      {room?.tutorial && <GuidedTutorialCoach key={room.roomCode} progress={room.tutorialProgress || 0} onExit={returnToMainMenu} />}
+      {room?.tutorial && <GuidedTutorialCoach key={room.roomCode} progress={room.tutorialProgress || 0} onExit={returnToMainMenu} onShowComeback={() => setShowComebackGuide(true)} />}
 
       {attackFeedback && (
         <div className="attackFeedbackToast">
