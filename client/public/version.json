@@ -1,5 +1,5 @@
 {
-  "version": "20261118-mobile-ux-tutorial-copy-v1",
-  "updatedAt": "2026-11-18T02:22:00.000Z",
-  "note": "Mobile battle scrolling, contextual tutorial modal, concise game instructions"
+  "version": "20261118-mobile-single-screen-v4",
+  "updatedAt": "2026-11-18T11:26:00+08:00",
+  "note": "Single-screen portrait battle, five-unit board, paged hand, mobile actions and menu; desktop preserved"
 }
