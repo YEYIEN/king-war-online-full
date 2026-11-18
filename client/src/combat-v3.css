@@ -916,7 +916,6 @@
 .kwCombatV3 .mobileEmptySlot,
 .kwCombatV3 .mobileTargetCycle {display:none !important}
 @media (max-width:800px) and (orientation:portrait) {
-  html,body,#root {height:100% !important;max-height:100% !important;overflow:hidden !important}
   .kwCombatV3, .kwCombatV3:has(.trialMiniHud) {
     width:100% !important;height:100dvh !important;min-height:0 !important;
     max-height:100dvh !important;overflow:hidden !important;
@@ -1219,4 +1218,9 @@
   .kwCombatV3 .battleGrid .gameCard .cardArt {height:clamp(28px,7dvh,60px) !important}
   .kwCombatV3 .battleActionHub {height:29px !important;min-height:29px !important;max-height:29px !important}
   .kwCombatV3 .handAndLog .gameCard .cardArt {height:clamp(28px,7dvh,60px) !important}
+}
+
+/* Hidden hand pages must beat the generic card flex display. */
+@media(max-width:800px) and (orientation:portrait) {
+ .kwCombatV3 .handAndLog .gameCard.mobileHandHidden {display:none !important}
 }
