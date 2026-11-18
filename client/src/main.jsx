@@ -205,7 +205,7 @@ function actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan }) {
   return {
     tone: "active",
     title: "輪到你行動",
-    steps: ["你可以部署任意數量兵種，直到場上滿 5 張。", "你可以點選可行動兵種作為攻擊者。", "你可以點選魔法卡，依提示選法師與目標。", "完成後按「結束回合」。"],
+    steps: ["你可以部署任意數量兵種，直到場上滿 5 張。", "你可以點選可行動兵種作為攻擊者。", "你可以點選魔法卡，依提示選法師與目標。", "行動完成後，按「結束回合」。"],
   };
 }
 
@@ -312,57 +312,57 @@ function EmptyState({ children }) {
 
 const GUIDED_LESSONS = [
   { title:"部署第一名兵種", where:"#kw-hand", location:"手牌與部署",
-    purpose:"先認識手牌與戰場：牌在手上不能攻擊，要部署到我方戰場才能使用。",
-    action:"到手牌區點選「中級騎兵」，閱讀卡牌資訊後按「確認部署」。",
+    purpose:"先把兵種放上戰場，才可以參與戰鬥。",
+    action:"點手牌中的「中級騎兵」，確認部署。",
     why:"騎兵能在部署當回合進攻；其他兵種通常要等待下一回合。", warning:"先別攻擊，下一步會用魔法強化它。" },
   { title:"用法師施放力量術", where:"#kw-hand", location:"魔法卡",
     purpose:"場上已放好法師，手上有一張力量術。魔法需要法師，並消耗法師本回合的行動。",
-    action:"在魔法卡區點「力量術」，依次選初級法師、我方中級騎兵，再確認施放。",
+    action:"點「力量術」，選初級法師，再選我方中級騎兵。",
     why:"騎兵原戰力 2，強化後變 3，能避免在對決中與戰力 2 的弓兵同歸於盡。",
     warning:"施法的法師本回合不能再次攻擊。魔法介面每一步都可取消。" },
   { title:"選攻擊者，再選敵方兵種", where:"#kw-field", location:"我方與敵方戰場",
     purpose:"騎兵已獲得力量術加成，現在親自用它擊敗敵方中級弓兵。",
-    action:"點我方「中級騎兵」，再點敵方「中級弓兵」；注意顯示的戰力與行動狀態。",
+    action:"選我方中級騎兵，攻擊敵方中級弓兵。",
     why:"攻擊時比較雙方戰力，還要考慮兵種相剋與特殊能力。",
     warning:"攻擊一次通常消耗一次行動，已行動的兵種不可重複出手。" },
   { title:"直接攻擊敵方國王", where:"#kw-enemy", location:"敵方戰場",
     purpose:"敵人場上已沒有步兵守衛。你可以看見敵方 HP 和國王能力。",
-    action:"點我方場上的「初級騎兵」，再按敵方戰場的「攻擊敵方國王」。",
+    action:"選初級騎兵，點「攻擊敵方國王」。",
     why:"戰鬥的最終目標是把敵方國王 HP 降至 0；有步兵守衛時必須先清除步兵。",
     warning:"可以直接點國王名稱查看王權，點「規則」查看兵種相剋。" },
   { title:"結束第一個回合", where:"#kw-top-actions", location:"回合操作區",
     purpose:"你已部署、施法、攻擊兵種和國王。現在體驗回合結束與下一回合抽牌。",
-    action:"點上方「結束回合」，觀察對手部署步兵，以及自己的兵種重新可以行動。",
+    action:"點「結束回合」，看看對手如何布防。",
     why:"回合開始會抽兵種牌；有法師時也可能抽魔法。每回合須決定資源使用順序。",
     warning:"結束回合後，將輪到對手。" },
   { title:"先部署步兵保護國王", where:"#kw-hand", location:"手牌與部署",
     purpose:"對手場上出現步兵，這正是守衛機制。你也可以部署步兵保護自己的國王。",
-    action:"點手牌裡的「中級步兵」，確認部署到我方戰場。",
+    action:"部署中級步兵，保護國王。",
     why:"只要場上仍有步兵守衛，敵人通常無法直接攻擊你的國王。",
     warning:"非騎兵一般剛部署無法立刻攻擊；防守仍然會生效。" },
   { title:"利用騎兵剋制清除步兵", where:"#kw-field", location:"我方與敵方戰場",
     purpose:"敵方步兵擋住國王攻擊。兵種有相剋關係：騎兵剋步兵。",
-    action:"點重新可行動的「中級騎兵」，再點敵方「初級步兵」進攻。",
+    action:"用中級騎兵攻擊敵方初級步兵。",
     why:"四種相剋循環是：步兵→弓兵→法師→騎兵→步兵。選對目標能降低損失。",
     warning:"戰力不是唯一條件，對手兵種特殊能力與狀態也會影響戰果。" },
   { title:"防線突破後繼續攻擊國王", where:"#kw-enemy", location:"敵方戰場",
     purpose:"敵方步兵已被清除，現在再次體驗攻擊國王與 HP 下降。",
-    action:"點我方「初級騎兵」，再按「攻擊敵方國王」。",
+    action:"用初級騎兵攻擊敵方國王。",
     why:"真正的勝利條件是擊敗國王，不是只消滅敵方所有場上兵種。",
     warning:"多人局要先選擇目標玩家；特殊能力請查看國王卡及規則。" },
   { title:"迎接最後的挑戰", where:"#kw-top-actions", location:"回合操作區",
     purpose:"最後一戰將從劣勢開始。",
-    action:"按「結束回合」，進入最後的逆境試煉。",
+    action:"點「結束回合」，迎接最後一戰。",
     why:"戰場不會永遠順利。落後時要重新評估能用的資源與勝利機會。",
     warning:"下一章將示範每局一次的逆境戰術。" },
   { title:"啟動逆境戰術", where:"#kw-top-actions", location:"逆境戰術",
     purpose:"我方國王 HP 低、兵力不足；逆境戰術符合條件才會解鎖。",
-    action:"開啟上方「逆境戰術」，比較突圍與固守後選擇一種並確認。",
+    action:"打開「逆境戰術」，選擇突圍或固守。",
     why:"突圍偏向奪回主動，固守偏向爭取下一回合；兩者都需要支付 2 HP。",
     warning:"此能力每局只能使用一次，護盾不是永久生命值。" },
   { title:"重整戰線，完成試煉", where:"#kw-top-actions", location:"戰場與回合區",
     purpose:"你已發動逆境戰術，查看增加的手牌和護盾。",
-    action:"可視情況部署剛抽到的兵種，確認效果後按「結束回合」完成四章試煉。",
+    action:"部署兵種或直接結束回合，完成試煉。",
     why:"逆境戰術提供的是一次重整機會，後續決策仍由玩家自己掌握。",
     warning:"選擇適合的兵種即可。" }
 ];
@@ -940,21 +940,21 @@ function App() {
   const magicTargetPlayer = room.players.find((p) => p.id === magicPlan?.targetPlayerId);
   const hint = actionHint({ room, me, isMyTurn, attacker, targetPlayer, magicPlan });
   const readyUnits = (me?.field || []).filter(canUnitStillAct).length;
-  const battleInstruction = room.status === "tutorialComplete" ? "教學已完成，請按引導面板的按鈕返回主選單。" : !isMyTurn
-    ? "目前是對手的回合。可以先查看王權、兵種剋制與戰鬥紀錄。"
-    : magicPlan ? "施法中：依照紫色魔法流程選法師、目標與確認；可以隨時取消。"
-    : attacker ? `已選擇「${attacker.name}」：點擊下方敵方兵種發動攻擊，或在敵人沒有步兵時攻擊國王。`
-    : me?.hand?.length ? "先在「手牌與部署」挑選兵種；要進攻時，先點我方場上可行動的兵種。"
-    : "目前沒有兵種手牌。選擇我方已部署且可行動的兵種進攻，或結束回合等待抽牌。";
+  const battleInstruction = room.status === "tutorialComplete" ? "試煉完成！點「查看成果」領取徽章。" : !isMyTurn
+    ? "對手回合。查看戰場，準備下一步。"
+    : magicPlan ? "選擇法師與目標，確認後施放魔法。"
+    : attacker ? `已選擇「${attacker.name}」：點敵方兵種進攻；沒有步兵守衛時可直接攻王。`
+    : me?.hand?.length ? "從手牌部署兵種，或點選我方兵種進攻。"
+    : "手牌已空。你可以進攻或結束回合。";
 
   const contextualTraining = !isMyTurn ? null
-    : me?.comebackAvailable ? "背水一戰現在可以使用：查看上方「突圍」或「固守」的實際代價，選擇其中一種反擊。"
+    : me?.comebackAvailable ? "逆境戰術已解鎖，可選擇突圍或固守。"
     : me?.king?.name === "成吉思汗" && me.field.some(u=>u.type==="騎兵") && !me.recallUsed
-      ? "成吉思汗可將場上騎兵撤回手牌：請在我方騎兵卡下方按「撤回」，留意手牌上限。"
+      ? "成吉思汗可撤回騎兵，重新安排攻勢。"
     : me?.field?.some(u=>u.type==="弓兵" && canUnitStillAct(u))
-      ? "弓兵可以依實際交戰結果取得特殊保護或追加攻擊；查看卡牌狀態，選擇值得交戰的敵人。"
+      ? "弓兵能追加攻擊或保住性命。詳見卡牌效果。"
     : me?.field?.some(u=>u.type==="法師" && canUnitStillAct(u)) && me?.magic?.length
-      ? "法師與魔法都已就緒：點選手上的魔法卡，親自完成施法者、目標與確認流程。"
+      ? "魔法已就緒。選擇魔法卡開始施放。"
       : null;
 
   const gameEnded = room.status === "ended";
@@ -1465,10 +1465,10 @@ function App() {
             <div className="rulesGrid">
               <div className="ruleBlock">
                 <h3>兵種效果速查</h3>
-                <p><strong>步兵：</strong>守衛。敵方有步兵時，通常必須先處理步兵，不能直接攻擊國王。</p>
-                <p><strong>弓兵：</strong>遠射。依戰力差與攻擊對象，可能獲得額外攻擊或保命效果。</p>
-                <p><strong>法師：</strong>施法。使用魔法卡需要選擇法師作為施法者。</p>
-                <p><strong>騎兵：</strong>突擊。部署後可更快投入攻擊，是主動進攻型兵種。</p>
+                <p><strong>步兵：</strong>守護國王。對手必須先清除步兵才能攻王。</p>
+                <p><strong>弓兵：</strong>遠射。符合條件時可追加攻擊或避免陣亡。</p>
+                <p><strong>法師：</strong>使用魔法卡；施法消耗一次行動。</p>
+                <p><strong>騎兵：</strong>初、中級騎兵部署後即可攻擊。</p>
               </div>
               <div className="ruleBlock">
                 <h3>兵種相剋</h3>
@@ -1480,19 +1480,19 @@ function App() {
 
               <div className="ruleBlock">
                 <h3>戰鬥目標</h3>
-                <p>把其他玩家的國王 HP 降到 0。</p>
-                <p>敵方場上有步兵時，通常必須先處理步兵，不能直接攻擊國王。</p>
+                <p>將其他國王的 HP 降到 0，即可獲勝。</p>
+                <p>敵方有步兵時，先清除步兵才能攻王。</p>
               </div>
 
               <div className="ruleBlock">
                 <h3>回合流程</h3>
-                <p>部署兵種、攻擊與施法可視局勢排序，再結束回合。</p>
+                <p>自由安排部署、攻擊和施法。完成後結束回合。</p>
                 <p><strong>逆境戰術：</strong>HP 4～12、我方場上不超過 2 兵種，而且敵軍明顯領先時，可付出 2 HP 選擇突圍或固守。每局一次。</p>
               </div>
 
               <div className="ruleBlock">
                 <h3>卡片說明</h3>
-                <p>手機長按卡片、電腦右鍵或雙擊卡片，可以查看完整描述。</p>
+                <p>點卡片上的「i」可查看效果。也可長按卡片。</p>
               </div>
             </div>
           </div>
@@ -1544,7 +1544,7 @@ function App() {
 
             <p>{cardDetailModal.text}</p>
 
-            <small>提示：國王及魔法卡可長按或右鍵查看說明；兵種效果請查看卡面及規則頁。</small>
+            <small>點卡牌上的「i」可隨時查看效果。</small>
           </div>
         </section>
       )}
@@ -1552,7 +1552,7 @@ function App() {
       {room.openingTruceActive && (
         <section className="guidedLesson">
           <h2>戰前部署期間</h2>
-          <p>所有玩家先完成一次布陣；本輪禁止攻擊及對敵方使用魔法。請先決定自己的兵種防線。</p>
+          <p>第一輪只能部署兵種，暫時不能攻擊或對敵人施法。</p>
         </section>
       )}
       {room?.tutorial && <GuidedTutorialCoach key={room.roomCode} progress={room.tutorialProgress || 0} onExit={returnToMainMenu} onShowComeback={() => setShowComebackGuide(true)} />}
@@ -1566,7 +1566,7 @@ function App() {
 
       {isMyTurn && me?.reinforcementAvailable && !me?.reinforcementUsed && (
         <div className="reinforcementNotice">
-          急援可用：本回合第一張部署的初級或中級兵種可以立刻攻擊。
+          急援已啟動：首張初、中級兵種部署後即可攻擊。
         </div>
       )}
 
