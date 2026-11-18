@@ -1874,7 +1874,7 @@ function App() {
             <h2>魔法 <small>({me?.magic?.length || 0})</small></h2>
             <p>點選魔法開始施放。</p>
             <div className="magicList">
-              {me?.magic?.length ? me.magic.map((card,index) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} hiddenMobile={index < Math.min(mobileHandPage,Math.max(0,Math.ceil(me.magic.length/4)-1))*4 || index >= (Math.min(mobileHandPage,Math.max(0,Math.ceil(me.magic.length/4)-1))+1)*4} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+              {me?.magic?.length ? me.magic.map((card,index) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} hiddenMobile={index < Math.min(mobileHandPage,Math.max(0,Math.ceil(me.magic.length/4)-1))*4 || index >= (Math.min(mobileHandPage,Math.max(0,Math.ceil(me.magic.length/4)-1))+1)*4} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => { setMobileDeckTab("units"); beginMagic(card); })} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
             </div>
           </section>
 
