@@ -460,6 +460,9 @@ function App() {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showComebackGuide, setShowComebackGuide] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
+  const [mobileDeckTab, setMobileDeckTab] = useState("units");
+  const [mobileHandPage, setMobileHandPage] = useState(0);
+  const [showMobileBattleMenu, setShowMobileBattleMenu] = useState(false);
   const [mobileActionModal, setMobileActionModal] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [attackFeedback, setAttackFeedback] = useState(null);
@@ -1341,7 +1344,7 @@ function App() {
   const targetHasInfantry = targetPlayer?.field?.some((u) => u.type === "步兵");
 
   return (
-    <main className="page guidedPage kwCombatV3">
+    <main className={`page guidedPage kwCombatV3 ${mobileDeckTab === "magic" ? "mobileDeckMagic" : "mobileDeckUnits"}`}>
       <header className="topbar guidedTopbar" id="kw-top-actions">
         <div>
           <div className="titleBadge">Room {room.roomCode}</div>
@@ -1355,6 +1358,7 @@ function App() {
         </div>
 
         <div className="topActions">
+          <button type="button" className="mobileBattleMenuButton" onClick={() => setShowMobileBattleMenu(true)} aria-label="開啟遊戲選單">☰ 選單</button>
           <button className="secondary" onClick={() => setShowHelp((v) => !v)}>{showHelp ? "隱藏提示" : "顯示提示"}</button>
           <button className="secondary" onClick={() => setShowRulesModal(true)}>規則</button>
           <button className="secondary" onClick={() => setShowLogModal(true)}>紀錄</button>
@@ -1417,6 +1421,20 @@ function App() {
                 取消
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {showMobileBattleMenu && (
+        <section className="rulesLogOverlay mobileBattleMenuOverlay" onClick={() => setShowMobileBattleMenu(false)}>
+          <div className="rulesLogPanel mobileBattleMenuPanel" role="dialog" aria-modal="true" aria-label="遊戲選單" onClick={e => e.stopPropagation()}>
+            <div className="rulesLogTop"><strong>遊戲選單</strong><button className="secondary" onClick={() => setShowMobileBattleMenu(false)}>關閉</button></div>
+            <button onClick={() => { setShowMobileBattleMenu(false);setShowRulesModal(true); }}>遊戲規則</button>
+            <button onClick={() => { setShowMobileBattleMenu(false);setShowLogModal(true); }}>戰鬥紀錄</button>
+            {!room.tutorial && <button onClick={() => { setShowMobileBattleMenu(false);setShowHelp(true); }}>操作提示</button>}
+            <button onClick={() => { setShowMobileBattleMenu(false);setShowComebackGuide(true); }}>逆境戰術</button>
+            {room.tutorial && <button onClick={() => { setShowMobileBattleMenu(false); }}>任務提示請點戰場上的「查看任務」</button>}
+            <button className="secondary" onClick={() => { setShowMobileBattleMenu(false);returnToMainMenu(); }}>返回主選單</button>
           </div>
         </section>
       )}
@@ -1640,6 +1658,7 @@ function App() {
           <span className="battleReadyCount">可行動兵種 {readyUnits} / {me?.field?.length || 0}</span>
         </div>
         <p role="status" aria-live="polite" className="battleInstruction">{battleInstruction}</p>
+        <p className="mobileBattlePrompt" aria-live="polite">{!isMyTurn ? "等待對手行動" : magicPlan ? "施法中 · 選法師與目標" : attacker ? `已選 ${attacker.name} · 點敵軍或攻王` : "選我方兵種攻擊，或從手牌部署"}</p>
         {me?.king && <button type="button" className="battleKingHelp" onClick={()=>openCardDetail({...me.king,kind:"king"},"國王")}>
           查看我的王權：{me.king.name}
         </button>}
@@ -1658,6 +1677,15 @@ function App() {
       </section>
 
       <section className="handAndLog" id="kw-hand">
+        <div className="mobileDeckControls" role="group" aria-label="選擇手牌種類">
+          <button type="button" className={mobileDeckTab === "units" ? "selected" : ""} onClick={() => setMobileDeckTab("units")}>兵種 {me?.hand?.length || 0}</button>
+          <button type="button" className={mobileDeckTab === "magic" ? "selected" : ""} onClick={() => setMobileDeckTab("magic")}>魔法 {me?.magic?.length || 0}</button>
+          {mobileDeckTab === "units" && (me?.hand?.length || 0) > 4 && <div className="mobileHandPaging">
+            <button type="button" disabled={mobileHandPage === 0} onClick={() => setMobileHandPage(p => Math.max(0, p-1))} aria-label="上一頁手牌">‹</button>
+            <span>{Math.min(mobileHandPage, Math.ceil((me?.hand?.length || 0)/4)-1)+1} / {Math.ceil((me?.hand?.length || 0)/4)}</span>
+            <button type="button" disabled={(mobileHandPage+1)*4 >= (me?.hand?.length || 0)} onClick={() => setMobileHandPage(p => p+1)} aria-label="下一頁手牌">›</button>
+          </div>}
+        </div>
         <div className="battleHandPrimary">
         <section className="zoneCard">
           <div className="zoneHeader">
@@ -1672,7 +1700,7 @@ function App() {
               me.hand.map((card) => (
                 <button
                   key={card.id}
-                  className="gameCard unit handCard"
+                  className={`gameCard unit handCard ${me.hand.indexOf(card) < Math.min(mobileHandPage, Math.max(0, Math.ceil(me.hand.length/4)-1))*4 || me.hand.indexOf(card) >= (Math.min(mobileHandPage, Math.max(0, Math.ceil(me.hand.length/4)-1))+1)*4 ? "mobileHandHidden" : ""}`}
                   disabled={!isMyTurn || !!magicPlan}
                   onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => emit("game:deploy", { cardId: card.id }))}
                   onDoubleClick={(e) => {
@@ -1857,11 +1885,12 @@ function App() {
           <div className="zoneHeader">
             <div>
               <h2>敵方兵種 · {targetPlayer?.name || "對手"}</h2>
+              <span className="mobileUnitCount">{targetPlayer?.field?.length || 0} / 5</span>
               <p>{targetHasInfantry ? "步兵守衛" : "國王可攻擊"}</p>
             </div>
             <div className="kwKingAttackAction" aria-label="攻擊敵方國王操作">
               <span className="kwKingAttackStatus">{targetHasInfantry ? "敵方步兵仍在守衛國王" : !isMyTurn ? "目前不是你的回合" : !attackerId ? "請先點選我方可行動兵種" : "已選攻擊者，可以攻擊國王"}</span>
-              <button className="dangerBtn kwKingAttackBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}>{targetHasInfantry ? "步兵守衛中" : "⚔ 攻擊敵方國王"}</button>
+              <button className="dangerBtn kwKingAttackBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}><span className="desktopAttackKingLabel">{targetHasInfantry ? "步兵守衛中" : "⚔ 攻擊敵方國王"}</span><span className="mobileAttackKingLabel">{targetHasInfantry ? "守衛中" : "攻王"}</span></button>
             </div>
           </div>
 
@@ -1886,6 +1915,7 @@ function App() {
           <div className="zoneHeader">
             <div>
               <h2>我方兵種</h2>
+              <span className="mobileUnitCount">{me?.field?.length || 0} / 5</span>
               <p>點兵種選攻擊者。</p>
             </div>
           </div>
