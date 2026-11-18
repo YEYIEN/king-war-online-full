@@ -248,7 +248,7 @@ function UnitCard({ card, onClick, selected, disabled, actionLabel, compact = fa
   );
 }
 
-function MagicCard({ card, onClick, disabled, selected, onDetail, onAction }) {
+function MagicCard({ card, onClick, disabled, selected, onDetail, onAction, hiddenMobile = false }) {
   let pressTimer = null;
 
   function startPress() {
@@ -278,7 +278,7 @@ function MagicCard({ card, onClick, disabled, selected, onDetail, onAction }) {
 
   return (
     <button
-      className={`gameCard magic ${selected ? "selected" : ""}`}
+      className={`gameCard magic ${selected ? "selected" : ""} ${hiddenMobile ? "mobileHandHidden" : ""}`}
       disabled={disabled}
       onClick={handleClick}
       onDoubleClick={(e) => {
@@ -1633,7 +1633,7 @@ function App() {
           </button>
           <div className="kwEnemyChips" role="group" aria-label="選擇對手並查看血量">
             {enemies.map(player=>(
-              <div className="kwEnemyChipWrap" key={player.id}>
+              <div className={`kwEnemyChipWrap ${targetPlayer?.id===player.id?"mobileSelectedEnemy":""}`} key={player.id}>
                 <button type="button"
                   className={`kwKingChip enemy ${targetPlayer?.id===player.id?"active":""}`}
                   aria-pressed={targetPlayer?.id===player.id}
@@ -1647,6 +1647,7 @@ function App() {
                   title="查看國王能力" onClick={()=>player.king && openCardDetail({...player.king,kind:"king"},"國王")}>?</button>
               </div>
             ))}
+            {enemies.length > 1 && <button type="button" className="mobileTargetCycle" onClick={() => setTargetPlayerId(enemies[(enemies.findIndex(e=>e.id===targetPlayer?.id)+1)%enemies.length].id)}>換目標 ↻</button>}
           </div>
         </div>
       <section className="battleActionHub" aria-label="本回合操作導覽">
@@ -1678,12 +1679,12 @@ function App() {
 
       <section className="handAndLog" id="kw-hand">
         <div className="mobileDeckControls" role="group" aria-label="選擇手牌種類">
-          <button type="button" className={mobileDeckTab === "units" ? "selected" : ""} onClick={() => setMobileDeckTab("units")}>兵種 {me?.hand?.length || 0}</button>
-          <button type="button" className={mobileDeckTab === "magic" ? "selected" : ""} onClick={() => setMobileDeckTab("magic")}>魔法 {me?.magic?.length || 0}</button>
-          {mobileDeckTab === "units" && (me?.hand?.length || 0) > 4 && <div className="mobileHandPaging">
+          <button type="button" className={mobileDeckTab === "units" ? "selected" : ""} onClick={() => {setMobileDeckTab("units");setMobileHandPage(0);}}>兵種 {me?.hand?.length || 0}</button>
+          <button type="button" className={mobileDeckTab === "magic" ? "selected" : ""} onClick={() => {setMobileDeckTab("magic");setMobileHandPage(0);}}>魔法 {me?.magic?.length || 0}</button>
+          {(mobileDeckTab === "units" ? (me?.hand?.length || 0) : (me?.magic?.length || 0)) > 4 && <div className="mobileHandPaging">
             <button type="button" disabled={mobileHandPage === 0} onClick={() => setMobileHandPage(p => Math.max(0, p-1))} aria-label="上一頁手牌">‹</button>
-            <span>{Math.min(mobileHandPage, Math.ceil((me?.hand?.length || 0)/4)-1)+1} / {Math.ceil((me?.hand?.length || 0)/4)}</span>
-            <button type="button" disabled={(mobileHandPage+1)*4 >= (me?.hand?.length || 0)} onClick={() => setMobileHandPage(p => p+1)} aria-label="下一頁手牌">›</button>
+            <span>{Math.min(mobileHandPage, Math.ceil((mobileDeckTab === "units" ? (me?.hand?.length || 0) : (me?.magic?.length || 0))/4)-1)+1} / {Math.ceil((mobileDeckTab === "units" ? (me?.hand?.length || 0) : (me?.magic?.length || 0))/4)}</span>
+            <button type="button" disabled={(mobileHandPage+1)*4 >= (mobileDeckTab === "units" ? (me?.hand?.length || 0) : (me?.magic?.length || 0))} onClick={() => setMobileHandPage(p => p+1)} aria-label="下一頁手牌">›</button>
           </div>}
         </div>
         <div className="battleHandPrimary">
@@ -1873,7 +1874,7 @@ function App() {
             <h2>魔法 <small>({me?.magic?.length || 0})</small></h2>
             <p>點選魔法開始施放。</p>
             <div className="magicList">
-              {me?.magic?.length ? me.magic.map((card) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
+              {me?.magic?.length ? me.magic.map((card,index) => <MagicCard onDetail={openCardDetail} key={card.id} card={card} hiddenMobile={index < Math.min(mobileHandPage,Math.max(0,Math.ceil(me.magic.length/4)-1))*4 || index >= (Math.min(mobileHandPage,Math.max(0,Math.ceil(me.magic.length/4)-1))+1)*4} disabled={!isMyTurn || !!magicPlan} onClick={() => openMobileActionModal(card, "魔法卡", "使用這張魔法", () => beginMagic(card))} />) : <EmptyState>沒有魔法卡。場上有法師時，回合開始會抽魔法。</EmptyState>}
             </div>
           </section>
 
@@ -1908,6 +1909,7 @@ function App() {
                 />
               ))
             ) : <EmptyState>敵方場上沒有兵種。</EmptyState>}
+            {Array.from({length:Math.max(0,5-(targetPlayer?.field?.length || 0))},(_,i)=><div key={`enemy-empty-${i}`} className="mobileEmptySlot" aria-hidden="true">＋</div>)}
           </div>
         </section>
 
@@ -1936,6 +1938,7 @@ function App() {
                 </div>
               ))
             ) : <EmptyState>你目前沒有場上兵種。可以先從手牌部署。</EmptyState>}
+            {Array.from({length:Math.max(0,5-(me?.field?.length || 0))},(_,i)=><div key={`own-empty-${i}`} className="mobileEmptySlot" aria-hidden="true">＋</div>)}
           </div>
         </section>
       </section>
