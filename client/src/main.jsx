@@ -599,7 +599,13 @@ function App() {
 
   React.useEffect(() => {
     const connected = () => setConnectionStatus("connected");
-    const disconnected = () => setConnectionStatus("disconnected");
+    const disconnected = () => {
+      setConnectionStatus("disconnected");
+      if (localStorage.getItem("kw_session")) {
+        setRoom(null);
+        setPlayerId(null);
+      }
+    };
     const connectionError = () => setConnectionStatus("disconnected");
     socket.on("connect", connected);
     socket.on("disconnect", disconnected);
