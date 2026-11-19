@@ -648,6 +648,7 @@ function App() {
     socket.on("connect",inspectSavedMatch);
     if (socket.connected) inspectSavedMatch();
     socket.on("session:replaced",({reason}={})=>{
+      localStorage.removeItem("kw_session");
       setRoom(null);setPlayerId(null);setReturningMatch(null);
       setMessage(reason || "此場對戰已在另一個裝置恢復。");
     });
