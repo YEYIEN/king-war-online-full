@@ -1,5 +1,5 @@
 {
-  "version": "20261118-mobile-single-screen-v4",
-  "updatedAt": "2026-11-18T11:26:00+08:00",
-  "note": "Single-screen portrait battle, five-unit board, paged hand, mobile actions and menu; desktop preserved"
+  "version": "20261119-reconnect-five-minute-v1",
+  "updatedAt": "2026-11-19T16:58:00+08:00",
+  "note": "Guest match recovery confirmation, 5-minute disconnect forfeit, offline turn skip; account database scaffold only"
 }
