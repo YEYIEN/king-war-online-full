@@ -1,0 +1,55 @@
+name: Game quality gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+      - name: Install server dependencies
+        run: npm ci --ignore-scripts
+      - name: Install client dependencies
+        run: npm ci --prefix client --ignore-scripts
+      - name: Run gameplay and security tests
+        run: npm test
+      - name: Compile production client
+        run: npm run build
+      - name: Static release-readiness report (known P0 blockers are expected)
+        shell: bash
+        run: |
+          set +e
+          npm run release:check > release-readiness.txt 2>&1
+          status=$?
+          cat release-readiness.txt
+          echo "release_check_exit=$status" >> "$GITHUB_STEP_SUMMARY"
+          echo '### Release-readiness report' >> "$GITHUB_STEP_SUMMARY"
+          echo '\`\`\`text' >> "$GITHUB_STEP_SUMMARY"
+          cat release-readiness.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '\`\`\`' >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - name: Upload release-readiness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-readiness
+          path: release-readiness.txt
