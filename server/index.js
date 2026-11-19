@@ -196,6 +196,7 @@ function startTurn(room, p) {
   p.fieldBonus = 0;
   p.field.forEach(u => {
     u.tapped = false; u.justDeployed = false; u.archerBonusUsed = false;
+    u.status = u.status.filter(status => status !== '高整備');
     u.status = u.status.filter(s => !["階級+1","階級-1","整備","傷害+1","燃血+1傷害","急援"].includes(s));
   });
   const openingDrawPenalty=(process.env.KW_SIMULATION==="1" && room.players.length===2 &&
@@ -414,6 +415,7 @@ function finishTurn(room, player, reason = "結束回合") {
   clearOfflineTurnTimer(room);
   clearEndOfTurnBuffs(player);
   clearEndTurnControl(player);
+  clearCombatRecovery(player);
   advanceFatigue(player);
   player.field = player.field.filter(unit => !unit.status.includes("下回合死亡"));
   if (room.simMetrics) room.simMetrics.turnsByKing[player.king.name] = (room.simMetrics.turnsByKing[player.king.name] || 0) + 1;
@@ -875,7 +877,7 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
   const defender = defenderPlayer.field[di];
   if (!canAttack(attacker)) return { ok: false, error: "這名兵種不能攻擊。" };
 
-  const { verdict: result, attackerPower, defenderPower,
+  const { verdict: result,
     archerSaved, archerExtra, killedEnemy, killedAttacker } = previewUnitAttack(attacker, defender);
   if (room.simMetrics) {
     room.simMetrics.unitAttacks++;
@@ -886,8 +888,11 @@ function resolveAttackUnit(room, attackerPlayer, defenderPlayer, attackerId, def
   incrementMatchMetric(room,"unitAttack",1,{playerId:attackerPlayer.id});
 
 
-  if (archerSaved && defenderPower > attackerPower && !attacker.status.includes("疲乏")) {
-    attacker.status.push("疲乏");
+  if (archerSaved && result === "defender" && !attacker.status.includes("高整備")) {
+    attacker.status.push("高整備");
+  }
+  if (result === "defender" && attacker.type !== "弓兵" && !defender.status.includes("半整備")) {
+    defender.status.push("半整備");
   }
 
 
@@ -1204,6 +1209,12 @@ function clearEndOfTurnBuffs(player) {
 function clearEndTurnControl(player) {
   player.field.forEach((u) => {
     u.status = u.status.filter((s) => s !== "不能攻擊");
+  });
+}
+
+function clearCombatRecovery(player) {
+  player.field.forEach(unit => {
+    unit.status = unit.status.filter(status => status !== '半整備');
   });
 }
 
