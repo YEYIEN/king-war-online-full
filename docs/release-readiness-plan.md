@@ -15,6 +15,7 @@
 - [ ] 記錄首次畫面可操作時間、遊戲中最大主執行緒停頓、記憶體峰值、Socket RTT、斷線後恢復時間。
 
 ## 階段 1：P0 穩定與安全
+- [x] 已加入 opt-in 瀏覽器診斷：網址加上 `?kw_perf=1`，在開發者工具 Console 執行 `window.__KW_PERF__.snapshot()`，可讀取長任務、慢影格及每分鐘 room:update 數量；僅儲存本機彙總數字，不收集房號、卡牌或帳號資料。
 - [ ] 真機凍結診斷：Performance timeline、長任務 >50ms、卡牌圖片記憶體與 WebSocket 頻率；重現後才針對瓶頸優化。
 - [ ] Socket.IO 連線端驗證 Supabase access token，從已驗證的 user id 綁定玩家，**不接受用戶端自報 user id**；遊客採獨立安全的 session／resume token。
 - [ ] 權威狀態由伺服器判斷，重複封包 idempotency、重連 token 旋轉、跨裝置接管與同帳號多分頁競爭。
