@@ -9,17 +9,23 @@ const bounded = (items, item) => {
 export function createPerformanceDiagnostics(win = window) {
   const params = new URLSearchParams(win.location.search);
   if (params.get("kw_perf") !== "1") return null;
-  const data = { longTasks: [], frames: [], socketUpdates: [], startedAt: Date.now() };
+  const data = { longTasks: [], frames: [], socketUpdates: [], startedAt: Date.now(), longTaskTotal: 0, slowFrameTotal: 0, roomUpdateTotal: 0 };
   let observer = null;
   let frameHandle = null;
   let lastFrame = 0;
   let active = true;
   const recordRoomUpdate = () => {
-    if (active) bounded(data.socketUpdates, Date.now());
+    if (active) {
+      data.roomUpdateTotal++;
+      bounded(data.socketUpdates, Date.now());
+    }
   };
   const frame = (time) => {
     if (!active) return;
-    if (lastFrame && time - lastFrame > 50) bounded(data.frames, Math.round(time - lastFrame));
+    if (lastFrame && time - lastFrame > 50) {
+      data.slowFrameTotal++;
+      bounded(data.frames, Math.round(time - lastFrame));
+    }
     lastFrame = time;
     frameHandle = win.requestAnimationFrame(frame);
   };
@@ -27,7 +33,10 @@ export function createPerformanceDiagnostics(win = window) {
     try {
       observer = new win.PerformanceObserver((list) => {
         if (!active) return;
-        for (const entry of list.getEntries()) bounded(data.longTasks, Math.round(entry.duration));
+        for (const entry of list.getEntries()) {
+          data.longTaskTotal++;
+          bounded(data.longTasks, Math.round(entry.duration));
+        }
       });
       observer.observe({ type: "longtask", buffered: true });
     } catch { /* unsupported browser */ }
@@ -39,12 +48,12 @@ export function createPerformanceDiagnostics(win = window) {
     const max = (values) => values.length ? Math.max(...values) : 0;
     return {
       uptimeSeconds: Math.round((now - data.startedAt) / 1000),
-      longTaskCount: data.longTasks.length,
+      longTaskCount: data.longTaskTotal,
       longestTaskMs: max(data.longTasks),
-      slowFrameCount: data.frames.length,
+      slowFrameCount: data.slowFrameTotal,
       slowestFrameMs: max(data.frames),
       roomUpdatesLastMinute: lastMinute,
-      roomUpdatesRecorded: data.socketUpdates.length
+      roomUpdatesRecorded: data.roomUpdateTotal
     };
   };
   const stop = () => {
