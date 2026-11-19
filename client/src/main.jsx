@@ -913,7 +913,7 @@ function App() {
             <div className="returnMatchPanel">
               <h2>尚有未完成的對戰</h2>
               <p>房間 {returningMatch.roomCode} · {returningMatch.playerName}</p>
-              <p>{returningMatch.deadline ? "離線五分鐘後將自動投降。請選擇是否返回。" : "你可以返回原本的房間繼續遊戲。"}</p>
+              <p>{returningMatch.deadline ? `離線倒數：${Math.floor(Math.max(0,returningMatch.deadline-now)/60000)} 分 ${String(Math.floor(Math.max(0,returningMatch.deadline-now)%60000/1000)).padStart(2,"0")} 秒。超過期限將自動投降。` : "你可以返回原本的房間繼續遊戲。"}</p>
               <div className="returnMatchChoices">
                 <button type="button" disabled={returningBusy} className="secondary" onClick={chooseForfeitReturningMatch}>放棄對戰</button>
                 <button type="button" disabled={returningBusy} className="primaryBtn" onClick={chooseReturnToMatch}>返回對戰</button>
