@@ -41,3 +41,45 @@ test("archer survivability, extra strike, and status-derived power are respected
  assert.equal(canAttack(make("法師","中級",["疲乏待解"])),false);
  assert.equal(canAttack(make("騎兵","中級")),true);
 });
+
+test("type advantage is temporary and determines archer tie survival",()=>{
+ const archer=make("弓兵","中級");
+ const mage=make("法師","高級");
+ const p=previewUnitAttack(archer,mage);
+ assert.equal(p.attackerPower,3);
+ assert.equal(p.defenderPower,3);
+ assert.equal(p.verdict,"both");
+ assert.equal(p.killedEnemy,true);
+ assert.equal(p.killedAttacker,false);
+ assert.equal(p.archerExtra,false);
+ assert.equal(power(archer),2);
+});
+test("archer loses without dying, and successful archer gets only one extra attack",()=>{
+ const archer=make("弓兵","初級");
+ const strong=make("騎兵","高級");
+ const loss=previewUnitAttack(archer,strong);
+ assert.equal(loss.verdict,"defender");
+ assert.equal(loss.killedAttacker,false);
+ assert.equal(loss.killedEnemy,false);
+ const strongArcher=make("弓兵","高級");
+ const weak=make("法師","初級");
+ assert.equal(previewUnitAttack(strongArcher,weak).archerExtra,true);
+ strongArcher.archerBonusUsed=true;
+ assert.equal(previewUnitAttack(strongArcher,weak).archerExtra,false);
+});
+test("archer passive never protects an archer who is defending",()=>{
+ const attacker=make("步兵","高級");
+ const defendingArcher=make("弓兵","初級");
+ const p=previewUnitAttack(attacker,defendingArcher);
+ assert.equal(p.verdict,"attacker");
+ assert.equal(p.killedEnemy,true);
+});
+test("half recovery and high recovery reduce power without allowing high-recovery attack",()=>{
+ const defender=make("騎兵","高級",["半整備"]);
+ assert.equal(power(defender),2);
+ assert.equal(canAttack(defender),true);
+ const archer=make("弓兵","中級",["高整備"]);
+ assert.equal(power(archer),1);
+ assert.equal(canAttack(archer),false);
+ assert.equal(power(make("步兵","初級",["半整備"])),0);
+});
