@@ -130,7 +130,7 @@ test("guided tutorial: real deployment, buff, combat, king attack, guard and two
     assert.equal(room.tutorialProgress,9);
     assert.equal(room.status,"playing");
     assert.equal(room.tutorialProgress,9);
-    assert.equal((await request(socket,"game:useLastStand",{mode:"defense"})).ok,true);
+    assert.equal((await request(socket,"game:lastStand",{mode:"defense"})).ok,true);
     room=await state();
     assert.equal(room.tutorialProgress,10);
     assert.equal((await request(socket,"game:endTurn")).ok,true);
