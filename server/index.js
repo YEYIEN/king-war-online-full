@@ -367,9 +367,9 @@ function clearOfflineTurnTimer(room) {
   offlineTurnTimers.delete(room.code);
 }
 function scheduleOfflineTurnSkip(room, player) {
-  clearOfflineTurnTimer(room);
   if (!room || room.status !== "playing" || !player || player.connected ||
       player.isAI || player.eliminated || room.currentPlayerId !== player.id) return;
+  clearOfflineTurnTimer(room);
   const waited = player.offlineTurnSkipped ? OFFLINE_TURN_WAIT_MS :
     Date.now() - (player.disconnectedAt || Date.now());
   const timer = setTimeout(() => {
