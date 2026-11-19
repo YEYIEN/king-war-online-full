@@ -31,10 +31,10 @@ test("the shipped beginner entry goes through the server-authoritative tutorial"
 });
 test("beginner experience requires eleven real game actions including last stand and has no multiple-choice quiz",()=>{
  assert.equal((ui.match(/where:"#kw-/g)||[]).length,11);
- assert.ok(ui.includes('第 ${progress+1} / ${GUIDED_LESSONS.length} 步'));
+ assert.match(ui,/本章 \{chapterDone\} \/ \{chapterCount\} 項完成/);
  assert.ok(ui.includes('room.tutorialProgress || 0'));
- assert.match(ui,/不需要回答考題/);
- assert.match(ui,/只有在正式戰場成功完成目前動作/);
+ assert.match(ui,/className="lessonTask"/);
+ assert.match(ui,/className="trialModalActions"/);
  assert.doesNotMatch(ui,/TUTORIAL_RECALL_QUESTIONS|lessonChoiceGroup|questionIndex/);
 });
 test("combat interface starts from the hand and keeps the next action visible",()=>{
