@@ -1224,3 +1224,49 @@
 @media(max-width:800px) and (orientation:portrait) {
  .kwCombatV3 .handAndLog .gameCard.mobileHandHidden {display:none !important}
 }
+
+/* MOBILE_CARD_READABILITY_20261119
+   Show more of the original illustrated card; keep the live combat power
+   and action controls outside the art. Desktop remains untouched. */
+@media (max-width:800px) and (orientation:portrait) {
+  .kwCombatV3 .battleGrid .gameCard.unit,
+  .kwCombatV3 .handAndLog .gameCard.unit {
+    padding:2px !important;gap:1px !important;
+    justify-content:flex-start !important;
+    overflow:hidden !important;
+  }
+  .kwCombatV3 .battleGrid .gameCard.unit .cardArt,
+  .kwCombatV3 .handAndLog .gameCard.unit .cardArt {
+    display:block !important;
+    width:100% !important;
+    height:auto !important;
+    max-height:calc(100% - 43px) !important;
+    min-height:0 !important;
+    object-fit:contain !important;
+    flex:1 1 auto !important;
+  }
+  .kwCombatV3 .battleGrid .gameCard.unit > strong,
+  .kwCombatV3 .handAndLog .gameCard.unit > strong,
+  .kwCombatV3 .battleGrid .gameCard.unit .miniLine,
+  .kwCombatV3 .handAndLog .gameCard.unit .miniLine,
+  .kwCombatV3 .battleGrid .gameCard.unit .effectText,
+  .kwCombatV3 .handAndLog .gameCard.unit .effectText {
+    display:none !important;
+  }
+  .kwCombatV3 .battleGrid .gameCard.unit .powerText,
+  .kwCombatV3 .handAndLog .gameCard.unit .powerText {
+    display:inline-flex !important;align-self:center !important;
+    font-size:11px !important;line-height:1.1 !important;
+    padding:2px 4px !important;white-space:nowrap !important;
+  }
+  .kwCombatV3 .battleGrid .gameCard.unit .statusPill,
+  .kwCombatV3 .handAndLog .gameCard.unit .statusPill {
+    font-size:10px !important;line-height:1.1 !important;
+    padding:1px 3px !important;align-self:center !important;
+  }
+  .kwCombatV3 .handAndLog .gameCard.unit .actionLabel {
+    min-height:20px !important;display:flex !important;
+    justify-content:center !important;align-items:center !important;
+    font-size:12px !important;line-height:1.2 !important;
+  }
+}
