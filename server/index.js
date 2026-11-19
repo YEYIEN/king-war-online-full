@@ -1406,7 +1406,8 @@ io.on("connection", socket => {
         const next=room.players.find(p=>!p.isAI&&p.connected);
         if(next){room.hostId=next.id;room.players.forEach(p=>p.isHost=p.id===next.id);}
       }
-      broadcast(room);
+      if (!room.players.length) deleteRoomNow(room.code,"房間內已無玩家。");
+      else broadcast(room);
     }
     reply?.({ok:true});
   });
