@@ -1384,6 +1384,8 @@ io.on("connection", socket => {
     detachSocketFromOtherRooms(socket.id,room.code);
     player.socketId=socket.id;
     player.connected=true;
+    // Rotate secret after takeover: a superseded browser tab must not reclaim control.
+    player.resumeToken=nanoid(32);
     player.disconnectedAt=null;
     player.offlineTurnSkipped=false;
     clearDisconnectGrace(room,player);
