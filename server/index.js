@@ -1378,14 +1378,19 @@ io.on("connection", socket => {
       forcePlayerDefeat(room,player,"離線超過五分鐘，判定投降。");
       return reply?.({ok:false,finished:true,error:"返回期限已過，已判定投降。"});
     }
-    const oldSocket=player.socketId && player.socketId!==socket.id?
+    const sameSocket=player.socketId===socket.id;
+    const oldSocket=!sameSocket && player.socketId?
       io.sockets.sockets.get(player.socketId):null;
-    if(oldSocket){oldSocket.emit("session:replaced",{reason:"已在另一個分頁恢復此對戰。"});oldSocket.leave(room.code);}
+    // A resume token is not sufficient to evict an actively connected player.
+    // Account-verified cross-device handoff must be implemented separately.
+    if(oldSocket?.connected && player.connected)
+      return reply?.({ok:false,error:"原本裝置仍在線上，請先從原裝置離開或斷線後再恢復。"});
     detachSocketFromOtherRooms(socket.id,room.code);
     player.socketId=socket.id;
     player.connected=true;
-    // Rotate secret after takeover: a superseded browser tab must not reclaim control.
-    player.resumeToken=nanoid(32);
+    // Keep the token stable for idempotent requests from the same socket.
+    // Rotate only after a genuine reconnect to invalidate older credentials.
+    if(!sameSocket)player.resumeToken=nanoid(32);
     player.disconnectedAt=null;
     player.offlineTurnSkipped=false;
     clearDisconnectGrace(room,player);
