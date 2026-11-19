@@ -40,7 +40,7 @@ test("magic stock can restart independently after it is exhausted",()=>{
  assert.equal(room.magicDeck[0].id,"spell-2");
  assert.equal(room.deckCycles.magicDeck,1);
 });
-test("tutorial guides a player through nine REAL actions, two rounds, and no quiz",{timeout:30000},async t=>{
+test("tutorial guides a player through eleven REAL actions including last stand, and no quiz",{timeout:30000},async t=>{
  const port=await freePort();
  const child=spawn(process.execPath,["server/index.js"],{
   cwd:fileURLToPath(new URL("../",import.meta.url)),
@@ -100,5 +100,5 @@ test("tutorial guides a player through nine REAL actions, two rounds, and no qui
  assert.equal(room.tutorialProgress,10);
  await step("game:endTurn",{},11);
  assert.equal(room.status,"tutorialComplete");
- assert.equal(enemy().hp,28);
+ assert.equal(enemy().hp,22, "final tutorial scenario deliberately sets enemy HP to 22");
 });
