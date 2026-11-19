@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {unitComposition,effectivePower,resolveBattle,canAttackKing,sacrificeLouis,exchangeGenghis,magicCapacity,qinSelect} from './rules-v2-core.mjs';
+const u=(type,rank,extra={})=>({type,rank,...extra});
+test('60 cards, 7/5/3 per type',()=>{const d=unitComposition();assert.equal(d.length,60);for(const t of ['步兵','弓兵','法師','騎兵'])for(const [r,n] of Object.entries({初級:7,中級:5,高級:3}))assert.equal(d.filter(x=>x.type===t&&x.rank===r).length,n)});
+test('cavalry counters infantry',()=>assert.equal(effectivePower(u('騎兵','中級'),u('步兵','中級')),3));
+test('Alexander versus Augustus tie',()=>{const r=resolveBattle(u('步兵','中級'),u('步兵','高級'),{alexander:true,augustus:true});assert.equal(r.attack,3);assert.equal(r.defense,3);assert.equal(r.attackerDies,true);assert.equal(r.defenderDies,false);assert.equal(r.defenderHalfReady,true)});
+test('Augustus survives equal fight',()=>assert.equal(resolveBattle(u('步兵','初級'),u('步兵','初級'),{augustus:true}).defenderDies,false));
+test('archer bypasses infantry guard',()=>{assert.equal(canAttackKing(u('弓兵','初級'),[u('步兵','初級')]),true);assert.equal(canAttackKing(u('騎兵','高級'),[u('步兵','初級')]),false)});
+test('Louis heals 3, capped 24, start-turn eligibility',()=>{assert.equal(sacrificeLouis(23,{turnStartPresent:4},4),24);assert.equal(sacrificeLouis(17,{turnStartPresent:4},4),20);assert.throws(()=>sacrificeLouis(17,{turnStartPresent:null},4))});
+test('Genghis clears statuses, adjusts mage capacity',()=>{const r=exchangeGenghis([u('法師','高級',{status:['冰凍'],turnStartPresent:5})],[u('弓兵','初級')],0,0);assert.equal(r.magicLimit,0);assert.equal(r.field[0].justDeployed,true);assert.equal(r.field[0].turnStartPresent,null);assert.deepEqual(r.hand[0].status,[])});
+test('Qin returns one of four to bottom',()=>{const r=qinSelect(['a','b','c','d'],2);assert.deepEqual(r.hand,['a','b','d']);assert.equal(r.deckBottom,'c')});
+test('magic capacity equals mage count',()=>assert.equal(magicCapacity([u('法師','初級'),u('法師','高級'),u('步兵','初級')]),2));
