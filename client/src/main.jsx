@@ -546,13 +546,16 @@ function App() {
   }, [magicPlan?.step, magicPlan?.casterId, magicPlan?.targetPlayerId, magicPlan?.targetUnitIds?.join(",")]);
 
   React.useEffect(() => {
-    // kw_turn_timer_tick
-    const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-
+    // Only tick when a visible countdown needs to update. Avoid forcing the
+    // entire card-heavy game view to re-render once per second otherwise.
+    const needsCountdown = Boolean(
+      returningMatch?.deadline ||
+      (room && room.status === "playing" && Number(room.settings?.turnTimeLimit || 0) > 0 && room.turnStartedAt)
+    );
+    if (!needsCountdown) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [returningMatch?.deadline, room?.status, room?.settings?.turnTimeLimit, room?.turnStartedAt]);
 
   React.useEffect(() => {
     socket.on("room:deleted", ({ reason } = {}) => {
