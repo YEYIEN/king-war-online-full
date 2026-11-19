@@ -11,7 +11,9 @@
     "start": "NODE_ENV=production node server/index.js",
     "bump-version": "node scripts/bump-version.cjs",
     "test": "node --test tests/*.test.mjs",
-    "release:check": "node scripts/release-readiness.mjs"
+    "release:check": "node scripts/release-readiness.mjs",
+    "test:v2": "node --test server/rules-v2-core.test.mjs",
+    "test:all": "npm test && npm run test:v2"
   },
   "dependencies": {
     "express": "^4.22.3",
