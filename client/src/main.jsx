@@ -761,7 +761,7 @@ function App() {
         setAccountUser(user);
         if (!user || user.is_anonymous) { setAccountProfile(null); return; }
         const profile = await ensurePlayerProfile(user, localStorage.getItem("kw_display_name"));
-        if (active) setAccountProfile(profile);
+        if (active) { setAccountProfile(profile); if (!localStorage.getItem("kw_display_name") && profile?.display_name) setName(profile.display_name); }
       } catch (error) {
         if (active) setAccountMessage("無法讀取帳號資料：" + error.message);
       }
@@ -773,6 +773,22 @@ function App() {
     });
     return () => { active = false; subscription.unsubscribe(); };
   },[]);
+
+  async function saveDisplayName() {
+    const clean = Array.from((name || "").normalize("NFKC").trim()).slice(0,16).join("");
+    if (!clean) return;
+    localStorage.setItem("kw_display_name",clean);
+    if (!accountUser || accountUser.is_anonymous || accountProfile?.display_name === clean) return;
+    try {
+      const {data,error} = await supabase.from("player_profiles")
+        .update({display_name:clean,updated_at:new Date().toISOString()})
+        .eq("user_id",accountUser.id)
+        .select("user_id,display_name,created_at").single();
+      if(error) throw error;
+      setAccountProfile(data);
+      setAccountMessage("");
+    } catch(error) { setAccountMessage("暱稱儲存失敗：" + error.message); }
+  }
 
   async function loginWithGoogle() {
     if (accountBusy) return;
@@ -982,7 +998,7 @@ function App() {
           </div>}
           <div className="kwAccountPanel" aria-label="玩家帳號">
             {accountUser && !accountUser.is_anonymous ? <>
-              <span>已登入：{accountProfile?.display_name || accountUser.email || "玩家"}</span>
+              <span>已登入：{name.trim() || accountProfile?.display_name || "玩家"}</span>
               <button type="button" disabled={accountBusy} onClick={logoutGoogle}>登出</button>
             </> : <>
               <button type="button" disabled={accountBusy} onClick={loginWithGoogle}>使用 Google 登入</button>
@@ -995,7 +1011,7 @@ function App() {
           <p>和朋友對戰、挑戰電腦，或尋找線上對手。</p>
 
           <label>暱稱 / 遊戲 ID</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如 Wayne；不填會自動產生 ID" />
+          <input value={name} onChange={(e) => setName(e.target.value)} onBlur={saveDisplayName} maxLength={16} placeholder="例如 Wayne；不填會自動產生 ID" />
           <p className="idHint">留空即可使用隨機暱稱。</p>
 
           <div className="twoCols">
