@@ -37,6 +37,9 @@ function atRoomCapacity(){return process.env.KW_SIMULATION!=="1" && rooms.size>=
 const turnTimers = new Map();
 const roomCleanupTimers = new Map();
 const disconnectGraceTimers = new Map();
+const offlineTurnTimers = new Map();
+const DISCONNECT_FORFEIT_MS = 300000;
+const OFFLINE_TURN_WAIT_MS = 60000;
 let matchmakingRoomCode = null;
 
 function cleanDisplayName(name) {
@@ -145,6 +148,7 @@ function finishIfGameOver(room) {
       recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!active?.isAI});
     }
     clearTurnTimer(room);
+    clearOfflineTurnTimer(room);
     room.status = "ended";
     room.currentPlayerId = null;
     room.log.push(`${living[0]?.name || "無人"} 獲勝！`);
@@ -209,10 +213,9 @@ function startTurn(room, p) {
   if (room.matchMetrics) room.matchMetrics.turnsStarted++;
   scheduleTurnTimer(room, p);
 
-  // DISCONNECT_GRACE_STARTTURN_V1
   if (!p.connected && !p.isAI && room.status === "playing") {
-    room.log.push(`${p.name} 目前斷線，開始 60 秒重連倒數。`);
-    scheduleDisconnectGrace(room, p, 60);
+    room.log.push(`${p.name} 尚未返回，將自動跳過本回合。`);
+    scheduleDisconnectGrace(room, p);
   }
 }
 function mageCanCast(m, magic) {
@@ -251,6 +254,7 @@ function deleteRoomNow(roomCode, reason = "房間已清理。") {
   clearTurnTimer(room);
   clearRoomCleanup(room);
   for (const player of room.players) clearDisconnectGrace(room, player);
+  clearOfflineTurnTimer(room);
   if (matchmakingRoomCode === room.code) matchmakingRoomCode = null;
   io.in(room.code).emit("room:deleted", { reason });
   io.socketsLeave(room.code);
@@ -356,40 +360,58 @@ function clearDisconnectGrace(room, player) {
   }
 }
 
-function scheduleDisconnectGrace(room, player, seconds = 60) {
-  if (!room || !player) return;
-  if (room.status !== "playing") return;
-  if (player.isAI || player.eliminated || player.connected) return;
-
-  clearDisconnectGrace(room, player);
-
-  const key = disconnectKey(room, player);
-
-  const timer = setTimeout(() => {
-    const liveRoom = rooms.get(room.code);
-    if (!liveRoom || liveRoom.status !== "playing") return;
-
-    const livePlayer = liveRoom.players.find((p) => p.id === player.id);
-    if (!livePlayer || livePlayer.connected || livePlayer.eliminated || livePlayer.isAI) return;
-
-    liveRoom.log.push(`${livePlayer.name} 斷線超過 ${seconds} 秒，視同投降。`);
-
-    forcePlayerDefeat(liveRoom, livePlayer, "斷線逾時，視同投降。");
-    disconnectGraceTimers.delete(key);
-
-    broadcast(liveRoom);
-    scheduleAITurn(liveRoom);
-  }, seconds * 1000);
-
-  disconnectGraceTimers.set(key, timer);
+function clearOfflineTurnTimer(room) {
+  if (!room?.code) return;
+  const timer = offlineTurnTimers.get(room.code);
+  if (timer) clearTimeout(timer);
+  offlineTurnTimers.delete(room.code);
 }
-
+function scheduleOfflineTurnSkip(room, player) {
+  clearOfflineTurnTimer(room);
+  if (!room || room.status !== "playing" || !player || player.connected ||
+      player.isAI || player.eliminated || room.currentPlayerId !== player.id) return;
+  const waited = player.offlineTurnSkipped ? OFFLINE_TURN_WAIT_MS :
+    Date.now() - (player.disconnectedAt || Date.now());
+  const timer = setTimeout(() => {
+    offlineTurnTimers.delete(room.code);
+    const liveRoom = rooms.get(room.code);
+    const current = liveRoom?.players.find(p=>p.id === player.id);
+    if (!liveRoom || liveRoom.status !== "playing" || !current ||
+        current.connected || current.eliminated || liveRoom.currentPlayerId !== current.id) return;
+    current.offlineTurnSkipped = true;
+    finishTurn(liveRoom,current,"離線，自動結束回合");
+  }, Math.max(1000,OFFLINE_TURN_WAIT_MS-waited));
+  offlineTurnTimers.set(room.code,timer);
+}
+function scheduleDisconnectGrace(room, player) {
+  if (!room || !player || room.status !== "playing" ||
+      player.isAI || player.eliminated || player.connected) return;
+  clearDisconnectGrace(room,player);
+  if (!player.disconnectedAt) player.disconnectedAt=Date.now();
+  const key=disconnectKey(room,player);
+  const disconnectedAt=player.disconnectedAt;
+  const deadline=disconnectedAt+DISCONNECT_FORFEIT_MS;
+  const timer=setTimeout(()=>{
+    disconnectGraceTimers.delete(key);
+    const liveRoom=rooms.get(room.code);
+    const current=liveRoom?.players.find(p=>p.id===player.id);
+    if (!liveRoom || liveRoom.status!=="playing" || !current ||
+        current.connected || current.eliminated || current.isAI ||
+        current.disconnectedAt!==disconnectedAt) return;
+    if (Date.now()<deadline) return scheduleDisconnectGrace(liveRoom,current);
+    forcePlayerDefeat(liveRoom,current,"離線超過五分鐘，判定投降。");
+    scheduleAITurn(liveRoom);
+  },Math.max(1,deadline-Date.now()));
+  disconnectGraceTimers.set(key,timer);
+  if(room.currentPlayerId===player.id) scheduleOfflineTurnSkip(room,player);
+}
 // One end-of-turn path for humans, AI and countdown expiry.
 function finishTurn(room, player, reason = "結束回合") {
   if (!room || !player || room.status !== "playing" ||
       room.currentPlayerId !== player.id || player.eliminated) return false;
 
   clearTurnTimer(room);
+  clearOfflineTurnTimer(room);
   clearEndOfTurnBuffs(player);
   clearEndTurnControl(player);
   advanceFatigue(player);
@@ -456,6 +478,7 @@ function advanceAfterElimination(room, player) {
     recordTurnDuration(room, Date.now() - room.turnStartedAt, {ai:!!player.isAI});
   }
   clearTurnTimer(room);
+  clearOfflineTurnTimer(room);
   const next = nextAlive(room, player.id);
   if (!next) return;
   room.currentPlayerId = next.id;
@@ -473,6 +496,8 @@ function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降�
   if (room.matchMetrics) room.matchMetrics.finishReason = "forfeit-involved";
   player.connected = false;
   player.socketId = null;
+  player.disconnectedAt = null;
+  clearDisconnectGrace(room,player);
   room.log.push(`${player.name} ${reason}`);
 
   advanceAfterElimination(room, player);
@@ -1325,37 +1350,66 @@ io.on("connection", socket => {
   }
 
 
-  guardedOn("room:resume", ({ roomCode, playerId, resumeToken } = {}, reply) => {
-    // ROOM_RESUME_REJECT_ENDED_V1
-    const codeText = String(roomCode || "").trim().toUpperCase();
-    const pid = String(playerId || "");
-
-    const room = rooms.get(codeText);
-    if (!room) return reply?.({ ok: false, error: "找不到原本房間。" });
-
-    const player = room.players.find((p) => p.id === pid);
-    if (!player) return reply?.({ ok: false, error: "找不到原本玩家。" });
-    if (!player.resumeToken || typeof resumeToken !== "string" || resumeToken !== player.resumeToken) return reply?.({ ok: false, error: "重連憑證無效，請重新加入房間。" });
-    if (room.status === "ended") return reply?.({ ok: false, error: "對局已結束，無法重新加入。" });
-    if (player.isAI || player.eliminated) return reply?.({ ok: false, error: "此玩家無法重新加入。" });
-    if (player.connected && player.socketId !== socket.id && io.sockets.sockets.has(player.socketId)) {
-      return reply?.({ ok: false, error: "此玩家目前仍在線上。" });
+  function returningPlayer({roomCode,playerId,resumeToken}={}) {
+    const room=rooms.get(String(roomCode||"").trim().toUpperCase());
+    const player=room?.players.find(p=>p.id===String(playerId||""));
+    if(!room || !player || player.isAI || !player.resumeToken ||
+       typeof resumeToken!=="string" || resumeToken!==player.resumeToken) return null;
+    return {room,player};
+  }
+  guardedOn("room:inspect",(credentials={},reply)=>{
+    const found=returningPlayer(credentials);
+    if(!found)return reply?.({ok:false,error:"找不到原本房間，或重連憑證無效。"});
+    const {room,player}=found;
+    if(room.status==="ended" || player.eliminated)
+      return reply?.({ok:false,finished:true,error:"原本對戰已經結束。"});
+    reply?.({ok:true,roomCode:room.code,status:room.status,playerName:player.name,
+      isHost:!!player.isHost,
+      deadline:player.disconnectedAt?player.disconnectedAt+DISCONNECT_FORFEIT_MS:null});
+  });
+  guardedOn("room:resume",(credentials={},reply)=>{
+    const found=returningPlayer(credentials);
+    if(!found)return reply?.({ok:false,error:"找不到原本房間，或重連憑證無效。"});
+    const {room,player}=found;
+    if(room.status==="ended" || player.eliminated)
+      return reply?.({ok:false,finished:true,error:"對戰已經結束。"});
+    if(room.status==="playing" && player.disconnectedAt &&
+       Date.now()>=player.disconnectedAt+DISCONNECT_FORFEIT_MS) {
+      forcePlayerDefeat(room,player,"離線超過五分鐘，判定投降。");
+      return reply?.({ok:false,finished:true,error:"返回期限已過，已判定投降。"});
     }
-
-    detachSocketFromOtherRooms(socket.id, room.code);
-    player.socketId = socket.id;
-    player.connected = true;
+    const oldSocket=player.socketId && player.socketId!==socket.id?
+      io.sockets.sockets.get(player.socketId):null;
+    if(oldSocket){oldSocket.emit("session:replaced",{reason:"已在另一個分頁恢復此對戰。"});oldSocket.leave(room.code);}
+    detachSocketFromOtherRooms(socket.id,room.code);
+    player.socketId=socket.id;
+    player.connected=true;
+    player.disconnectedAt=null;
+    player.offlineTurnSkipped=false;
+    clearDisconnectGrace(room,player);
+    if(room.currentPlayerId===player.id)clearOfflineTurnTimer(room);
     socket.join(room.code);
-
-    // DISCONNECT_GRACE_RESUME_V1
-    clearDisconnectGrace(room, player);
-
-    room.log.push(`${player.name} 已重新連線。`);
-
-    reply?.({ ok: true, playerId: player.id, resumeToken: player.resumeToken, room: viewFor(room, player.id) });
+    room.log.push(`${player.name} 已返回對戰。`);
+    reply?.({ok:true,playerId:player.id,resumeToken:player.resumeToken,room:viewFor(room,player.id)});
     broadcast(room);
   });
-
+  guardedOn("room:forfeit",(credentials={},reply)=>{
+    const found=returningPlayer(credentials);
+    if(!found)return reply?.({ok:false,error:"重連憑證無效。"});
+    const {room,player}=found;
+    if(room.status==="playing" && !player.eliminated)
+      forcePlayerDefeat(room,player,"選擇放棄對戰。");
+    else if(room.status==="lobby") {
+      clearDisconnectGrace(room,player);
+      room.players=room.players.filter(p=>p.id!==player.id);
+      if(room.hostId===player.id){
+        const next=room.players.find(p=>!p.isAI&&p.connected);
+        if(next){room.hostId=next.id;room.players.forEach(p=>p.isHost=p.id===next.id);}
+      }
+      broadcast(room);
+    }
+    reply?.({ok:true});
+  });
 
   guardedOn("room:leave", (_, reply) => {
     const f = findBySocket(socket.id);
@@ -2075,12 +2129,15 @@ io.on("connection", socket => {
     if (!f) return;
 
     f.player.connected = false;
+    f.player.socketId = null;
     f.room.log.push(`${f.player.name} 連線中斷。`);
 
     // DISCONNECT_GRACE_DISCONNECT_V1
     if (f.room.status === "playing" && !f.player.isAI && !f.player.eliminated) {
-      f.room.log.push(`${f.player.name} 有 60 秒可以重新連線。`);
-      scheduleDisconnectGrace(f.room, f.player, 60);
+      f.player.disconnectedAt=Date.now();
+      f.player.offlineTurnSkipped=false;
+      f.room.log.push(`${f.player.name} 有五分鐘可以返回對戰。`);
+      scheduleDisconnectGrace(f.room,f.player);
     }
 
     if (f.room.matchmaking && f.room.status === "lobby" && matchmakingRoomCode === f.room.code) {
@@ -2117,10 +2174,11 @@ if (process.env.KW_SIMULATION !== "1") {
       const active=room.players.find(p=>p.id===room.currentPlayerId && !p.eliminated);
       if(!active) {console.warn("Skipping invalid recovered active room");rooms.delete(room.code);continue;}
       room.log.push("伺服器已重新啟動，可使用原本重連憑證返回對局。");
-      // Restart the turn timer rather than charging players for server downtime.
       scheduleTurnTimer(room,active);
-      for(const player of room.players.filter(p=>!p.isAI && !p.eliminated))
-        scheduleDisconnectGrace(room,player,60);
+      for(const player of room.players.filter(p=>!p.isAI && !p.eliminated)) {
+        if(!player.disconnectedAt)player.disconnectedAt=Date.now();
+        scheduleDisconnectGrace(room,player);
+      }
       scheduleAITurn(room);
     } else scheduleRoomCleanup(room,180);
   }
