@@ -94,7 +94,7 @@ test("tutorial guides a player through nine REAL actions, two rounds, and no qui
  await step("game:endTurn",{},9);
  assert.equal(room.status,"playing");
  assert.equal(room.tutorialProgress,9);
- const lastStand=await request(socket,"game:useLastStand",{mode:"defense"});
+ const lastStand=await request(socket,"game:lastStand",{mode:"defense"});
  assert.equal(lastStand.ok,true,JSON.stringify(lastStand));
  room=await view();
  assert.equal(room.tutorialProgress,10);
