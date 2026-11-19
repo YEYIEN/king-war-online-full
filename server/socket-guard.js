@@ -4,14 +4,14 @@
  * Rate limits are per socket and exist to bound repeated abusive requests.
  */
 export const GAME_CLIENT_EVENTS = Object.freeze([
-  "room:resume","room:leave","singleplayer:start","tutorial:start",
+  "room:inspect","room:resume","room:forfeit","room:leave","singleplayer:start","tutorial:start",
   "matchmaking:join","room:create","room:join","room:toggleReady",
   "game:rematch","room:updateSettings","room:addAI","room:removeAI",
   "game:start","game:lastStand","game:deploy","game:recall",
   "game:attackUnit","game:attackKing","game:castMagic","game:endTurn"
 ]);
 const GAME_EVENT_SET = new Set(GAME_CLIENT_EVENTS);
-const HIGH_COST_EVENTS = new Set(["room:resume","room:create","room:join",
+const HIGH_COST_EVENTS = new Set(["room:inspect","room:resume","room:forfeit","room:create","room:join",
   "matchmaking:join","singleplayer:start","tutorial:start"]);
 const MAX_CLIENT_PAYLOAD_BYTES = 12 * 1024;
 const OPTIONAL_OBJECT_EVENTS = new Set(["room:leave","room:toggleReady","game:rematch","room:addAI","room:removeAI","game:start","game:endTurn"]);
