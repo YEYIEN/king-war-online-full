@@ -2906,4 +2906,9 @@
 .kwAccountPanel span {font-weight:600;}
 .kwAccountPanel small {font-size:12px;opacity:.85;flex-basis:100%;line-height:1.5;}
 .kwAccountPanel p {flex-basis:100%;margin:0;color:#ffcc91;font-size:13px;}
-@media(max-width:600px){.kwAccountPanel {align-items:stretch;flex-direction:column}.kwAccountPanel button {width:100%;min-height:48px;}}
+@media(max-width:600px){
+  .kwAccountPanel {flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;margin-bottom:10px;}
+  .kwAccountPanel span {font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+  .kwAccountPanel button {width:auto;flex-shrink:0;min-height:44px;padding:8px 14px;font-size:14px;}
+  .kwAccountPanel small {font-size:12px;}
+}
