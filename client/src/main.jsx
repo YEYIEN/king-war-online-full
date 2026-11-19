@@ -15,11 +15,13 @@ function cardImage(card) {
   return `${ASSET_BASE}/cards/${card.name}_63x88mm_300dpi.png`;
 }
 
-function CardArt({ card, small = false }) {
+const CardArt = React.memo(function CardArt({ card, small = false }) {
   const src = cardImage(card);
   if (!src) return null;
-  return <img className={small ? "cardArt small" : "cardArt"} src={src} alt={card.name} onError={(e) => { e.currentTarget.style.display = "none"; }} />;
-}
+  return <img className={small ? "cardArt small" : "cardArt"} src={src} alt={card.name}
+    loading="lazy" decoding="async" draggable={false}
+    onError={(e) => { e.currentTarget.style.display = "none"; }} />;
+}, (previous, next) => previous.small === next.small && cardImage(previous.card) === cardImage(next.card));
 
 function unitEffectText(card) {
   if (!card || card.kind !== "unit") return "";
