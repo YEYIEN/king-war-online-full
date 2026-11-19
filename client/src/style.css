@@ -2878,3 +2878,23 @@
   .guidedLessonTop { flex-direction:column; gap:2px; }
   .lessonChoiceGroup button { min-height:44px; }
 }
+
+
+/* Active-match recovery confirmation; also usable on small phones. */
+.returnMatchOverlay {
+ position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;
+ padding:16px;background:rgba(0,7,22,.88);
+}
+.returnMatchPanel {
+ width:min(460px,100%);max-height:90dvh;overflow-y:auto;
+ border:1px solid #7393b9;border-radius:18px;background:#16273c;
+ box-shadow:0 20px 80px #0009;padding:24px;color:#f5f7fd;
+}
+.returnMatchPanel h2 {color:#ffe4a8;font-size:22px;margin:0 0 12px;}
+.returnMatchPanel p {font-size:15px;line-height:1.6;}
+.returnMatchChoices {display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;}
+.returnMatchChoices button {min-height:48px;margin:0;font-size:15px;}
+@media(max-width:480px){
+ .returnMatchPanel {padding:18px;}
+ .returnMatchChoices {grid-template-columns:1fr;}
+}
