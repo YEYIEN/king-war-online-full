@@ -16,7 +16,11 @@ export function power(u) {
   if (u.status.includes("階級+1")) v++;
   if (u.status.includes("力量術+1")) v++;
   if (u.status.includes("屋大維+1")) v++;
-  return Math.max(1, v);
+  // Combat recovery penalties apply after existing rank/spell minimum, so a rank-1 unit can reach 0.
+  v = Math.max(1, v);
+  if (u.status.includes("半整備")) v--;
+  if (u.status.includes("高整備")) v--;
+  return Math.max(0, v);
 }
 
 export function effectiveDamage(unit) {
@@ -32,31 +36,35 @@ export function canAttack(u) {
     !u.status.includes("整備") &&
     !u.status.includes("不能攻擊") &&
     !u.status.includes("疲乏") &&
-    !u.status.includes("疲乏待解");
+    !u.status.includes("疲乏待解") &&
+    !u.status.includes("高整備");
+}
+
+export function combatPowers(a, d) {
+  let attackerPower = power(a), defenderPower = power(d);
+  // Type advantage only applies to this specific matchup; never persist it on the card.
+  if (a.counterTarget === d.type) attackerPower++;
+  if (d.counterTarget === a.type) defenderPower++;
+  return { attackerPower, defenderPower };
 }
 
 export function battle(a, d) {
-  let av = power(a), dv = power(d);
-  if (a.counterTarget === d.type) av++;
-  if (d.counterTarget === a.type) dv++;
-  if (av > dv) return "attacker";
-  if (dv > av) return "defender";
+  const { attackerPower, defenderPower } = combatPowers(a, d);
+  if (attackerPower > defenderPower) return "attacker";
+  if (defenderPower > attackerPower) return "defender";
   return "both";
 }
 
-/** Exact, immutable forecast for one unit-versus-unit attack.
- * The server consumes this same calculation when applying an attack.
- * It deliberately does not forecast card draws, king effects or magic.
- */
+/** Immutable preview; archer passive applies ONLY when the archer initiates. */
 export function previewUnitAttack(attacker, defender) {
-  const attackerPower=power(attacker);
-  const defenderPower=power(defender);
-  const verdict=battle(attacker, defender);
-  const archerSaved=attacker.type==="弓兵" && defenderPower>=attackerPower;
-  const archerExtra=attacker.type==="弓兵" && defenderPower<attackerPower && !attacker.archerBonusUsed;
+  const { attackerPower, defenderPower } = combatPowers(attacker, defender);
+  const verdict = attackerPower > defenderPower ? "attacker"
+    : attackerPower < defenderPower ? "defender" : "both";
+  const archerSaved = attacker.type === "弓兵" && verdict !== "attacker";
+  const archerExtra = attacker.type === "弓兵" && verdict === "attacker" && !attacker.archerBonusUsed;
   return {
-    verdict,attackerPower,defenderPower,archerSaved,archerExtra,
-    killedEnemy:verdict==="attacker" || verdict==="both",
-    killedAttacker:(verdict==="defender" || verdict==="both") && !archerSaved
+    verdict, attackerPower, defenderPower, archerSaved, archerExtra,
+    killedEnemy: verdict === "attacker" || verdict === "both",
+    killedAttacker: verdict !== "attacker" && !archerSaved
   };
 }
