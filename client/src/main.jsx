@@ -6,6 +6,10 @@ import "./design-system.css";
 import "./combat-v3.css";
 
 import { supabase, loadAccount, ensurePlayerProfile } from "./account.js";
+import { createPerformanceDiagnostics } from "./performance-diagnostics.js";
+
+const performanceDiagnostics = typeof window !== "undefined" ? createPerformanceDiagnostics(window) : null;
+if (performanceDiagnostics) window.__KW_PERF__ = performanceDiagnostics;
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV ? "http://localhost:3001" : window.location.origin);
 const ASSET_BASE = "/king-war-assets";
@@ -571,6 +575,7 @@ function App() {
     });
 
     socket.on("room:update", (next) => {
+      performanceDiagnostics?.recordRoomUpdate();
       // kw_attack_feedback
       const latestLog = next?.log?.[next.log.length - 1] || "";
 
