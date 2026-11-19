@@ -5,6 +5,8 @@ import "./style.css";
 import "./design-system.css";
 import "./combat-v3.css";
 
+import { supabase, loadAccount, ensurePlayerProfile } from "./account.js";
+
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV ? "http://localhost:3001" : window.location.origin);
 const ASSET_BASE = "/king-war-assets";
 
@@ -444,6 +446,10 @@ function GuidedTutorialCoach({ progress=0, onExit, onShowComeback }) {
 function App() {
   const socket = useMemo(() => io(SERVER_URL), []);
   const [name, setName] = useState("");
+  const [accountUser, setAccountUser] = useState(null);
+  const [accountProfile, setAccountProfile] = useState(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountMessage, setAccountMessage] = useState("");
   const [aiDifficulty, setAiDifficulty] = useState("normal");
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -746,6 +752,56 @@ function App() {
     return `玩家${Math.floor(1000 + Math.random() * 9000)}`;
   }
 
+  React.useEffect(() => {
+    let active = true;
+    async function syncAccount() {
+      try {
+        const user = await loadAccount();
+        if (!active) return;
+        setAccountUser(user);
+        if (!user || user.is_anonymous) { setAccountProfile(null); return; }
+        const profile = await ensurePlayerProfile(user, localStorage.getItem("kw_display_name"));
+        if (active) setAccountProfile(profile);
+      } catch (error) {
+        if (active) setAccountMessage("無法讀取帳號資料：" + error.message);
+      }
+    }
+    void syncAccount();
+    const { data:{ subscription } } = supabase.auth.onAuthStateChange(() => {
+      // Defer data queries outside the auth callback to avoid auth-client lock contention.
+      window.setTimeout(() => { if (active) void syncAccount(); },0);
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  },[]);
+
+  async function loginWithGoogle() {
+    if (accountBusy) return;
+    setAccountBusy(true);setAccountMessage("");
+    try {
+      const {error} = await supabase.auth.signInWithOAuth({
+        provider:"google",
+        options:{ redirectTo:window.location.origin }
+      });
+      if(error) throw error;
+    } catch(error) {
+      setAccountMessage("Google 登入失敗：" + error.message);
+      setAccountBusy(false);
+    }
+  }
+  async function logoutGoogle() {
+    if (room?.status === "playing") {
+      setAccountMessage("請先完成或離開對戰，再登出帳號。");
+      return;
+    }
+    setAccountBusy(true);
+    try {
+      const {error}=await supabase.auth.signOut();
+      if(error) throw error;
+      setAccountUser(null);setAccountProfile(null);setAccountMessage("已登出 Google 帳號。");
+    } catch(error) {setAccountMessage("登出失敗：" + error.message);}
+    finally {setAccountBusy(false);}
+  }
+
   function safeName() {
     const typed = Array.from((name || "").normalize("NFKC").trim()).slice(0, 16).join("");
 
@@ -922,6 +978,17 @@ function App() {
               {message && <p className="error" role="alert">{message}</p>}
             </div>
           </div>}
+          <div className="kwAccountPanel" aria-label="玩家帳號">
+            {accountUser && !accountUser.is_anonymous ? <>
+              <span>已登入：{accountProfile?.display_name || accountUser.email || "玩家"}</span>
+              <button type="button" disabled={accountBusy} onClick={logoutGoogle}>登出</button>
+              <small>帳號已建立；跨裝置對戰恢復及戰績同步仍在開發中。</small>
+            </> : <>
+              <button type="button" disabled={accountBusy} onClick={loginWithGoogle}>使用 Google 登入</button>
+              <small>也可以不登入，直接以遊客身分遊玩。</small>
+            </>}
+            {accountMessage && <p role="status">{accountMessage}</p>}
+          </div>
           <div className="titleBadge">Online Multiplayer</div>
           <h1>國王戰爭</h1>
           <p>和朋友對戰、挑戰電腦，或尋找線上對手。</p>
