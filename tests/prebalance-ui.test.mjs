@@ -29,8 +29,8 @@ test("the shipped beginner entry goes through the server-authoritative tutorial"
  assert.doesNotMatch(ui,/function InteractiveTutorial\(/);
  assert.doesNotMatch(ui,/tutorialMode|showTutorial|tutorialSteps|tutorialStep/);
 });
-test("beginner experience requires nine real game actions and has no multiple-choice quiz",()=>{
- assert.equal((ui.match(/where:"#kw-/g)||[]).length,9);
+test("beginner experience requires eleven real game actions including last stand and has no multiple-choice quiz",()=>{
+ assert.equal((ui.match(/where:"#kw-/g)||[]).length,11);
  assert.ok(ui.includes('第 ${progress+1} / ${GUIDED_LESSONS.length} 步'));
  assert.ok(ui.includes('room.tutorialProgress || 0'));
  assert.match(ui,/不需要回答考題/);
@@ -48,7 +48,7 @@ test("card details have a single rule and instructions match the actual gesture 
  assert.match(ui,/if \(!allowUnitInfo && shouldBlockUnitCardDetail\(card, source\)\) return;/);
  assert.match(ui,/className="kwUnitInfo"/);
  assert.match(ui,/onClick=\{\(\)=>onDetail\(card,"兵種",true\)\}/);
- assert.match(ui,/兵種效果請查看卡面及規則頁/);
+ assert.match(ui,/title="查看兵種效果"/);
  assert.doesNotMatch(ui,/PLAY_AGAIN_FULLY_DISABLED_CLEAN_V1/);
 });
 
@@ -65,14 +65,14 @@ test("king ability is keyboard-discoverable while unit cards retain normal click
 test("special abilities are taught contextually through usable controls rather than quiz answers",()=>{
  assert.match(ui,/特殊功能實戰提示/);
  assert.match(ui,/查看我的王權/);
- assert.match(ui,/成吉思汗可將場上騎兵撤回手牌/);
- assert.match(ui,/背水一戰現在可以使用/);
- assert.match(ui,/法師與魔法都已就緒/);
+ assert.match(ui,/成吉思汗可撤回騎兵，重新安排攻勢/);
+ assert.match(ui,/逆境戰術已解鎖，可選擇突圍或固守/);
+ assert.match(ui,/魔法已就緒。選擇魔法卡開始施放/);
  assert.doesNotMatch(ui,/TUTORIAL_RECALL_QUESTIONS/);
 });
 
 test("compact combat V3 retains essential gameplay controls and defers secondary content",()=>{
- assert.match(ui,/className="page guidedPage kwCombatV3"/);
+ assert.match(ui,/className=\{`page guidedPage kwCombatV3 /);
  assert.match(ui,/className="kwBattleFrame"/);
  assert.match(ui,/className="kwScoreStrip"/);
  assert.match(ui,/className="kwEnemyChips"/);
