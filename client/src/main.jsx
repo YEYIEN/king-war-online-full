@@ -769,7 +769,7 @@ function App() {
     void syncAccount();
     const { data:{ subscription } } = supabase.auth.onAuthStateChange(() => {
       // Defer data queries outside the auth callback to avoid auth-client lock contention.
-      window.setTimeout(() => { if (active) void syncAccount(); },0);
+      window.setTimeout(() => { if (active) { setAccountMessage(""); setAccountBusy(false); void syncAccount(); } },0);
     });
     return () => { active = false; subscription.unsubscribe(); };
   },[]);
@@ -783,14 +783,16 @@ function App() {
         options:{ redirectTo:window.location.origin }
       });
       if(error) throw error;
+      // The browser normally navigates to Google; reset if navigation is blocked.
+      setAccountBusy(false);
     } catch(error) {
       setAccountMessage("Google 登入失敗：" + error.message);
       setAccountBusy(false);
     }
   }
   async function logoutGoogle() {
-    if (room?.status === "playing") {
-      setAccountMessage("請先完成或離開對戰，再登出帳號。");
+    if (room && room.status !== "ended") {
+      setAccountMessage("請先結束或離開房間，再登出帳號。");
       return;
     }
     setAccountBusy(true);
@@ -982,7 +984,6 @@ function App() {
             {accountUser && !accountUser.is_anonymous ? <>
               <span>已登入：{accountProfile?.display_name || accountUser.email || "玩家"}</span>
               <button type="button" disabled={accountBusy} onClick={logoutGoogle}>登出</button>
-              <small>帳號已建立；跨裝置對戰恢復及戰績同步仍在開發中。</small>
             </> : <>
               <button type="button" disabled={accountBusy} onClick={loginWithGoogle}>使用 Google 登入</button>
               <small>也可以不登入，直接以遊客身分遊玩。</small>
