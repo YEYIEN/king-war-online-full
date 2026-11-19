@@ -449,6 +449,8 @@ function App() {
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [playerId, setPlayerId] = useState(null);
   const [room, setRoom] = useState(null);
+  const [returningMatch, setReturningMatch] = useState(null);
+  const [returningBusy, setReturningBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [connectionStatus, setConnectionStatus] = useState(socket.connected ? "connected" : "connecting");
   const pendingRequestsRef = useRef(new Set());
@@ -610,44 +612,81 @@ function App() {
   }, [socket]);
 
   React.useEffect(() => {
-    // kw_session_resume
-    function resumeSession() {
+    // Check an existing match without taking over a live session.
+    function inspectSavedMatch() {
       const raw = localStorage.getItem("kw_session");
       if (!raw) return;
-
-      try {
-        const saved = JSON.parse(raw);
-        if (!saved?.roomCode || !saved?.playerId || !saved?.resumeToken) {
-          localStorage.removeItem("kw_session");
+      let credentials;
+      try { credentials=JSON.parse(raw); }
+      catch { localStorage.removeItem("kw_session"); return; }
+      if (!credentials?.roomCode || !credentials?.playerId || !credentials?.resumeToken) {
+        localStorage.removeItem("kw_session");
+        return;
+      }
+      if (!socket.connected) return;
+      socket.timeout(5000).emit("room:inspect",credentials,(error,res)=>{
+        if (error) {
+          setMessage("無法查詢上次的對戰，請檢查連線後重試。");
           return;
         }
-
-        requestNow("room:resume", saved, (res) => {
-          if (!res?.ok) {
-            localStorage.removeItem("kw_session");
-            setRoom(null);
-            setPlayerId(null);
-            setTargetPlayerId("");
-            setAttackerId(null);
-            setMagicPlan(null);
-            setMessage(res?.error || "連線已恢復，但原房間無法接續。請重新加入。");
-            return;
-          }
-          rememberSession(res.playerId, res.room, res.resumeToken);
-          setPlayerId(res.playerId);
-          setRoom(res.room);
-          setMessage("");
-        });
-      } catch {
-        localStorage.removeItem("kw_session");
-      }
+        if (!res?.ok) {
+          // Do not erase a valid token for transient errors. Only completed games are expired.
+          if (res?.finished) localStorage.removeItem("kw_session");
+          setReturningMatch(null);
+          if (!res?.finished) setMessage(res?.error || "目前無法恢復對戰。");
+          return;
+        }
+        setReturningMatch({credentials,...res});
+      });
     }
+    socket.on("connect",inspectSavedMatch);
+    if (socket.connected) inspectSavedMatch();
+    socket.on("session:replaced",({reason}={})=>{
+      setRoom(null);setPlayerId(null);setReturningMatch(null);
+      setMessage(reason || "此場對戰已在另一個裝置恢復。");
+    });
+    return ()=>{
+      socket.off("connect",inspectSavedMatch);
+      socket.off("session:replaced");
+    };
+  },[socket]);
 
-    socket.on("connect", resumeSession);
-    if (socket.connected) resumeSession();
+  function chooseReturnToMatch() {
+    if (!returningMatch || returningBusy) return;
+    setReturningBusy(true);
+    const credentials=returningMatch.credentials;
+    requestNow("room:resume",credentials,(res)=>{
+      setReturningBusy(false);
+      if (!res?.ok) {
+        if (res?.finished) { localStorage.removeItem("kw_session"); setReturningMatch(null); }
+        setMessage(res?.error || "暫時無法返回對戰，請重試。");
+        return;
+      }
+      rememberSession(res.playerId,res.room,res.resumeToken);
+      setPlayerId(res.playerId);
+      setRoom(res.room);
+      setReturningMatch(null);
+      setTargetPlayerId("");
+      setAttackerId(null);
+      setMagicPlan(null);
+      setMessage("");
+    });
+  }
 
-    return () => socket.off("connect", resumeSession);
-  }, [socket]);
+  function chooseForfeitReturningMatch() {
+    if (!returningMatch || returningBusy) return;
+    if (!window.confirm("放棄後會直接判定投降，無法恢復這場對戰。確定嗎？")) return;
+    setReturningBusy(true);
+    requestNow("room:forfeit",returningMatch.credentials,(res)=>{
+      setReturningBusy(false);
+      if (!res?.ok) return setMessage(res?.error || "無法放棄對戰，請重試。");
+      clearSavedSession();
+      setReturningMatch(null);
+      setRoom(null);
+      setPlayerId(null);
+      setMessage("已放棄原本的對戰。");
+    });
+  }
 
   // AI visibility fix: keep target player as enemy.
   // 單人模式或房間更新時，避免目標玩家被錯設成自己，導致 AI 場地看起來消失。
@@ -728,6 +767,7 @@ function App() {
 
   function clearSavedSession() {
     localStorage.removeItem("kw_session");
+    setReturningMatch(null);
   }
 
   function createRoom() {
@@ -863,6 +903,18 @@ function App() {
     return (
       <main className="page centered">
         <section className="card hero newHero">
+          {returningMatch && <div className="returnMatchOverlay" role="dialog" aria-modal="true" aria-label="返回對戰">
+            <div className="returnMatchPanel">
+              <h2>尚有未完成的對戰</h2>
+              <p>房間 {returningMatch.roomCode} · {returningMatch.playerName}</p>
+              <p>{returningMatch.deadline ? "離線五分鐘後將自動投降。請選擇是否返回。" : "你可以返回原本的房間繼續遊戲。"}</p>
+              <div className="returnMatchChoices">
+                <button type="button" disabled={returningBusy} className="secondary" onClick={chooseForfeitReturningMatch}>放棄對戰</button>
+                <button type="button" disabled={returningBusy} className="primaryBtn" onClick={chooseReturnToMatch}>返回對戰</button>
+              </div>
+              {message && <p className="error" role="alert">{message}</p>}
+            </div>
+          </div>}
           <div className="titleBadge">Online Multiplayer</div>
           <h1>國王戰爭</h1>
           <p>和朋友對戰、挑戰電腦，或尋找線上對手。</p>
