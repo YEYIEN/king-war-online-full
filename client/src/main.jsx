@@ -761,7 +761,7 @@ function App() {
         setAccountUser(user);
         if (!user || user.is_anonymous) { setAccountProfile(null); return; }
         const profile = await ensurePlayerProfile(user, localStorage.getItem("kw_display_name"));
-        if (active) { setAccountProfile(profile); if (!localStorage.getItem("kw_display_name") && profile?.display_name) setName(profile.display_name); }
+        if (active) { setAccountProfile(profile); if (profile?.display_name) { setName(profile.display_name); localStorage.setItem("kw_display_name",profile.display_name); } }
       } catch (error) {
         if (active) setAccountMessage("無法讀取帳號資料：" + error.message);
       }
