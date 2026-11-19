@@ -2101,7 +2101,54 @@ function App() {
   );
 }
 
+function PerformanceDebugPanel({ diagnostics }) {
+  const [open, setOpen] = useState(false);
+  const [metrics, setMetrics] = useState(() => diagnostics.snapshot());
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setMetrics(diagnostics.snapshot());
+    const timer = window.setInterval(() => setMetrics(diagnostics.snapshot()), 2000);
+    return () => window.clearInterval(timer);
+  }, [open, diagnostics]);
+  const copyMetrics = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(metrics, null, 2));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <aside aria-label="效能診斷" style={{position:"fixed",right:10,bottom:10,zIndex:99999,
+      background:"#101827",color:"#fff",border:"1px solid #8190a6",borderRadius:10,
+      padding:10,maxWidth:"min(92vw,320px)",fontSize:13,boxShadow:"0 2px 15px #0008"}}>
+      <button type="button" onClick={() => setOpen(v => !v)}
+        style={{background:"#24354e",color:"white",border:"1px solid #8190a6",
+          padding:"8px 12px",borderRadius:7,cursor:"pointer"}}>
+        {open ? "關閉效能診斷" : "效能診斷"}
+      </button>
+      {open && <>
+        <p style={{margin:"8px 0"}}>僅記錄效能數字，不包含帳號、房號或卡牌資訊。</p>
+        <pre style={{fontSize:11,whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:220,overflow:"auto"}}>
+          {JSON.stringify(metrics,null,2)}
+        </pre>
+        <button type="button" onClick={copyMetrics}
+          style={{background:"#24354e",color:"white",padding:"8px",borderRadius:7}}>
+          {copied ? "已複製" : "複製診斷數據"}
+        </button>
+      </>}
+    </aside>
+  );
+}
+
 createRoot(document.getElementById("root")).render(<App />);
+if (performanceDiagnostics) {
+  const diagnosticsRoot = document.createElement("div");
+  diagnosticsRoot.id = "kw-performance-diagnostics";
+  document.body.appendChild(diagnosticsRoot);
+  createRoot(diagnosticsRoot).render(<PerformanceDebugPanel diagnostics={performanceDiagnostics} />);
+}
 
 
 if ("serviceWorker" in navigator) {
