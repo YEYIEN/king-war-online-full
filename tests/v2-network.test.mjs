@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {Server} from 'socket.io';
-import {io as connect} from '../client/node_modules/socket.io-client/build/esm/index.js';
+import {createRequire} from 'node:module';
+const clientRequire=createRequire(new URL('../client/package.json',import.meta.url));
+const {io:connect}=clientRequire('socket.io-client');
 import {registerV2Playtest} from '../server/v2-playtest-socket.mjs';
 test('real TCP Socket.IO clients join and complete a two-player turn', {timeout:20000}, async()=>{
  const http=createServer();const server=new Server(http,{cors:{origin:'*'}});registerV2Playtest(server);
