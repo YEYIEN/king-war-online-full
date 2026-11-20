@@ -1,0 +1,23 @@
+import {nanoid} from 'nanoid';
+import {unitComposition,KING_MAX_HP} from './rules-v2-core.mjs';
+import {newV2Player,startV2Turn,deployV2,battleV2,kingAttackV2,endV2Turn} from './rules-v2-turn.mjs';
+// Experimental isolated namespace. Does not modify the production v1 rooms.
+export function registerV2Playtest(io){
+ const nsp=io.of('/v2-playtest'),rooms=new Map();
+ const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b};
+ const view=(room,socketId)=>({code:room.code,status:room.status,turn:room.turn,current:room.current,winner:room.winner,players:room.players.map((p,i)=>({id:p.id,name:p.name,hp:p.hp,king:p.king,field:p.field,hand:p.id===socketId?p.hand:undefined,handCount:p.hand.length})),you:room.players.findIndex(p=>p.id===socketId),log:room.log.slice(-15)});
+ const emit=r=>{for(const p of r.players)nsp.to(p.id).emit('v2:state',view(r,p.id))};
+ const fail=(ack,e)=>ack?.({ok:false,error:String(e.message||e)});
+ const check=(socket,code)=>{const r=rooms.get(String(code).toUpperCase());if(!r||!r.players.some(p=>p.id===socket.id))throw Error('Not in room');return r};
+ const turn=(r,socket)=>{if(r.status!=='playing'||r.players[r.current]?.id!==socket.id)throw Error('Not your turn');return r.players[r.current]};
+ nsp.on('connection',socket=>{
+  socket.on('v2:create',({name}={},ack)=>{try{let code;do{code=nanoid(6).toUpperCase()}while(rooms.has(code));const p={...newV2Player(''),id:socket.id,name:String(name||'玩家1').slice(0,16)};const r={code,players:[p],status:'waiting',current:0,turn:0,winner:null,unitDeck:[],unitDiscard:[],log:[]};rooms.set(code,r);socket.join(code);ack?.({ok:true,code});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('v2:join',({code,name}={},ack)=>{try{const r=rooms.get(String(code).toUpperCase());if(!r||r.status!=='waiting'||r.players.length!==1)throw Error('Room unavailable');r.players.push({...newV2Player(''),id:socket.id,name:String(name||'玩家2').slice(0,16)});socket.join(r.code);ack?.({ok:true,code:r.code});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('v2:start',({code}={},ack)=>{try{const r=check(socket,code);if(r.players[0].id!==socket.id||r.players.length!==2||r.status!=='waiting')throw Error('Cannot start');r.unitDeck=shuffle(unitComposition().map((u,i)=>({...u,id:'u'+i})));r.players=r.players.map((p,i)=>({...p,...newV2Player(i===0?'亞歷山大大帝':'屋大維奧古斯都'),hand:r.unitDeck.splice(0,3)}));r.status='playing';r.turn=1;r.current=0;r.players[0]=startV2Turn(r.players[0],r.turn);r.log.push('V2 基礎對戰開始（暫不含魔法及國王能力）');ack?.({ok:true});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('v2:deploy',({code,index}={},ack)=>{try{const r=check(socket,code),p=turn(r,socket);r.players[r.current]=deployV2(p,index);ack?.({ok:true});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('v2:attack',({code,attackerIndex,defenderIndex}={},ack)=>{try{const r=check(socket,code),p=turn(r,socket),di=1-r.current,d=r.players[di];if(defenderIndex===null||defenderIndex===undefined){const x=kingAttackV2(p,d,attackerIndex);r.players[r.current]=x.attacker;r.players[di]=x.defender;if(x.eliminated){r.status='finished';r.winner=p.name}r.log.push(p.name+' 對國王造成 '+x.damage+' 傷害')}else{const x=battleV2(p,d,attackerIndex,defenderIndex);r.players[r.current]=x.attacker;r.players[di]=x.defender;r.log.push(p.name+' 發動兵種戰鬥')}ack?.({ok:true});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('v2:end',({code,discard=[]}={},ack)=>{try{const r=check(socket,code),p=turn(r,socket);const x=endV2Turn(p,r.unitDeck,r.unitDiscard,discard);r.players[r.current]=x.player;r.unitDeck=x.unitDeck;r.unitDiscard=x.unitDiscard;r.current=1-r.current;r.turn++;r.players[r.current]=startV2Turn(r.players[r.current],r.turn);ack?.({ok:true});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('disconnect',()=>{for(const r of rooms.values()){if(r.players.some(p=>p.id===socket.id)&&r.status==='playing'){r.status='finished';r.winner=r.players.find(p=>p.id!==socket.id)?.name||null;r.log.push('玩家斷線，測試對局結束');emit(r)}}});
+ });
+ return nsp;
+}
