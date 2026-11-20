@@ -1,4 +1,4 @@
-import {nanoid} from 'nanoid';
+import {randomBytes} from 'node:crypto';
 import {unitComposition,KING_MAX_HP} from './rules-v2-core.mjs';
 import {newV2Player,startV2Turn,deployV2,battleV2,kingAttackV2,endV2Turn} from './rules-v2-turn.mjs';
 // Experimental isolated namespace. Does not modify the production v1 rooms.
@@ -11,7 +11,7 @@ export function registerV2Playtest(io){
  const check=(socket,code)=>{const r=rooms.get(String(code).toUpperCase());if(!r||!r.players.some(p=>p.id===socket.id))throw Error('Not in room');return r};
  const turn=(r,socket)=>{if(r.status!=='playing'||r.players[r.current]?.id!==socket.id)throw Error('Not your turn');return r.players[r.current]};
  nsp.on('connection',socket=>{
-  socket.on('v2:create',({name}={},ack)=>{try{let code;do{code=nanoid(6).toUpperCase()}while(rooms.has(code));const p={...newV2Player(''),id:socket.id,name:String(name||'玩家1').slice(0,16)};const r={code,players:[p],status:'waiting',current:0,turn:0,winner:null,unitDeck:[],unitDiscard:[],log:[]};rooms.set(code,r);socket.join(code);ack?.({ok:true,code});emit(r)}catch(e){fail(ack,e)}});
+  socket.on('v2:create',({name}={},ack)=>{try{let code;do{code=randomBytes(4).toString('hex').toUpperCase()}while(rooms.has(code));const p={...newV2Player(''),id:socket.id,name:String(name||'玩家1').slice(0,16)};const r={code,players:[p],status:'waiting',current:0,turn:0,winner:null,unitDeck:[],unitDiscard:[],log:[]};rooms.set(code,r);socket.join(code);ack?.({ok:true,code});emit(r)}catch(e){fail(ack,e)}});
   socket.on('v2:join',({code,name}={},ack)=>{try{const r=rooms.get(String(code).toUpperCase());if(!r||r.status!=='waiting'||r.players.length!==1)throw Error('Room unavailable');r.players.push({...newV2Player(''),id:socket.id,name:String(name||'玩家2').slice(0,16)});socket.join(r.code);ack?.({ok:true,code:r.code});emit(r)}catch(e){fail(ack,e)}});
   socket.on('v2:start',({code}={},ack)=>{try{const r=check(socket,code);if(r.players[0].id!==socket.id||r.players.length!==2||r.status!=='waiting')throw Error('Cannot start');r.unitDeck=shuffle(unitComposition().map((u,i)=>({...u,id:'u'+i})));r.players=r.players.map((p,i)=>({...p,...newV2Player(i===0?'亞歷山大大帝':'屋大維奧古斯都'),hand:r.unitDeck.splice(0,3)}));r.status='playing';r.turn=1;r.current=0;r.players[0]=startV2Turn(r.players[0],r.turn);r.log.push('V2 基礎對戰開始（暫不含魔法及國王能力）');ack?.({ok:true});emit(r)}catch(e){fail(ack,e)}});
   socket.on('v2:deploy',({code,index}={},ack)=>{try{const r=check(socket,code),p=turn(r,socket);r.players[r.current]=deployV2(p,index);ack?.({ok:true});emit(r)}catch(e){fail(ack,e)}});
