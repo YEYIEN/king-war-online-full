@@ -21,16 +21,17 @@ test('socket two-player flow: room, join, start, deploy, alternating turns, vict
  assert.equal((await a.send('v2:end',{code})).ok,true);
  assert.equal((await b.send('v2:deploy',{code,index:0})).ok,true);
  assert.equal((await b.send('v2:end',{code})).ok,true);
- assert.equal((await a.send('v2:attack',{code,attackerIndex:0})).ok,true);
- assert.ok(state(b).players[1].hp<24);
+ const firstTarget=state(a).players[1].field.some(u=>u.type==='步兵')&&state(a).players[0].field[0].type!=='弓兵'?{defenderIndex:0}:{};
+ assert.equal((await a.send('v2:attack',{code,attackerIndex:0,...firstTarget})).ok,true);
  assert.equal((await a.send('v2:end',{code})).ok,true);
- assert.equal((await b.send('v2:attack',{code,attackerIndex:0})).ok,true);
+ const secondTarget=state(b).players[0].field.some(u=>u.type==='步兵')&&state(b).players[1].field[0].type!=='弓兵'?{defenderIndex:0}:{};
+ assert.equal((await b.send('v2:attack',{code,attackerIndex:0,...secondTarget})).ok,true);
  let count=0;while(state(a).status==='playing'&&count++<100){
    const current=state(a).current,s=current===0?a:b;
    const p=state(s).players[current];
    if(p.field.length===0&&p.hand.length)assert.equal((await s.send('v2:deploy',{code,index:0})).ok,true);
    const currentState=state(s),currentP=currentState.players[current];
-   for(let i=0;i<currentP.field.length;i++){if(currentP.field[i].tapped||currentP.field[i].justDeployed)continue;const result=await s.send('v2:attack',{code,attackerIndex:i});assert.equal(result.ok,true);if(state(s).status==='finished')break}
+   for(let i=0;i<currentP.field.length;i++){if(currentP.field[i].tapped||currentP.field[i].justDeployed)continue;const enemy=currentState.players[1-current];const guarded=enemy.field.some(u=>u.type==='步兵')&&currentP.field[i].type!=='弓兵';const result=await s.send('v2:attack',{code,attackerIndex:i,...(guarded?{defenderIndex:enemy.field.findIndex(u=>u.type==='步兵')}: {})});assert.equal(result.ok,true);if(state(s).status==='finished')break}
    if(state(s).status==='playing')assert.equal((await s.send('v2:end',{code})).ok,true);
  }
  assert.equal(state(a).status,'finished','match must finish');
