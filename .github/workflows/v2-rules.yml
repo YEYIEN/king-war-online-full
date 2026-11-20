@@ -13,3 +13,5 @@ jobs:
         with:
           node-version: '24'
       - run: npm run test:v2
+      - run: node --check server/index.js
+      - run: node --check server/v2-playtest-socket.mjs
