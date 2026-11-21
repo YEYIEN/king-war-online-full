@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {MAGIC_DEFS,castMagicV2,tickMagicTurnV2} from './rules-v2-magic.mjs';
 const u=(type='法師',rank='高級',extra={})=>({type,rank,tapped:false,justDeployed:false,status:[],...extra});
-const player=(name)=>({king:'秦始皇',hp:24,hand:[],magic:[],field:[u()],magicCastThisTurn:false});
+const player=(name)=>({king:'秦始皇',hp:24,hand:[],field:[u()],magicCastThisTurn:false});
 const cast=(name,targets=[0],enemy=[u('步兵','中級')])=>castMagicV2(player(name),{hp:24,field:enemy},name,0,targets);
 test('nine selectable spells are available without a deck',()=>{assert.equal(MAGIC_DEFS.length,9)});
 test('magic is selected without drawing cards',()=>{const r=cast('火球術',[0],[u('步兵','初級')]);assert.equal(r.spell.name,'火球術');assert.equal('magic' in r.caster,false)});
