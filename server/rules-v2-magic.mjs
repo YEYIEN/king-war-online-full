@@ -1,0 +1,43 @@
+import {magicCapacity} from './rules-v2-core.mjs';
+export const MAGIC_DEFS=[
+{name:'火球術',count:3,level:1,target:'enemy',maxTargets:1},
+{name:'冰凍術',count:2,level:1,target:'enemy',maxTargets:1},
+{name:'力量術',count:3,level:1,target:'self',maxTargets:1},
+{name:'虛弱術',count:2,level:2,target:'enemy',maxTargets:1},
+{name:'增強術',count:2,level:2,target:'self',maxTargets:1},
+{name:'流星雨',count:1,level:2,target:'enemy',maxTargets:3},
+{name:'毒藥瓶',count:1,level:3,target:'enemy',maxTargets:1},
+{name:'燃血術',count:1,level:3,target:'self',maxTargets:1},
+{name:'天殞術',count:1,level:3,target:'enemy',maxTargets:0}
+];
+export function magicComposition(){return MAGIC_DEFS.flatMap(d=>Array.from({length:d.count},()=>({...d})));}
+export function drawMagicV2(player,deck,discard){const p={...player,magic:[...player.magic]},d=[...deck],trash=[...discard];const available=Math.max(0,Math.min(3,magicCapacity(p.field))-p.magic.length);for(let i=0;i<available;i++){if(!d.length&&trash.length)d.push(...trash.splice(0));if(!d.length)break;p.magic.push(d.shift());}return {player:p,deck:d,discard:trash};}
+export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[]){
+ const a={...caster,field:caster.field.map(u=>({...u,status:[...(u.status||[])]})),magic:[...caster.magic]},b={...opponent,field:opponent.field.map(u=>({...u,status:[...(u.status||[])]}))};
+ if(!Number.isInteger(magicIndex)||magicIndex<0||magicIndex>=a.magic.length)throw Error('Invalid magic card');
+ const magic=a.magic[magicIndex],def=MAGIC_DEFS.find(x=>x.name===magic.name);
+ if(!def)throw Error('Unknown magic');
+ const mage=a.field[mageIndex];if(!Number.isInteger(mageIndex)||!mage||mage.type!=='法師'||mage.tapped||mage.justDeployed||({初級:1,中級:2,高級:3}[mage.rank]<def.level))throw Error('Mage cannot cast');
+ if(!Array.isArray(targetIndices)||new Set(targetIndices).size!==targetIndices.length||targetIndices.some(i=>!Number.isInteger(i)||i<0))throw Error('Invalid targets');
+ const field=def.target==='self'?a.field:b.field;
+ if(def.maxTargets===0){if(targetIndices.length)throw Error('No targets allowed');}
+ else if(targetIndices.length<1||targetIndices.length>def.maxTargets||targetIndices.some(i=>i>=field.length))throw Error('Invalid target count');
+ if(magic.name==='冰凍術'&&targetIndices.some(i=>field[i].status.includes('冰凍')))throw Error('Freeze cannot stack');
+ if(magic.name==='燃血術'&&a.hp<=3)throw Error('Insufficient HP');
+ const dead=new Set();const add=(u,status)=>{if(!u.status.includes(status))u.status.push(status)};
+ for(const i of targetIndices){const u=field[i];switch(magic.name){
+ case '火球術':case '流星雨':if(u.rank==='初級')dead.add(i);else u.modifier=(u.modifier||0)-1;break;
+ case '冰凍術':if(u.rank==='高級')u.modifier=(u.modifier||0)-1;else add(u,'冰凍');break;
+ case '力量術':u.modifier=(u.modifier||0)+1;add(u,'力量術');break;
+ case '虛弱術':if((({初級:1,中級:2,高級:3}[u.rank])+(u.modifier||0))<=1)add(u,'虛弱禁攻');else u.modifier=(u.modifier||0)-1;break;
+ case '增強術':u.modifier=(u.modifier||0)+1;add(u,'增強術');if(!u.tapped)add(u,'增強傷害');break;
+ case '毒藥瓶':add(u,'下回合死亡');break;
+ case '燃血術':a.hp-=3;u.modifier=(u.modifier||0)+1;u.tapped=false;add(u,'燃血傷害');break;
+ }}
+ if(magic.name==='天殞術')b.field.forEach((u,i)=>{if(u.rank!=='高級')dead.add(i);else add(u,'冰凍')});
+ field.splice(0,field.length,...field.filter((_,i)=>!dead.has(i)));
+ a.field[mageIndex]&&(a.field[mageIndex].tapped=true);
+ a.magic.splice(magicIndex,1);
+ return {caster:a,opponent:b,discarded:magic};
+}
+export function tickMagicTurnV2(player,phase){const p={...player,field:player.field.map(u=>({...u,status:[...(u.status||[])]}))};if(phase==='start')p.field.forEach(u=>{if(u.status.includes('冰凍')){u.tapped=true;u.status=u.status.filter(x=>x!=='冰凍')}else u.tapped=false;for(const s of ['增強術','增強傷害','虛弱禁攻'])if(u.status.includes(s)){u.status=u.status.filter(x=>x!==s);if(s==='增強術')u.modifier=(u.modifier||0)-1}});if(phase==='end'){p.field=p.field.filter(u=>!u.status.includes('下回合死亡'));p.field.forEach(u=>{if(u.status.includes('力量術')){u.modifier=(u.modifier||0)-1;u.status=u.status.filter(x=>x!=='力量術')}})}return p;}
