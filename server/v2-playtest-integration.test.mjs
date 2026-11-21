@@ -74,3 +74,30 @@ test('four players: defender can intercept attacker A and attacker C separately'
  // Other attacker must have its own independent interception budget.
  assert.equal(view(1).players[1].interceptionUsedBy.p2,undefined);
 });
+
+test('invalid target payloads cannot mutate room state',()=>{
+ const h=harness(3),{code,view,connections}=h;
+ const before=JSON.stringify(view(0));
+ for(const target of [undefined,null,'1',-1,0,3,1.5]){
+  const attack=connections[0].call('v2:attack',{code,attackerIndex:0,defenderPlayerIndex:target});
+  assert.equal(attack.ok,false,'invalid attack target '+String(target));
+  const cast=connections[0].call('v2:cast',{code,magicIndex:0,mageIndex:0,defenderPlayerIndex:target});
+  assert.equal(cast.ok,false,'invalid spell target '+String(target));
+ }
+ assert.equal(JSON.stringify(view(0)),before,'rejected operations must not change game state');
+});
+
+test('pending king attack blocks turn progression and other actions',()=>{
+ const h=harness(2),{ok,code,view,connections}=h;
+ ok(0,'v2:deploy',{code,index:0});
+ for(let i=0;i<2;i++){
+  const cur=view(0).current,hand=view(cur).players[cur].hand;
+  ok(cur,'v2:end',{code,overflowDiscardIndices:Array.from({length:Math.max(0,hand.length+2-5)},(_,j)=>j)});
+ }
+ ok(0,'v2:attack',{code,attackerIndex:0,defenderPlayerIndex:1});
+ assert.equal(connections[0].call('v2:end',{code}).ok,false);
+ assert.equal(connections[0].call('v2:deploy',{code,index:0}).ok,false);
+ assert.equal(connections[0].call('v2:cast',{code,magicIndex:0,mageIndex:0,defenderPlayerIndex:1}).ok,false);
+ ok(1,'v2:respond-attack',{code,handIndex:null});
+ assert.equal(view(0).pendingAttack,null);
+});
