@@ -1,17 +1,16 @@
 export const MAGIC_DEFS=[
-{name:'火球術',count:2,level:1,target:'enemy',maxTargets:1},
-{name:'冰凍術',count:2,level:1,target:'enemy',maxTargets:1},
-{name:'力量術',count:3,level:1,target:'self',maxTargets:1},
-{name:'虛弱術',count:2,level:2,target:'enemy',maxTargets:1},
-{name:'增強術',count:2,level:2,target:'self',maxTargets:1},
-{name:'流星雨',count:1,level:2,target:'enemy',maxTargets:0},
-{name:'毒藥瓶',count:1,level:3,target:'enemy',maxTargets:1},
-{name:'燃血術',count:1,level:3,target:'self',maxTargets:1},
-{name:'天殞術',count:1,level:3,target:'enemy',maxTargets:1}
+{name:'火球術',level:1,target:'enemy',maxTargets:1},
+{name:'冰凍術',level:1,target:'enemy',maxTargets:1},
+{name:'力量術',level:1,target:'self',maxTargets:1},
+{name:'虛弱術',level:2,target:'enemy',maxTargets:1},
+{name:'增強術',level:2,target:'self',maxTargets:1},
+{name:'流星雨',level:2,target:'enemy',maxTargets:0},
+{name:'毒藥瓶',level:3,target:'enemy',maxTargets:1},
+{name:'燃血術',level:3,target:'self',maxTargets:1},
+{name:'天殞術',level:3,target:'enemy',maxTargets:1}
 ];
-export function magicComposition(){return MAGIC_DEFS.flatMap(d=>Array.from({length:d.count},()=>({...d})));}
 export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[]){
- const a={...caster,field:caster.field.map(u=>({...u,status:[...(u.status||[])]})),magic:[...caster.magic]},b={...opponent,field:opponent.field.map(u=>({...u,status:[...(u.status||[])]}))};
+ const a={...caster,field:caster.field.map(u=>({...u,status:[...(u.status||[])]}))},b={...opponent,field:opponent.field.map(u=>({...u,status:[...(u.status||[])]}))};
  const magic=typeof magicIndex==='string'?magicIndex:MAGIC_DEFS[magicIndex]?.name,def=MAGIC_DEFS.find(x=>x.name===magic);
  if(!def)throw Error('Unknown magic');if(a.magicCastThisTurn)throw Error('Only one magic per turn');
  const mage=a.field[mageIndex];if(!Number.isInteger(mageIndex)||!mage||mage.type!=='法師'||mage.tapped||({初級:1,中級:2,高級:3}[mage.rank]<def.level))throw Error('Mage cannot cast');
