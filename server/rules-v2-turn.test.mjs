@@ -26,3 +26,10 @@ test('malformed indices and discard payloads are rejected',()=>{
  assert.throws(()=>endV2Turn(p,[],[],null));
  assert.throws(()=>endV2Turn(p,[],[],['0']));
 });
+
+test('half-ready recovery preserves independent magic modifiers',()=>{
+ const p={...newV2Player('秦始皇'),field:[u('步兵','高級',{modifier:1,halfReadyUntilOwnerTurn:true,status:['力量術']})]};
+ const next=startV2Turn(p,3);
+ assert.equal(next.field[0].modifier,2,'half-ready -1 recovers, strength +1 remains');
+ assert.equal(next.field[0].halfReadyUntilOwnerTurn,false);
+});
