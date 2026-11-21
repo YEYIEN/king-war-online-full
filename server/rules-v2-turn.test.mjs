@@ -1,4 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {startV2Turn,deployV2,battleV2,kingAttackV2,interceptV2,louisV2,genghisV2,endV2Turn,newV2Player} from './rules-v2-turn.mjs';
+import {tickMagicTurnV2} from './rules-v2-magic.mjs';
 const u=(type,rank,extra={})=>({type,rank,...extra});
 test('turn-start eligibility and no immediate deploy attack',()=>{let p=startV2Turn({...newV2Player('路易十四'),hand:[u('弓兵','初級')]},1);p=deployV2(p,0);assert.throws(()=>kingAttackV2(p,newV2Player('秦始皇'),0));assert.throws(()=>louisV2(p,0));p=startV2Turn(p,2);assert.equal(louisV2({...p,hp:15},0).hp,18)});
 test('king guard and direct damage',()=>{const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('騎兵','高級')]},1),d={...newV2Player('秦始皇'),field:[u('步兵','初級')]};assert.throws(()=>kingAttackV2(a,d,0));const r=kingAttackV2(a,{...d,field:[]},0);assert.equal(r.defender.hp,19);assert.equal(r.attacker.field[0].tapped,true)});
@@ -14,8 +15,11 @@ test('half-ready defense penalty lasts until owner next turn, then expires',()=>
  assert.equal(result.defender.field[0].modifier,-1);
  assert.equal(result.defender.field[0].halfReadyUntilOwnerTurn,true);
  const next=startV2Turn(result.defender,2);
- assert.equal(next.field[0].modifier,0);
- assert.equal(next.field[0].halfReadyUntilOwnerTurn,false);
+ assert.equal(next.field[0].modifier,-1);
+ assert.equal(next.field[0].halfReadyUntilOwnerTurn,true);
+ const ended=tickMagicTurnV2(next,'end');
+ assert.equal(ended.field[0].modifier,0);
+ assert.equal(ended.field[0].halfReadyUntilOwnerTurn,false);
 });
 
 test('malformed indices and discard payloads are rejected',()=>{
@@ -30,13 +34,14 @@ test('malformed indices and discard payloads are rejected',()=>{
 test('half-ready recovery preserves independent magic modifiers',()=>{
  const p={...newV2Player('秦始皇'),field:[u('步兵','高級',{modifier:1,halfReadyUntilOwnerTurn:true,status:['力量術']})]};
  const next=startV2Turn(p,3);
- assert.equal(next.field[0].modifier,2,'half-ready -1 recovers, strength +1 remains');
- assert.equal(next.field[0].halfReadyUntilOwnerTurn,false);
+ assert.equal(next.field[0].modifier,1,'half-ready penalty remains during owner turn');
+ assert.equal(next.field[0].halfReadyUntilOwnerTurn,true);
+ assert.equal(tickMagicTurnV2(next,'end').field[0].modifier,2,'recover after turn, preserve strength');
 });
 
 test('interception succeeds on tie, discards card and kills attacker',()=>{const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','中級')]},1);const d={...newV2Player('秦始皇'),hand:[u('步兵','初級')]};const x=interceptV2(a,d,0,0,'player1');assert.equal(x.success,true);assert.equal(x.damage,0);assert.equal(x.attacker.field.length,0);assert.equal(x.defender.hand.length,0);assert.equal(x.defender.interceptionUsedBy.player1,true);assert.throws(()=>interceptV2(startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','初級')]},2),{...x.defender,hand:[u('步兵','初級')]},0,0,'player1'));});
 test('failed interception reduces direct king damage by one',()=>{const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','高級')]},1);const d={...newV2Player('秦始皇'),hand:[u('法師','初級')]};const x=interceptV2(a,d,0,0,'player1');assert.equal(x.success,false);assert.equal(x.damage,4);assert.equal(x.defender.hp,20);assert.equal(x.attacker.field.length,1);assert.equal(x.attacker.field[0].tapped,true);});
-test('half-ready cannot stack after repeated successful defenses',()=>{let d={...newV2Player('秦始皇'),field:[u('步兵','高級')]};for(let i=0;i<2;i++){const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級')]},i+1);d=battleV2(a,d,0,0).defender;}assert.equal(d.field[0].modifier,-1);assert.equal(startV2Turn(d,3).field[0].modifier,0);});
+test('half-ready cannot stack after repeated successful defenses',()=>{let d={...newV2Player('秦始皇'),field:[u('步兵','高級')]};for(let i=0;i<2;i++){const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級')]},i+1);d=battleV2(a,d,0,0).defender;}assert.equal(d.field[0].modifier,-1);const active=startV2Turn(d,3);assert.equal(active.field[0].modifier,-1);assert.equal(tickMagicTurnV2(active,'end').field[0].modifier,0);});
 
 test('interception is per attacking player and resets on defender turn',()=>{const attack=()=>startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','初級')]},1);const d={...newV2Player('秦始皇'),hand:[u('步兵','初級'),u('步兵','初級'),u('步兵','初級')]};const first=interceptV2(attack(),d,0,0,'player1');assert.throws(()=>interceptV2(attack(),first.defender,0,0,'player1'),/already used/);const third=interceptV2(attack(),first.defender,0,0,'player3');assert.equal(third.defender.interceptionUsedBy.player3,true);const reset=startV2Turn(third.defender,2);assert.deepEqual(reset.interceptionUsedBy,{});});
 
