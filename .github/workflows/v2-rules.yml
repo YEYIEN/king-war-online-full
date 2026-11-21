@@ -26,3 +26,5 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm --prefix client install --no-audit --no-fund
       - run: node --test tests/v2-network.test.mjs tests/v2-magic-network.test.mjs
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright-core
+      - run: node --test tests/v2-magic-browser.test.mjs
