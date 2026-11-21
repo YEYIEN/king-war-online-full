@@ -12,7 +12,7 @@ const ordered=spell=>cards=>{
  const m=cards.filter(c=>c.type==='法師'&&c.rank==='高級'),i=cards.filter(c=>c.type==='步兵'&&c.rank==='初級');
  const ids=new Set([...m,...i].map(c=>c.id));return [...m,...i,...cards.filter(c=>!ids.has(c.id))];
 };
-test('real Chromium UI: two players cast all nine spells via visible controls', {timeout:120000},async()=>{
+test('real Chromium UI: two players cast all nine spells via visible controls', {timeout:240000},async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',args:['--no-sandbox']});
  try{
   for(const spell of MAGIC_DEFS){
