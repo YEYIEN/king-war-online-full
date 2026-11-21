@@ -13,7 +13,8 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
-      - run: npm --prefix client ci
+      # Client lockfile predates added Supabase dependencies; use install until regenerated.
+      - run: npm --prefix client install --no-audit --no-fund
       - name: V2 unit and 2-5 player integration tests
         run: npm run test:v2
       - name: V1 regression tests
