@@ -61,8 +61,13 @@ test('five king powers: real Chromium two-player controls and synchronized state
       await a.locator('button[onclick="hit(0)"]').click();
       await a.waitForFunction(()=>state.players[0].abilityUsed===true);
       assert.equal((await b.evaluate(()=>state.players[0].abilityUsed)),true);
-     }else{
-      assert.equal((await a.evaluate(()=>state.players[0].abilityUsed)),false);
+     }else if(king==='屋大維奧古斯都'){
+      await a.getByRole('button',{name:'結束回合'}).click();
+      await b.waitForFunction(()=>state.current===1);
+      await b.locator('button[onclick="select(0)"]').click();
+      await b.locator('button[onclick="hit(0)"]').click();
+      await b.waitForFunction(()=>state.players[1].field.length===0);
+      assert.equal((await a.evaluate(()=>state.players[0].field.length)),1,'Augustus defender survives equal-power tie');
      }
     }
    }finally{await ctx.close();await new Promise(r=>io.close(r));}
