@@ -13,7 +13,10 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+      - run: npm --prefix client ci
       - name: V2 unit and 2-5 player integration tests
         run: npm run test:v2
       - name: V1 regression tests
         run: npm test
+      - name: Client build
+        run: npm run build
