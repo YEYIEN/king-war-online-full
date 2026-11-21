@@ -37,3 +37,12 @@ test('magic draw respects three-card hand cap and one draw per mage',()=>{
 });
 
 test('ice rank penalty on high-level unit expires at owner turn start',()=>{const a=player({name:'冰凍術'}),b={hp:24,field:[unit('步兵','高級')]};const x=castMagicV2(a,b,0,0,[0]);assert.equal(x.opponent.field[0].modifier,-1);const y=tickMagicTurnV2(x.opponent,'start');assert.equal(y.field[0].modifier,0)});
+
+test('stacked strength and enhancement effects expire without permanent power',()=>{
+ const unitA=unit('步兵','中級');unitA.modifier=2;unitA.status=['力量術','力量術'];
+ const end=tickMagicTurnV2({field:[unitA]},'end');
+ assert.equal(end.field[0].modifier,0);
+ const unitB=unit('步兵','中級');unitB.modifier=2;unitB.status=['增強術','增強術'];
+ const start=tickMagicTurnV2({field:[unitB]},'start');
+ assert.equal(start.field[0].modifier,0);
+});
