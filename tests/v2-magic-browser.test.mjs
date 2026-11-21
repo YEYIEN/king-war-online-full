@@ -34,22 +34,26 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
     await b.getByRole('button',{name:'加入房間'}).click();
     await a.getByRole('button',{name:'開始對戰'}).click();
     await a.waitForFunction(()=>state?.status==='playing',{timeout:8000});
+    await b.waitForFunction(()=>state?.status==='playing',{timeout:8000});
     console.log('started',spell.name);
     await a.locator('button[onclick="deploy(0)"]').click();
     await a.getByRole('button',{name:'結束回合'}).click();
     await b.waitForFunction(()=>state?.current===1);
     await b.locator('button[onclick="deploy(0)"]').click();
     await b.getByRole('button',{name:'結束回合'}).click();
-    await a.waitForFunction(()=>state?.current===0&&state?.players[0]?.magic?.length===1,{timeout:8000});
+    await a.waitForFunction(()=>state?.current===0&&state?.players[0]?.availableSpells?.length===9,{timeout:8000});
     console.log('drawn',spell.name);
-    await a.locator('button[onclick="cast(0)"]').click();
-    await a.waitForFunction(()=>state?.players[0]?.magic?.length===0);
+    const magicIndex=MAGIC_DEFS.findIndex(m=>m.name===spell.name);
+    await a.locator('button[onclick="cast('+magicIndex+')"]').click();
+    await a.waitForFunction(()=>state?.players[0]?.field?.[0]?.tapped===true&&state?.log?.some(x=>x.includes('施放 '+spell.name)),spell.name);
     await b.waitForFunction(()=>state?.log?.some(x=>x.includes('施放')));
     const stateA=await a.evaluate(()=>state),stateB=await b.evaluate(()=>state);
     assert.equal(stateA.log.at(-1).includes(spell.name),true,spell.name);
     assert.deepEqual(stateA.players[0].field,stateB.players[0].field);
     assert.deepEqual(stateA.players[1].field,stateB.players[1].field);
-    assert.equal(stateB.players[0].magic,undefined);
+    assert.equal(stateB.players[0].availableSpells,undefined);
+    assert.equal(stateB.players[0].hand,undefined);
+    assert.equal(stateA.players[1].hand,undefined);
    }finally{await ctx.close();await new Promise(r=>io.close(r));}
   }
  }finally{await browser.close();}
