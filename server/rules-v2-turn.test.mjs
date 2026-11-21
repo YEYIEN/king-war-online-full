@@ -17,3 +17,12 @@ test('half-ready defense penalty lasts until owner next turn, then expires',()=>
  assert.equal(next.field[0].modifier,0);
  assert.equal(next.field[0].halfReadyUntilOwnerTurn,false);
 });
+
+test('malformed indices and discard payloads are rejected',()=>{
+ const p=newV2Player('亞歷山大大帝');
+ p.hand=[{type:'步兵',rank:'初級'}];
+ assert.throws(()=>deployV2(p,undefined));
+ assert.throws(()=>deployV2(p,0.5));
+ assert.throws(()=>endV2Turn(p,[],[],null));
+ assert.throws(()=>endV2Turn(p,[],[],['0']));
+});
