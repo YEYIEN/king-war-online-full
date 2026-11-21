@@ -55,7 +55,7 @@ test('freeze prevents one defender turn of actions',()=>{
 });
 test('Genghis exchange removes mage without obsolete magic-discard requirement',()=>{
  const {a,b,view,ok,end}=ready({kingA:'成吉思汗'});
- ok(a,'v2:ability',{fieldIndex:0,handIndex:0});
+ ok(a,'v2:ability',{fieldIndex:0,handIndex:1});
  assert.notEqual(view(a).players[0].field[0].type,'法師');
  end(a);
  assert.equal(view(b).players[0].availableSpells,undefined);
