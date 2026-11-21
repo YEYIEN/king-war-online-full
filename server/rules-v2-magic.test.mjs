@@ -35,3 +35,5 @@ test('magic draw respects three-card hand cap and one draw per mage',()=>{
  assert.equal(r.player.magic.length,3);
  assert.equal(r.deck.length,15);
 });
+
+test('ice rank penalty on high-level unit expires at owner turn start',()=>{const a=player({name:'冰凍術'}),b={hp:24,field:[unit('步兵','高級')]};const x=castMagicV2(a,b,0,0,[0]);assert.equal(x.opponent.field[0].modifier,-1);const y=tickMagicTurnV2(x.opponent,'start');assert.equal(y.field[0].modifier,0)});
