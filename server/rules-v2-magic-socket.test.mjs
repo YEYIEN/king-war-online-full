@@ -9,10 +9,11 @@ class Socket {
  emit(event,payload){this.messages.push({event,payload});}
  send(event,data={}){let ack;this.handlers.get(event)(data,r=>ack=r);assert.ok(ack,'missing ack '+event);return ack;}
 }
-function fixture(spell){
+function fixture(spell,{kingA='亞歷山大大帝',unitOrder=null}={}){
  const sockets=new Map();
  const namespace={on(event,fn){if(event==='connection')this.connect=fn;},to(id){return {emit(event,payload){sockets.get(id)?.emit(event,payload);}}}};
  const deckOrder=cards=>{
+  if(unitOrder&&cards[0]?.type)return unitOrder(cards);
   if(cards[0]?.name)return [...cards.filter(c=>c.name===spell),...cards.filter(c=>c.name!==spell)];
   const m=cards.filter(c=>c.type==='法師'&&c.rank==='高級');
   const infantry=cards.filter(c=>c.type==='步兵'&&c.rank==='初級');
@@ -21,7 +22,7 @@ function fixture(spell){
  };
  registerV2Playtest({of(){return namespace;}},{deckOrder});
  const connect=id=>{const s=new Socket(id);sockets.set(id,s);namespace.connect(s);return s;};
- const a=connect('a'),b=connect('b'),code=a.send('v2:create',{name:'A'}).code;
+ const a=connect('a'),b=connect('b'),code=a.send('v2:create',{name:'A',king:kingA}).code;
  assert.equal(b.send('v2:join',{code,name:'B'}).ok,true);
  assert.equal(a.send('v2:start',{code}).ok,true);
  const view=s=>s.messages.filter(m=>m.event==='v2:state').at(-1)?.payload;
