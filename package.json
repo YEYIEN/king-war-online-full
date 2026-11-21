@@ -12,7 +12,7 @@
     "bump-version": "node scripts/bump-version.cjs",
     "test": "node --test tests/*.test.mjs",
     "release:check": "node scripts/release-readiness.mjs",
-    "test:v2": "node --test server/rules-v2-*.test.mjs",
+    "test:v2": "node --test server/rules-v2-*.test.mjs server/v2-playtest-integration.test.mjs",
     "test:all": "npm test && npm run test:v2"
   },
   "dependencies": {
