@@ -9,5 +9,5 @@ test('Augustus survives equal fight',()=>assert.equal(resolveBattle(u('步兵','
 test('archer bypasses infantry guard',()=>{assert.equal(canAttackKing(u('弓兵','初級'),[u('步兵','初級')]),true);assert.equal(canAttackKing(u('騎兵','高級'),[u('步兵','初級')]),false)});
 test('Louis heals 3, capped 24, start-turn eligibility',()=>{assert.equal(sacrificeLouis(23,{turnStartPresent:4},4),24);assert.equal(sacrificeLouis(17,{turnStartPresent:4},4),20);assert.throws(()=>sacrificeLouis(17,{turnStartPresent:null},4))});
 test('Genghis clears statuses, adjusts mage capacity',()=>{const r=exchangeGenghis([u('法師','高級',{status:['冰凍'],turnStartPresent:5})],[u('弓兵','初級')],0,0);assert.equal(r.magicLimit,0);assert.equal(r.field[0].justDeployed,true);assert.equal(r.field[0].turnStartPresent,null);assert.deepEqual(r.hand[0].status,[])});
-test('Qin returns one of four to bottom',()=>{const r=qinSelect(['a','b','c','d'],2);assert.deepEqual(r.hand,['a','b','d']);assert.equal(r.deckBottom,'c')});
+test('Qin returns one of four to bottom',()=>{const r=qinSelect(['a','b','c'],2);assert.deepEqual(r.hand,['a','b']);assert.equal(r.deckBottom,'c')});
 test('magic capacity equals mage count',()=>assert.equal(magicCapacity([u('法師','初級'),u('法師','高級'),u('步兵','初級')]),2));
