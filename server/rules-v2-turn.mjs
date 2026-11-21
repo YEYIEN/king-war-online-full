@@ -8,5 +8,18 @@ export function kingAttackV2(attackerPlayer,defenderPlayer,attackerIndex){const 
 export function louisV2(player,index){const p=copy(player);if(p.king!=='路易十四'||p.abilityUsed)throw Error('Louis unavailable');const unit=p.field[index];if(!Number.isInteger(index)||!unit)throw Error('Missing unit');p.hp=sacrificeLouis(p.hp,unit,p.turn);p.field.splice(index,1);p.abilityUsed=true;return {...p,magicOverLimit:Math.max(0,p.magic.length-magicCapacity(p.field))};}
 export function genghisV2(player,fieldIndex,handIndex){const p=copy(player);if(p.king!=='成吉思汗'||p.abilityUsed)throw Error('Genghis unavailable');const r=exchangeGenghis(p.field,p.hand,fieldIndex,handIndex);return {...p,field:r.field,hand:r.hand,abilityUsed:true,magicOverLimit:Math.max(0,p.magic.length-r.magicLimit)};}
 export function discardExcessMagicV2(player,indices){const p=copy(player),excess=Math.max(0,p.magic.length-magicCapacity(p.field));if(indices.length!==excess||new Set(indices).size!==indices.length||indices.some(i=>i<0||i>=p.magic.length))throw Error('Wrong discard selection');const discarded=indices.map(i=>p.magic[i]);p.magic=p.magic.filter((_,i)=>!indices.includes(i));return {player:p,discarded};}
-export function endV2Turn(player,unitDeck,unitDiscard,discardHandIndices=[],qinBottomIndex=null){const p=copy(player),deck=[...unitDeck],discard=[...unitDiscard];if(!Array.isArray(discardHandIndices)||discardHandIndices.length>3||new Set(discardHandIndices).size!==discardHandIndices.length||discardHandIndices.some(i=>!Number.isInteger(i)||i<0||i>=p.hand.length))throw Error('Invalid discard');if(p.king==='秦始皇'&&qinBottomIndex!==null&&(!Number.isInteger(qinBottomIndex)||qinBottomIndex<0||qinBottomIndex>3))throw Error('Invalid Qin selection');const removed=p.hand.filter((_,i)=>discardHandIndices.includes(i));p.hand=p.hand.filter((_,i)=>!discardHandIndices.includes(i));discard.push(...removed);const draw=()=>{if(!deck.length&&discard.length)deck.push(...discard.splice(0));return deck.shift()};for(let i=0;i<2;i++){const c=draw();if(!c)break;p.hand.push(c)}if(p.king==='秦始皇'){const extra=draw();if(extra){p.hand.push(extra);if(qinBottomIndex===null)throw Error('Qin selection required');const selected=qinSelect(p.hand,qinBottomIndex);p.hand=selected.hand;deck.push(selected.deckBottom)}}return {player:p,unitDeck:deck,unitDiscard:discard};}
+export function endV2Turn(player,unitDeck,unitDiscard,options={}){
+ const p=copy(player),deck=[...unitDeck],discard=[...unitDiscard];
+ const {qinBottomIndex=null,overflowDiscardIndices=[]}=options;
+ if(!Array.isArray(overflowDiscardIndices)||new Set(overflowDiscardIndices).size!==overflowDiscardIndices.length||overflowDiscardIndices.some(i=>!Number.isInteger(i)||i<0))throw Error('Invalid overflow discard');
+ const draw=()=>{if(!deck.length&&discard.length)deck.push(...discard.splice(0));return deck.shift()};
+ const drawn=[];for(let i=0;i<(p.king==='秦始皇'?3:2);i++){const card=draw();if(!card)break;drawn.push(card)}
+ if(p.king==='秦始皇'&&drawn.length===3){if(!Number.isInteger(qinBottomIndex)||qinBottomIndex<0||qinBottomIndex>2)throw Error('Qin must return one of three newly drawn cards');const [returned]=drawn.splice(qinBottomIndex,1);deck.push(returned)}
+ else if(qinBottomIndex!==null)throw Error('Qin selection not applicable');
+ p.hand.push(...drawn);
+ const excess=Math.max(0,p.hand.length-UNIT_HAND_LIMIT);
+ if(overflowDiscardIndices.length!==excess||overflowDiscardIndices.some(i=>i>=p.hand.length))throw Error('Select exactly '+excess+' overflow cards to discard');
+ const removed=p.hand.filter((_,i)=>overflowDiscardIndices.includes(i));p.hand=p.hand.filter((_,i)=>!overflowDiscardIndices.includes(i));discard.push(...removed);
+ return {player:p,unitDeck:deck,unitDiscard:discard,drawn,overflowDiscarded:removed};
+}
 export function newV2Player(king){return {king,hp:KING_MAX_HP,hand:[],field:[],magic:[],abilityUsed:false,interceptionUsedBy:{},magicCastThisTurn:false,turn:0};}
