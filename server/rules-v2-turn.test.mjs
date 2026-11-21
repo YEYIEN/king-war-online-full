@@ -6,3 +6,14 @@ test('Augustus survives tie and Alexander consumes ability',()=>{const a=startV2
 test('Genghis swap forces magic discard',()=>{const p=startV2Turn({...newV2Player('成吉思汗'),field:[u('法師','高級')],hand:[u('弓兵','初級')],magic:['x']},1);const r=genghisV2(p,0,0);assert.equal(r.magicOverLimit,1);assert.deepEqual(discardExcessMagicV2(r,[0]).player.magic,[])});
 test('Qin end-turn selection',()=>{const p={...newV2Player('秦始皇'),hand:['a','b']};const r=endV2Turn(p,['c','d','e'],[],[],1);assert.deepEqual(r.player.hand,['a','c','d']);assert.deepEqual(r.unitDeck,['e','b']);});
 test('regular end-turn hand refill and discard',()=>{const p={...newV2Player('亞歷山大大帝'),hand:['a','b','c']};const r=endV2Turn(p,['d','e'],[],[1]);assert.deepEqual(r.player.hand,['a','c','d']);assert.deepEqual(r.unitDiscard,['b'])});
+
+test('half-ready defense penalty lasts until owner next turn, then expires',()=>{
+ const attacker=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級')]},1);
+ const defender={...newV2Player('秦始皇'),field:[u('步兵','中級')]};
+ const result=battleV2(attacker,defender,0,0);
+ assert.equal(result.defender.field[0].modifier,-1);
+ assert.equal(result.defender.field[0].halfReadyUntilOwnerTurn,true);
+ const next=startV2Turn(result.defender,2);
+ assert.equal(next.field[0].modifier,0);
+ assert.equal(next.field[0].halfReadyUntilOwnerTurn,false);
+});
