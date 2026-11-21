@@ -1,3 +1,4 @@
+import {kingAttackV2} from './rules-v2-turn.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {MAGIC_DEFS,magicComposition,drawMagicV2,castMagicV2,tickMagicTurnV2} from './rules-v2-magic.mjs';
 const unit=(type='法師',rank='高級')=>({type,rank,tapped:false,justDeployed:false,status:[]});
@@ -84,4 +85,15 @@ test('multiple blood buffs expire without leftover power',()=>{
  const done=tickMagicTurnV2(first.caster,'end');
  assert.equal(done.field[1].modifier,0);
  assert.equal(done.field[1].status.includes('燃血傷害'),false);
+});
+
+test('enhancement and blood magic each increase king damage once',()=>{
+ for(const spell of ['增強術','燃血術']){
+  const a=player({name:spell}),b={hp:24,field:[]};
+  const cast=castMagicV2(a,b,0,0,[0]);
+  const ready={...cast.caster,field:cast.caster.field.map(u=>({...u,tapped:false}))};
+  const attack=kingAttackV2(ready,b,0);
+  assert.equal(attack.damage,6,spell);
+  assert.equal(attack.defender.hp,18);
+ }
 });
