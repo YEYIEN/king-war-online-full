@@ -45,7 +45,7 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
     console.log('drawn',spell.name);
     const magicIndex=MAGIC_DEFS.findIndex(m=>m.name===spell.name);
     await a.locator('button[onclick="cast('+magicIndex+')"]').click();
-    await a.waitForFunction(()=>state?.players[0]?.field?.[0]?.tapped===true&&state?.log?.some(x=>x.includes('施放 '+spell.name)),spell.name);
+    await a.waitForFunction(name=>state?.players[0]?.field?.[0]?.tapped===true&&state?.log?.some(x=>x.includes('施放 '+name)),spell.name);
     await b.waitForFunction(()=>state?.log?.some(x=>x.includes('施放')));
     const stateA=await a.evaluate(()=>state),stateB=await b.evaluate(()=>state);
     assert.equal(stateA.log.at(-1).includes(spell.name),true,spell.name);
