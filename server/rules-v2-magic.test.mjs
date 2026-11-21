@@ -33,8 +33,8 @@ test('every one of nine magic definitions resolves with legal caster and target'
 test('magic draw respects three-card hand cap and one draw per mage',()=>{
  const p=player(null);p.magic=[{name:'火球術'},{name:'力量術'}];p.field.push(unit());
  const r=drawMagicV2(p,magicComposition(),[]);
- assert.equal(r.player.magic.length,3);
- assert.equal(r.deck.length,15);
+ assert.equal(r.player.magic.length,2);
+ assert.equal(r.deck.length,16);
 });
 
 test('ice rank penalty on high-level unit expires at owner turn start',()=>{const a=player({name:'冰凍術'}),b={hp:24,field:[unit('步兵','高級')]};const x=castMagicV2(a,b,0,0,[0]);assert.equal(x.opponent.field[0].modifier,-1);const y=tickMagicTurnV2(x.opponent,'start');assert.equal(y.field[0].modifier,0)});
@@ -96,4 +96,11 @@ test('enhancement and blood magic each increase king damage once',()=>{
   assert.equal(attack.damage,6,spell);
   assert.equal(attack.defender.hp,18);
  }
+});
+
+test('one mage never draws above its single-card holding capacity',()=>{
+ const p=player(null);p.magic=[{name:'火球術'}];
+ const r=drawMagicV2(p,magicComposition(),[]);
+ assert.equal(r.player.magic.length,1);
+ assert.equal(r.deck.length,16);
 });
