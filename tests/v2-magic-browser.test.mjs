@@ -23,6 +23,7 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
    try{
     const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
     await Promise.all([a.goto(url),b.goto(url)]);
+    for(const page of [a,b])page.on('dialog',async dialog=>{if(dialog.type()==='confirm')await dialog.dismiss();else await dialog.accept('1')});
     await a.getByRole('button',{name:'建立房間'}).click();
     await a.waitForFunction(()=>document.querySelector('#code').value.length>0);
     const code=await a.locator('#code').inputValue();
@@ -36,8 +37,6 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
     await b.locator('button[onclick="deploy(0)"]').click();
     await b.getByRole('button',{name:'結束回合'}).click();
     await a.waitForFunction(()=>state?.current===0&&state?.players[0]?.magic?.length===1);
-    let dialogs=0;
-    a.on('dialog',async dialog=>{dialogs++;await dialog.accept(dialogs===1?'1':'1')});
     await a.locator('button[onclick="cast(0)"]').click();
     await a.waitForFunction(()=>state?.players[0]?.magic?.length===0);
     await b.waitForFunction(()=>state?.log?.some(x=>x.includes('施放')));
