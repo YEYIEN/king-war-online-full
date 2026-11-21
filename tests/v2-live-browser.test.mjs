@@ -7,9 +7,13 @@ test('deployed V2: two independent Chromium clients can join, deploy, and altern
  const ctx=await browser.newContext(),a=await ctx.newPage(),b=await ctx.newPage();
  try{
   for(const page of [a,b]){page.setDefaultTimeout(25000);page.on('dialog',async d=>{if(d.type()==='confirm')await d.dismiss();else await d.accept('1')});}
-  await Promise.all([a.goto(url,{waitUntil:'domcontentloaded',timeout:45000}),b.goto(url,{waitUntil:'domcontentloaded',timeout:45000})]);
+  for(const page of [a,b]){page.on('pageerror',e=>console.log('LIVE PAGE ERROR',e.message));page.on('response',r=>{if(r.url().includes('socket.io')&&r.status()>=400)console.log('LIVE SOCKET HTTP',r.status(),r.url())});}
+  const responses=await Promise.all([a.goto(url,{waitUntil:'domcontentloaded',timeout:45000}),b.goto(url,{waitUntil:'domcontentloaded',timeout:45000})]);
+  console.log('LIVE HTTP',responses.map(r=>r.status()));
+  console.log('LIVE SOCKET STATE',await a.evaluate(()=>({connected:socket.connected,origin:location.origin,script:typeof io,error:document.querySelector('#error')?.textContent})));
+  await a.waitForFunction(()=>socket.connected,{timeout:30000});
   await a.getByRole('button',{name:'建立房間'}).click();
-  await a.waitForFunction(()=>document.querySelector('#code').value.length===8);
+  try{await a.waitForFunction(()=>document.querySelector('#code').value.length===8,{timeout:15000})}catch(e){console.log('LIVE CREATE FAILURE',await a.evaluate(()=>({connected:socket.connected,error:document.querySelector('#error').textContent,code:document.querySelector('#code').value})));throw e}
   const code=await a.locator('#code').inputValue();
   await b.locator('#code').fill(code);
   await b.getByRole('button',{name:'加入房間'}).click();
