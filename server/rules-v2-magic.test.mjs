@@ -18,3 +18,20 @@ test('self-targeted blood magic retains caster identity',()=>{const a=player({na
 test('magic caster is still tapped when earlier target index is removed',()=>{const a=player({name:'火球術'});const b={hp:24,field:[unit('步兵','初級')]};const x=castMagicV2(a,b,0,0,[0]);assert.equal(x.caster.field[0].tapped,true)});
 
 test('blood power modifier expires at end of casting turn',()=>{const a=player({name:'燃血術'});a.field.push(unit('步兵','中級'));const x=castMagicV2(a,{hp:24,field:[]},0,0,[1]);assert.equal(x.caster.field[1].modifier,1);const y=tickMagicTurnV2(x.caster,'end');assert.equal(y.field[1].modifier,0);assert.equal(y.field[1].status.includes('燃血傷害'),false)});
+
+test('every one of nine magic definitions resolves with legal caster and target',()=>{
+ for(const def of MAGIC_DEFS){
+  const a=player({name:def.name}),b={hp:24,field:[unit('步兵','中級'),unit('騎兵','高級')]};
+  a.field.push(unit('步兵','中級'));
+  const indices=def.maxTargets===0?[]:[0];
+  const x=castMagicV2(a,b,0,0,indices);
+  assert.equal(x.caster.magic.length,0,def.name);
+  assert.equal(x.discarded.name,def.name);
+ }
+});
+test('magic draw respects three-card hand cap and one draw per mage',()=>{
+ const p=player(null);p.magic=[{name:'火球術'},{name:'力量術'}];p.field.push(unit());
+ const r=drawMagicV2(p,magicComposition(),[]);
+ assert.equal(r.player.magic.length,3);
+ assert.equal(r.deck.length,15);
+});
