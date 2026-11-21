@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {startV2Turn,deployV2,battleV2,kingAttackV2,louisV2,genghisV2,discardExcessMagicV2,endV2Turn,newV2Player} from './rules-v2-turn.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {startV2Turn,deployV2,battleV2,kingAttackV2,interceptV2,louisV2,genghisV2,discardExcessMagicV2,endV2Turn,newV2Player} from './rules-v2-turn.mjs';
 const u=(type,rank,extra={})=>({type,rank,...extra});
 test('turn-start eligibility and no immediate deploy attack',()=>{let p=startV2Turn({...newV2Player('路易十四'),hand:[u('弓兵','初級')]},1);p=deployV2(p,0);assert.throws(()=>kingAttackV2(p,newV2Player('秦始皇'),0));assert.throws(()=>louisV2(p,0));p=startV2Turn(p,2);assert.equal(louisV2({...p,hp:15},0).hp,18)});
 test('king guard and direct damage',()=>{const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('騎兵','高級')]},1),d={...newV2Player('秦始皇'),field:[u('步兵','初級')]};assert.throws(()=>kingAttackV2(a,d,0));const r=kingAttackV2(a,{...d,field:[]},0);assert.equal(r.defender.hp,19);assert.equal(r.attacker.field[0].tapped,true)});
@@ -33,3 +33,7 @@ test('half-ready recovery preserves independent magic modifiers',()=>{
  assert.equal(next.field[0].modifier,2,'half-ready -1 recovers, strength +1 remains');
  assert.equal(next.field[0].halfReadyUntilOwnerTurn,false);
 });
+
+test('interception succeeds on tie, discards card and kills attacker',()=>{const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','中級')]},1);const d={...newV2Player('秦始皇'),hand:[u('步兵','初級')]};const x=interceptV2(a,d,0,0);assert.equal(x.success,true);assert.equal(x.damage,0);assert.equal(x.attacker.field.length,0);assert.equal(x.defender.hand.length,0);assert.equal(x.defender.interceptionUsed,true);assert.throws(()=>interceptV2(startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','初級')]},2),{...x.defender,hand:[u('步兵','初級')]},0,0));});
+test('failed interception reduces direct king damage by one',()=>{const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','高級')]},1);const d={...newV2Player('秦始皇'),hand:[u('法師','初級')]};const x=interceptV2(a,d,0,0);assert.equal(x.success,false);assert.equal(x.damage,4);assert.equal(x.defender.hp,20);assert.equal(x.attacker.field.length,1);assert.equal(x.attacker.field[0].tapped,true);});
+test('half-ready cannot stack after repeated successful defenses',()=>{let d={...newV2Player('秦始皇'),field:[u('步兵','高級')]};for(let i=0;i<2;i++){const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級')]},i+1);d=battleV2(a,d,0,0).defender;}assert.equal(d.field[0].modifier,-1);assert.equal(startV2Turn(d,3).field[0].modifier,0);});
