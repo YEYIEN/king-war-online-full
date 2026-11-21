@@ -9,10 +9,11 @@ export function registerV2Playtest(io,{deckOrder}={}){
  const nextAlive=(r,from)=>{for(let step=1;step<=r.players.length;step++){const i=(from+step)%r.players.length;if(r.players[i].hp>0)return i}return -1};
  const living=r=>r.players.filter(p=>p.hp>0);
  // Return defeated or sacrificed unit cards to the shared discard pile.
- const collectFallen=(r,before,after)=>{const remaining=new Set(after.field.map(u=>u.id));for(const unit of before.field)if(!remaining.has(unit.id))r.unitDiscard.push(unit)};
+ const collectFallen=(r,before,after)=>{const remaining=new Set(after.field.map(u=>u.id));for(const unit of before.field)if(!remaining.has(unit.id))r.unitDiscard.push({...unit,status:[],modifier:0,halfReadyUntilOwnerTurn:false,tapped:false,justDeployed:false,turnStartPresent:null})};
+ const assertCardConservation=r=>{if(r.status==='waiting')return;const cards=[...r.unitDeck,...r.unitDiscard,...r.players.flatMap(p=>[...p.hand,...p.field])];if(cards.length!==60||new Set(cards.map(c=>c.id)).size!==60)throw Error('V2 unit card conservation violated: '+cards.length+'/60')};
  const shuffle=a=>{if(deckOrder)return deckOrder([...a]);const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b};
  const view=(room,socketId)=>({code:room.code,status:room.status,turn:room.turn,current:room.current,winner:room.winner,pendingAttack:room.pendingAttack?{defenderIndex:room.pendingAttack.defenderIndex,attackerIndex:room.pendingAttack.attackerIndex,attackerName:room.players[room.pendingAttack.attackerIndexPlayer]?.name}:null,players:room.players.map((p,i)=>({id:p.id,name:p.name,hp:p.hp,king:p.king,field:p.field,hand:p.id===socketId?p.hand:undefined,handCount:p.hand.length,availableSpells:p.id===socketId?MAGIC_DEFS:undefined,abilityUsed:p.abilityUsed,interceptionUsedBy:p.id===socketId?p.interceptionUsedBy:undefined})),you:room.players.findIndex(p=>p.id===socketId),log:room.log.slice(-15)});
- const emit=r=>{for(const p of r.players)nsp.to(p.id).emit('v2:state',view(r,p.id))};
+ const emit=r=>{assertCardConservation(r);for(const p of r.players)nsp.to(p.id).emit('v2:state',view(r,p.id))};
  const fail=(ack,e)=>ack?.({ok:false,error:String(e.message||e)});
  const check=(socket,code)=>{const r=rooms.get(String(code).toUpperCase());if(!r||!r.players.some(p=>p.id===socket.id))throw Error('Not in room');return r};
  const turn=(r,socket)=>{if(r.status!=='playing'||r.players[r.current]?.id!==socket.id||r.players[r.current]?.hp<=0)throw Error('Not your turn');return r.players[r.current]};
