@@ -20,7 +20,7 @@ test('two-player deterministic end-to-end match: draw, deploy, turn, damage, vic
     }
     players[current]=p;players[1-current]=other;
     if(finished)break;
-    const x=endV2Turn(p,deck,discard,[]);
+    const count=Math.min(2,deck.length+discard.length);const excess=Math.max(0,p.hand.length+count-5);const x=endV2Turn(p,deck,discard,{overflowDiscardIndices:Array.from({length:excess},(_,i)=>i)});
     players[current]=x.player;deck=x.unitDeck;discard=x.unitDiscard;
     current=1-current;turn++;
     players[current]=startV2Turn(players[current],turn);
