@@ -51,8 +51,8 @@ for(const size of [3,4,5]){
    const end=async(index)=>{
     const p=pages[index];
     await waitForTurn(p,index);
-    await p.getByRole('button',{name:'結束回合'}).click();
     const expected=await p.evaluate(index=>{for(let step=1;step<=state.players.length;step++){const j=(index+step)%state.players.length;if(state.players[j].hp>0)return j}return -1},index);
+    await p.getByRole('button',{name:'結束回合'}).click();
     await p.waitForFunction(next=>state?.current===next,expected);
     assert.equal(await p.locator('#error').textContent(),'','end turn must be legal');
    };
