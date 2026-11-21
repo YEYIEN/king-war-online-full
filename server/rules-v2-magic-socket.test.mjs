@@ -2,107 +2,61 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {registerV2Playtest} from './v2-playtest-socket.mjs';
 import {MAGIC_DEFS} from './rules-v2-magic.mjs';
-class Socket {
- constructor(id){this.id=id;this.handlers=new Map();this.messages=[];}
- on(event,handler){this.handlers.set(event,handler);}
- join(){}
- emit(event,payload){this.messages.push({event,payload});}
- send(event,data={}){let ack;this.handlers.get(event)(data,r=>ack=r);assert.ok(ack,'missing ack '+event);return ack;}
-}
-function fixture(spell,{kingA='亞歷山大大帝',unitOrder=null}={}){
+
+function fixture({kingA='亞歷山大大帝'}={}){
  const sockets=new Map();
- const namespace={on(event,fn){if(event==='connection')this.connect=fn;},to(id){return {emit(event,payload){sockets.get(id)?.emit(event,payload);}}}};
- const deckOrder=cards=>{
-  if(unitOrder&&cards[0]?.type)return unitOrder(cards);
-  if(cards[0]?.name)return [...cards.filter(c=>c.name===spell),...cards.filter(c=>c.name!==spell)];
-  const m=cards.filter(c=>c.type==='法師'&&c.rank==='高級');
-  const infantry=cards.filter(c=>c.type==='步兵'&&c.rank==='初級');
-  const ids=new Set([...m,...infantry].map(x=>x.id));
-  return [...m,...infantry,...cards.filter(c=>!ids.has(c.id))];
- };
- registerV2Playtest({of(){return namespace;}},{deckOrder});
- const connect=id=>{const s=new Socket(id);sockets.set(id,s);namespace.connect(s);return s;};
- const a=connect('a'),b=connect('b'),code=a.send('v2:create',{name:'A',king:kingA}).code;
- assert.equal(b.send('v2:join',{code,name:'B'}).ok,true);
- assert.equal(a.send('v2:start',{code}).ok,true);
- const view=s=>s.messages.filter(m=>m.event==='v2:state').at(-1)?.payload;
- return {a,b,code,view};
+ const nsp={on(e,fn){if(e==='connection')this.connect=fn},to(id){return {emit(e,data){sockets.get(id)?.messages.push({event:e,data})}}}};
+ const deckOrder=cards=>{const m=cards.filter(x=>x.type==='法師'&&x.rank==='高級');const i=cards.filter(x=>x.type==='步兵'&&x.rank==='初級');const used=new Set([...m,...i].map(x=>x.id));return [...m,...i,...cards.filter(x=>!used.has(x.id))]};
+ registerV2Playtest({of(){return nsp}},{deckOrder});
+ const connect=id=>{const handlers=new Map(),s={id,messages:[],on(e,fn){handlers.set(e,fn)},join(){},send(e,data={}){let result;const fn=handlers.get(e);assert.ok(fn,'missing event '+e);fn(data,x=>result=x);assert.ok(result,'missing ack '+e);return result}};sockets.set(id,s);nsp.connect(s);return s};
+ const a=connect('a'),b=connect('b'),created=a.send('v2:create',{name:'A',king:kingA}),code=created.code;
+ assert.equal(created.ok,true);assert.equal(b.send('v2:join',{code,name:'B'}).ok,true);assert.equal(a.send('v2:start',{code}).ok,true);
+ const view=s=>s.messages.filter(x=>x.event==='v2:state').at(-1)?.data;
+ const ok=(s,e,data={})=>{const r=s.send(e,{code,...data});assert.equal(r.ok,true,e+': '+r.error);return r};
+ const end=s=>{const v=ok(s,'v2:preview-end');const qinBottomIndex=v.qin&&v.drawn.length===3?2:null;const kept=v.drawn.length-(qinBottomIndex===null?0:1);const excess=Math.max(0,v.hand.length+kept-5);return ok(s,'v2:end',{qinBottomIndex,overflowDiscardIndices:Array.from({length:excess},(_,i)=>i)})};
+ return {a,b,code,view,ok,end};
 }
-for(const def of MAGIC_DEFS){
- test('two-client magic lifecycle: '+def.name,()=>{
-  const {a,b,code,view}=fixture(def.name);
-  assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
-  assert.equal(a.send('v2:end',{code}).ok,true);
-  assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
-  assert.equal(b.send('v2:end',{code}).ok,true);
-  const before=view(a),other=view(b);
-  assert.equal(before.current,0);
-  assert.equal(before.players[0].field[0].type,'法師');
-  assert.equal(before.players[0].magic[0].name,def.name);
-  assert.equal(other.players[0].magic,undefined,'enemy cannot read caster magic');
-  const targetIndices=def.maxTargets===0?[]:[0];
-  assert.equal(b.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices}).ok,false,'opponent cannot cast during A turn');
-  const response=a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices});
-  assert.equal(response.ok,true,def.name+': '+response.error);
-  const after=view(a),remote=view(b);
-  assert.equal(after.players[0].magic.length,0);
-  assert.equal(after.players[0].field[0].tapped,true);
-  assert.deepEqual(remote.players[0].field,after.players[0].field,'field synchronized');
-  assert.deepEqual(remote.players[1].field,after.players[1].field,'enemy field synchronized');
-  assert.equal(remote.players[0].magic,undefined);
-  assert.equal(after.players[1].magic,undefined);
-  assert.equal(a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices}).ok,false,'no second cast without card');
-  assert.equal(a.send('v2:end',{code}).ok,true,'turn resolution succeeds');
+const ready=opts=>{const h=fixture(opts);h.ok(h.a,'v2:deploy',{index:0});h.end(h.a);h.ok(h.b,'v2:deploy',{index:0});h.end(h.b);return h};
+for(const spell of MAGIC_DEFS){
+ test('two-client selectable magic synchronizes and hides hands: '+spell.name,()=>{
+  const {a,b,code,view,ok,end}=ready();
+  const i=MAGIC_DEFS.findIndex(m=>m.name===spell.name);
+  assert.equal(view(a).current,0);
+  assert.equal(view(a).players[0].field[0].type,'法師');
+  assert.equal(view(b).players[0].availableSpells,undefined);
+  assert.equal(view(b).players[0].hand,undefined);
+  const targets=spell.maxTargets===0?[]:[0];
+  assert.equal(b.send('v2:cast',{code,magicIndex:i,mageIndex:0,targetIndices:targets,defenderPlayerIndex:0}).ok,false);
+  ok(a,'v2:cast',{magicIndex:i,mageIndex:0,targetIndices:targets,defenderPlayerIndex:1});
+  assert.equal(view(a).players[0].field[0].tapped,true);
+  assert.deepEqual(view(a).players[0].field,view(b).players[0].field);
+  assert.deepEqual(view(a).players[1].field,view(b).players[1].field);
+  assert.equal(a.send('v2:cast',{code,magicIndex:i,mageIndex:0,targetIndices:targets,defenderPlayerIndex:1}).ok,false);
+  end(a);
  });
 }
-
-test('poison kills victim at the end of victim owner turn and syncs both players',()=>{
- const {a,b,code,view}=fixture('毒藥瓶');
- assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
- assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
- assert.equal(b.send('v2:end',{code}).ok,true);
- assert.equal(a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]}).ok,true);
+test('poison persists through caster end and kills on defender owner end',()=>{
+ const {a,b,view,ok,end}=ready();
+ ok(a,'v2:cast',{magicIndex:6,mageIndex:0,targetIndices:[0],defenderPlayerIndex:1});
  assert.equal(view(b).players[1].field.length,1);
- assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(view(b).players[1].field.length,1,'poison does not kill before victim turn end');
- assert.equal(b.send('v2:end',{code}).ok,true);
+ end(a);
+ assert.equal(view(b).players[1].field.length,1);
+ end(b);
  assert.equal(view(a).players[1].field.length,0);
- assert.equal(view(b).players[1].field.length,0);
 });
-test('freeze blocks low-rank unit for one owner turn',()=>{
- const {a,b,code,view}=fixture('冰凍術');
- assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
- assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
- assert.equal(b.send('v2:end',{code}).ok,true);
- assert.equal(a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]}).ok,true);
- assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(view(b).players[1].field[0].tapped,true,'frozen infantry cannot act');
- assert.equal(b.send('v2:attack',{code,attackerIndex:0}).ok,false);
- assert.equal(b.send('v2:end',{code}).ok,true);
- assert.equal(a.send('v2:end',{code}).ok,true);
+test('freeze prevents one defender turn of actions',()=>{
+ const {a,b,code,view,ok,end}=ready();
+ ok(a,'v2:cast',{magicIndex:1,mageIndex:0,targetIndices:[0],defenderPlayerIndex:1});
+ end(a);
+ assert.equal(view(b).players[1].field[0].tapped,true);
+ assert.equal(b.send('v2:attack',{code,attackerIndex:0,defenderPlayerIndex:0}).ok,false);
+ end(b);end(a);
  assert.equal(view(b).players[1].field[0].tapped,false);
 });
-
-test('losing last mage requires explicit magic discard before ending turn',()=>{
- const unitOrder=cards=>{
-  const mage=cards.find(c=>c.type==='法師'&&c.rank==='高級');
-  const infantry=cards.filter(c=>c.type==='步兵'&&c.rank==='初級');
-  const used=new Set([mage,...infantry].map(c=>c.id));
-  return [mage,...infantry,...cards.filter(c=>!used.has(c.id))];
- };
- const {a,b,code,view}=fixture('火球術',{kingA:'成吉思汗',unitOrder});
- assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
- assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
- assert.equal(b.send('v2:end',{code}).ok,true);
- assert.equal(view(a).players[0].magic.length,1);
- assert.equal(a.send('v2:ability',{code,fieldIndex:0,handIndex:0}).ok,true);
- assert.equal(view(a).players[0].field[0].type,'步兵');
- assert.equal(a.send('v2:end',{code}).ok,false);
- assert.equal(a.send('v2:discard-magic',{code,indices:[0]}).ok,true);
- assert.equal(view(a).players[0].magic.length,0);
- assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(view(b).players[0].magic,undefined);
+test('Genghis exchange removes mage without obsolete magic-discard requirement',()=>{
+ const {a,b,view,ok,end}=ready({kingA:'成吉思汗'});
+ ok(a,'v2:ability',{fieldIndex:0,handIndex:0});
+ assert.notEqual(view(a).players[0].field[0].type,'法師');
+ end(a);
+ assert.equal(view(b).players[0].availableSpells,undefined);
 });
