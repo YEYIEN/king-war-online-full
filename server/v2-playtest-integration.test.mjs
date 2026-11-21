@@ -101,3 +101,17 @@ test('pending king attack blocks turn progression and other actions',()=>{
  ok(1,'v2:respond-attack',{code,handIndex:null});
  assert.equal(view(0).pendingAttack,null);
 });
+
+test('unit losses and Louis sacrifice preserve the shared 60-card inventory',()=>{
+ const h=harness(2),{ok,code,view}=h;
+ ok(0,'v2:deploy',{code,index:0});
+ ok(0,'v2:end',{code,overflowDiscardIndices:[0]});
+ ok(1,'v2:deploy',{code,index:0});
+ ok(1,'v2:end',{code,overflowDiscardIndices:[0]});
+ ok(0,'v2:attack',{code,attackerIndex:0,defenderIndex:0,defenderPlayerIndex:1});
+ // Every state emission now checks that the deck, discard, hands and fields
+ // contain exactly 60 unique unit IDs; any lost/duplicated unit fails the ack.
+ ok(0,'v2:end',{code,overflowDiscardIndices:[0,1]});
+ ok(1,'v2:ability',{code,fieldIndex:0});
+ assert.equal(view(1).players[1].field.length,0);
+});
