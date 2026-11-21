@@ -25,4 +25,4 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: npm --prefix client install --no-audit --no-fund
-      - run: node --test tests/v2-network.test.mjs
+      - run: node --test tests/v2-network.test.mjs tests/v2-magic-network.test.mjs
