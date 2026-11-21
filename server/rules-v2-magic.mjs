@@ -19,10 +19,10 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  const field=def.target==='self'?a.field:b.field;
  if(def.maxTargets===0){if(targetIndices.length)throw Error('No targets allowed');}
  else if(targetIndices.length<1||targetIndices.length>def.maxTargets||targetIndices.some(i=>i>=field.length))throw Error('Invalid target count');
- if(magic.name==='冰凍術'&&targetIndices.some(i=>field[i].status.includes('冰凍')))throw Error('Freeze cannot stack');
- if(magic.name==='燃血術'&&a.hp<=3)throw Error('Insufficient HP');
+ if(magic==='冰凍術'&&targetIndices.some(i=>field[i].status.includes('冰凍')))throw Error('Freeze cannot stack');
+ if(magic==='燃血術'&&a.hp<=3)throw Error('Insufficient HP');
  const castingMageId=mage.id;const dead=new Set();const add=(u,status)=>{if(!u.status.includes(status))u.status.push(status)};
- for(const i of targetIndices){const u=field[i];switch(magic.name){
+ for(const i of targetIndices){const u=field[i];switch(magic){
  case '火球術':if(u.rank==='初級')dead.add(i);else if(!u.halfReadyUntilOwnerTurn){u.modifier=(u.modifier||0)-1;u.halfReadyUntilOwnerTurn=true}break;
  case '冰凍術':add(u,'冰凍');break;
  case '力量術':u.modifier=(u.modifier||0)+1;add(u,'力量術');break;
@@ -31,7 +31,7 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  case '毒藥瓶':add(u,'下回合死亡');break;
  case '燃血術':if(u.tapped||u.justDeployed)throw Error('Target already acted');a.hp-=3;u.modifier=(u.modifier||0)+2;add(u,'燃血術');break;
  }}
- if(magic.name==='流星雨')b.field.forEach((u,i)=>{if(u.rank==='初級')dead.add(i)});if(magic.name==='天殞術')dead.add(targetIndices[0]);
+ if(magic==='流星雨')b.field.forEach((u,i)=>{if(u.rank==='初級')dead.add(i)});if(magic==='天殞術')dead.add(targetIndices[0]);
  field.splice(0,field.length,...field.filter((_,i)=>!dead.has(i)));
  const survivingMage=a.field.find(u=>u===mage||(castingMageId!==undefined&&u.id===castingMageId));if(survivingMage)survivingMage.tapped=true;
  a.magicCastThisTurn=true;
