@@ -29,3 +29,21 @@ test('socket two-player flow: room, join, start, deploy, alternating turns and g
  assert.equal(state(b).current,1);
  assert.equal((await a.send('v2:end',{code})).ok,false);
 });
+
+test('selected kings and ability validation through socket',async()=>{
+ const {connect}=setup(),a=connect('kingA'),b=connect('kingB');
+ const c=(await a.send('v2:create',{name:'Louis',king:'路易十四'})).code;
+ assert.equal((await b.send('v2:join',{code:c,name:'Genghis',king:'成吉思汗'})).ok,true);
+ assert.equal((await a.send('v2:start',{code:c})).ok,true);
+ assert.equal(state(a).players[0].king,'路易十四');
+ assert.equal(state(b).players[1].king,'成吉思汗');
+ assert.equal((await a.send('v2:ability',{code:c,fieldIndex:0})).ok,false,'cannot sacrifice absent unit');
+ assert.equal((await a.send('v2:deploy',{code:c,index:0})).ok,true);
+ assert.equal((await a.send('v2:ability',{code:c,fieldIndex:0})).ok,false,'cannot sacrifice freshly deployed unit');
+ assert.equal((await a.send('v2:end',{code:c})).ok,true);
+ assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,false,'cannot swap without field unit');
+ assert.equal((await b.send('v2:deploy',{code:c,index:0})).ok,true);
+ assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,true);
+ assert.equal(state(b).players[1].abilityUsed,true);
+ assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,false);
+});
