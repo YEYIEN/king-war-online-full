@@ -20,9 +20,12 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
    const io=new Server(http);registerV2Playtest(io,{deckOrder:ordered(spell.name)});
    await new Promise(r=>http.listen(0,'127.0.0.1',r));
    const ctx=await browser.newContext(),a=await ctx.newPage(),b=await ctx.newPage();
+   a.setDefaultTimeout(8000);b.setDefaultTimeout(8000);
+   console.log('BROWSER SPELL',spell.name);
    try{
     const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
     await Promise.all([a.goto(url),b.goto(url)]);
+    console.log('loaded',spell.name);
     for(const page of [a,b])page.on('dialog',async dialog=>{if(dialog.type()==='confirm')await dialog.dismiss();else await dialog.accept('1')});
     await a.getByRole('button',{name:'建立房間'}).click();
     await a.waitForFunction(()=>document.querySelector('#code').value.length>0);
@@ -30,13 +33,15 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
     await b.locator('#code').fill(code);
     await b.getByRole('button',{name:'加入房間'}).click();
     await a.getByRole('button',{name:'開始對戰'}).click();
-    await a.waitForFunction(()=>state?.status==='playing');
+    await a.waitForFunction(()=>state?.status==='playing',{timeout:8000});
+    console.log('started',spell.name);
     await a.locator('button[onclick="deploy(0)"]').click();
     await a.getByRole('button',{name:'結束回合'}).click();
     await b.waitForFunction(()=>state?.current===1);
     await b.locator('button[onclick="deploy(0)"]').click();
     await b.getByRole('button',{name:'結束回合'}).click();
-    await a.waitForFunction(()=>state?.current===0&&state?.players[0]?.magic?.length===1);
+    await a.waitForFunction(()=>state?.current===0&&state?.players[0]?.magic?.length===1,{timeout:8000});
+    console.log('drawn',spell.name);
     await a.locator('button[onclick="cast(0)"]').click();
     await a.waitForFunction(()=>state?.players[0]?.magic?.length===0);
     await b.waitForFunction(()=>state?.log?.some(x=>x.includes('施放')));
