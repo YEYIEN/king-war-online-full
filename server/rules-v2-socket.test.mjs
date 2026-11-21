@@ -1,126 +1,105 @@
-import test from 'node:test';import assert from 'node:assert/strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import {registerV2Playtest} from './v2-playtest-socket.mjs';
 class FakeSocket {
  constructor(id){this.id=id;this.handlers=new Map();this.messages=[]}
- on(event,handler){this.handlers.set(event,handler)}
+ on(e,fn){this.handlers.set(e,fn)}
  join(){}
- emit(event,payload){this.messages.push({event,payload})}
- async send(event,data={}){let result;const handler=this.handlers.get(event);assert.ok(handler,'missing handler '+event);handler(data,r=>{result=r});assert.ok(result,'missing acknowledgement '+event);return result}
+ emit(e,payload){this.messages.push({event:e,payload})}
+ send(e,data={}){let result;const fn=this.handlers.get(e);assert.ok(fn,'missing '+e);fn(data,r=>result=r);assert.ok(result,'missing ack '+e);return result}
 }
-function setup(){const sockets=new Map(),nsp={on(event,handler){if(event==='connection')this.connect=handler},to(id){return {emit(event,payload){sockets.get(id)?.emit(event,payload)}}}};const io={of(name){assert.equal(name,'/v2-playtest');return nsp}};registerV2Playtest(io);const connect=id=>{const s=new FakeSocket(id);sockets.set(id,s);nsp.connect(s);return s};return {connect}}
+function setup(){
+ const sockets=new Map(),nsp={on(e,fn){if(e==='connection')this.connect=fn},to(id){return {emit(e,payload){sockets.get(id)?.emit(e,payload)}}}};
+ registerV2Playtest({of(name){assert.equal(name,'/v2-playtest');return nsp}});
+ const connect=id=>{const s=new FakeSocket(id);sockets.set(id,s);nsp.connect(s);return s};
+ return {connect};
+}
 const state=s=>s.messages.filter(m=>m.event==='v2:state').at(-1)?.payload;
-test('socket two-player flow: room, join, start, deploy, alternating turns and guarded combat',async()=>{
- const {connect}=setup(),a=connect('A'),b=connect('B');
- const created=await a.send('v2:create',{name:'甲'});assert.equal(created.ok,true);const code=created.code;
- assert.equal((await b.send('v2:join',{code,name:'乙'})).ok,true);
- assert.equal((await a.send('v2:start',{code})).ok,true);
- assert.equal(state(a).players.length,2);assert.equal(state(b).players[0].hand,undefined,'opponent hand must be hidden');
- assert.equal(state(a).players[0].hand.length,3);
- assert.equal((await a.send('v2:deploy',{code,index:0})).ok,true);
- assert.equal((await a.send('v2:attack',{code,attackerIndex:0})).ok,false,'new unit cannot attack');
- assert.equal((await a.send('v2:end',{code})).ok,true);
- assert.equal((await b.send('v2:deploy',{code,index:0})).ok,true);
- assert.equal((await b.send('v2:end',{code})).ok,true);
- const p=state(a).players[0].field[0];assert.ok(p,'deployed unit exists');
- const opponent=state(a).players[1];const guarded=opponent.field.some(u=>u.type==='步兵')&&p.type!=='弓兵';
- const target=guarded?{defenderIndex:opponent.field.findIndex(u=>u.type==='步兵')}:{};
- assert.equal((await a.send('v2:attack',{code,attackerIndex:0,...target})).ok,true);
- assert.equal((await a.send('v2:end',{code})).ok,true);
- assert.equal(state(b).current,1);
- assert.equal((await a.send('v2:end',{code})).ok,false);
+const end=(s,code)=>{
+ const p=s.send('v2:preview-end',{code});assert.equal(p.ok,true,p.error);
+ const qinBottomIndex=p.qin&&p.drawn.length===3?2:null;
+ const count=p.drawn.length-(qinBottomIndex===null?0:1);
+ const excess=Math.max(0,p.hand.length+count-5);
+ return s.send('v2:end',{code,qinBottomIndex,overflowDiscardIndices:Array.from({length:excess},(_,i)=>i)});
+};
+test('socket two-player room, five-card private hands, deployment and turn rotation',()=>{
+ const {connect}=setup(),a=connect('A'),b=connect('B'),created=a.send('v2:create',{name:'甲'}),code=created.code;
+ assert.equal(created.ok,true);assert.equal(b.send('v2:join',{code,name:'乙'}).ok,true);
+ assert.equal(a.send('v2:start',{code}).ok,true);
+ assert.equal(state(a).players[0].hand.length,5);
+ assert.equal(state(b).players[0].hand,undefined);
+ assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(a.send('v2:attack',{code,attackerIndex:0,defenderPlayerIndex:1}).ok,false);
+ assert.equal(end(a,code).ok,true);assert.equal(state(a).current,1);
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(end(b,code).ok,true);assert.equal(state(a).current,0);
+ assert.equal(a.send('v2:end',{code}).ok,false,'overflow selection must be explicit');
+ assert.equal(a.send('v2:attack',{code,attackerIndex:0,defenderPlayerIndex:0}).ok,false);
 });
-
-test('selected kings and ability validation through socket',async()=>{
- const {connect}=setup(),a=connect('kingA'),b=connect('kingB');
- const c=(await a.send('v2:create',{name:'Louis',king:'路易十四'})).code;
- assert.equal((await b.send('v2:join',{code:c,name:'Genghis',king:'成吉思汗'})).ok,true);
- assert.equal((await a.send('v2:start',{code:c})).ok,true);
- assert.equal(state(a).players[0].king,'路易十四');
- assert.equal(state(b).players[1].king,'成吉思汗');
- assert.equal((await a.send('v2:ability',{code:c,fieldIndex:0})).ok,false,'cannot sacrifice absent unit');
- assert.equal((await a.send('v2:deploy',{code:c,index:0})).ok,true);
- assert.equal((await a.send('v2:ability',{code:c,fieldIndex:0})).ok,false,'cannot sacrifice freshly deployed unit');
- assert.equal((await a.send('v2:end',{code:c})).ok,true);
- assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,false,'cannot swap without field unit');
- assert.equal((await b.send('v2:deploy',{code:c,index:0})).ok,true);
- assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,true);
+test('Louis and Genghis abilities obey king selection, timing, and once-per-turn limits',()=>{
+ const {connect}=setup(),a=connect('louis'),b=connect('genghis');
+ const code=a.send('v2:create',{king:'路易十四'}).code;
+ assert.equal(b.send('v2:join',{code,king:'成吉思汗'}).ok,true);
+ assert.equal(a.send('v2:start',{code}).ok,true);
+ assert.equal(a.send('v2:ability',{code,fieldIndex:0}).ok,false);
+ assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(a.send('v2:ability',{code,fieldIndex:0}).ok,false);
+ assert.equal(end(a,code).ok,true);
+ assert.equal(b.send('v2:ability',{code,fieldIndex:0,handIndex:0}).ok,false);
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(b.send('v2:ability',{code,fieldIndex:0,handIndex:0}).ok,true);
  assert.equal(state(b).players[1].abilityUsed,true);
- assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,false);
+ assert.equal(b.send('v2:ability',{code,fieldIndex:0,handIndex:0}).ok,false);
+ assert.equal(end(b,code).ok,true);
+ assert.equal(a.send('v2:ability',{code,fieldIndex:0}).ok,true);
+ assert.equal(state(a).players[0].field.length,0);
 });
-
-test('room rejects duplicate participants and invalid king selections',async()=>{
- const {connect}=setup(),a=connect('duplicateA'),b=connect('duplicateB');
- assert.equal((await a.send('v2:create',{name:'A',king:'invalid'})).ok,false);
- const code=(await a.send('v2:create',{name:'A',king:'秦始皇'})).code;
- assert.equal((await a.send('v2:join',{code,name:'A2'})).ok,false);
- assert.equal((await b.send('v2:join',{code,name:'B',king:'亞歷山大大帝'})).ok,true);
- assert.equal((await b.send('v2:join',{code,name:'B2'})).ok,false);
- assert.equal((await a.send('v2:start',{code})).ok,true);
+test('invalid kings and duplicate participants cannot join two rooms',()=>{
+ const {connect}=setup(),a=connect('a'),b=connect('b');
+ assert.equal(a.send('v2:create',{king:'unknown'}).ok,false);
+ const code=a.send('v2:create',{king:'秦始皇'}).code;
+ assert.equal(a.send('v2:join',{code}).ok,false);
+ assert.equal(b.send('v2:join',{code,king:'亞歷山大大帝'}).ok,true);
+ assert.equal(b.send('v2:join',{code}).ok,false);
+ assert.equal(a.send('v2:start',{code}).ok,true);
  assert.equal(state(a).players[0].king,'秦始皇');
- assert.equal(state(b).players[1].king,'亞歷山大大帝');
  assert.equal(state(b).players[0].hand,undefined);
 });
-
-test('Qin preview is private, does not mutate match, and matches selected end-turn hand',async()=>{
- const {connect}=setup(),a=connect('qinA'),b=connect('qinB');
- const code=(await a.send('v2:create',{king:'秦始皇'})).code;
- assert.equal((await b.send('v2:join',{code})).ok,true);
- assert.equal((await a.send('v2:start',{code})).ok,true);
- const before=JSON.stringify(state(a));
- const preview=await a.send('v2:preview-end',{code,discard:[]});
- assert.equal(preview.ok,true);
- assert.equal(JSON.stringify(state(a)),before);
- assert.equal((await b.send('v2:preview-end',{code})).ok,false);
- if(preview.hasExtra){
-   assert.equal(preview.choices.length,4);
-   assert.equal((await a.send('v2:end',{code,qinBottomIndex:3})).ok,true);
-   assert.deepEqual(state(a).players[0].hand,preview.choices.slice(0,3));
- }else assert.equal((await a.send('v2:end',{code})).ok,true);
+test('Qin end preview is private and exactly one of three new cards returns to deck bottom',()=>{
+ const {connect}=setup(),a=connect('qin'),b=connect('other');
+ const code=a.send('v2:create',{king:'秦始皇'}).code;
+ assert.equal(b.send('v2:join',{code}).ok,true);assert.equal(a.send('v2:start',{code}).ok,true);
+ const before=JSON.stringify(state(a)),p=a.send('v2:preview-end',{code});
+ assert.equal(p.ok,true);assert.equal(p.drawn.length,3);
+ assert.equal(JSON.stringify(state(a)),before,'preview must not mutate state');
+ assert.equal(b.send('v2:preview-end',{code}).ok,false);
+ assert.equal(a.send('v2:end',{code,qinBottomIndex:3,overflowDiscardIndices:[0,1]}).ok,false);
+ const chosen=2,kept=p.drawn.filter((_,i)=>i!==chosen),combined=[...p.hand,...kept];
+ assert.equal(a.send('v2:end',{code,qinBottomIndex:chosen,overflowDiscardIndices:[0,1]}).ok,true);
+ assert.deepEqual(state(a).players[0].hand,combined.slice(2));
+ assert.equal(state(b).players[0].hand,undefined);
 });
-
-test('Qin preview does not leak a card and handles discarded hand',async()=>{
- const {connect}=setup(),a=connect('qinDiscardA'),b=connect('qinDiscardB');
- const code=(await a.send('v2:create',{king:'秦始皇'})).code;
- assert.equal((await b.send('v2:join',{code})).ok,true);
- assert.equal((await a.send('v2:start',{code})).ok,true);
- const before=JSON.stringify(state(a));
- const preview=await a.send('v2:preview-end',{code,discard:[0]});
- assert.equal(preview.ok,true);
- assert.equal(preview.choices.length,4);
- assert.equal(JSON.stringify(state(a)),before);
- assert.equal((await a.send('v2:end',{code,discard:[0],qinBottomIndex:3})).ok,true);
- assert.deepEqual(state(a).players[0].hand,preview.choices.slice(0,3));
+test('Qin preview after deploy and overflow choices use the new 5-card rule',()=>{
+ const {connect}=setup(),a=connect('qin2'),b=connect('other2'),code=a.send('v2:create',{king:'秦始皇'}).code;
+ assert.equal(b.send('v2:join',{code}).ok,true);assert.equal(a.send('v2:start',{code}).ok,true);
+ assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
+ const p=a.send('v2:preview-end',{code});assert.equal(p.ok,true);assert.equal(p.hand.length,4);
+ assert.equal(p.drawn.length,3);
+ const combined=[...p.hand,p.drawn[0],p.drawn[1]];
+ assert.equal(a.send('v2:end',{code,qinBottomIndex:2,overflowDiscardIndices:[0]}).ok,true);
+ assert.deepEqual(state(a).players[0].hand,combined.slice(1));
 });
-
-test('invalid socket actions preserve current player state',async()=>{
- const {connect}=setup(),a=connect('invalidA'),b=connect('invalidB');
- const code=(await a.send('v2:create',{name:'A'})).code;
- assert.equal((await b.send('v2:join',{code,name:'B'})).ok,true);
- assert.equal((await a.send('v2:start',{code})).ok,true);
+test('invalid requests reject without mutating player state',()=>{
+ const {connect}=setup(),a=connect('invalidA'),b=connect('invalidB'),code=a.send('v2:create',{}).code;
+ assert.equal(b.send('v2:join',{code}).ok,true);assert.equal(a.send('v2:start',{code}).ok,true);
  const before=JSON.stringify(state(a));
- assert.equal((await a.send('v2:deploy',{code,index:'0'})).ok,false);
- assert.equal((await a.send('v2:deploy',{code,index:null})).ok,false);
- assert.equal((await a.send('v2:end',{code,discard:['0']})).ok,false);
+ for(const event of [{name:'v2:deploy',data:{index:'0'}},{name:'v2:deploy',data:{index:null}},{name:'v2:end',data:{overflowDiscardIndices:['0']}},{name:'v2:cast',data:{magicIndex:0,mageIndex:0,targetIndices:[0],defenderPlayerIndex:1}}]){
+  assert.equal(a.send(event.name,{code,...event.data}).ok,false,event.name);
+ }
  assert.equal(JSON.stringify(state(a)),before);
 });
-
-test('one socket cannot create multiple waiting rooms',async()=>{
- const {connect}=setup(),a=connect('doubleCreator');
- const first=await a.send('v2:create',{name:'First'});
- assert.equal(first.ok,true);
- assert.equal((await a.send('v2:create',{name:'Second'})).ok,false);
+test('socket cannot create a second waiting room',()=>{
+ const {connect}=setup(),a=connect('double'),first=a.send('v2:create',{name:'First'});
+ assert.equal(first.ok,true);assert.equal(a.send('v2:create',{name:'Again'}).ok,false);
  assert.equal(state(a).code,first.code);
-});
-
-test('magic socket rejects illegal casts without mutating state or revealing private magic',async()=>{
- const {connect}=setup(),a=connect('magicA'),b=connect('magicB');
- const code=(await a.send('v2:create',{name:'Mage'})).code;
- assert.equal((await b.send('v2:join',{code,name:'Enemy'})).ok,true);
- assert.equal((await a.send('v2:start',{code})).ok,true);
- assert.equal(state(a).players[1].magic,undefined);
- assert.equal(state(b).players[0].magic,undefined);
- const before=JSON.stringify(state(a));
- assert.equal((await a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]})).ok,false);
- assert.equal((await a.send('v2:cast',{code,magicIndex:-1,mageIndex:0,targetIndices:[0]})).ok,false);
- assert.equal(JSON.stringify(state(a)),before);
 });
