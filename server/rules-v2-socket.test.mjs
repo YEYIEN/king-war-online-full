@@ -47,3 +47,16 @@ test('selected kings and ability validation through socket',async()=>{
  assert.equal(state(b).players[1].abilityUsed,true);
  assert.equal((await b.send('v2:ability',{code:c,fieldIndex:0,handIndex:0})).ok,false);
 });
+
+test('room rejects duplicate participants and invalid king selections',async()=>{
+ const {connect}=setup(),a=connect('duplicateA'),b=connect('duplicateB');
+ assert.equal((await a.send('v2:create',{name:'A',king:'invalid'})).ok,false);
+ const code=(await a.send('v2:create',{name:'A',king:'秦始皇'})).code;
+ assert.equal((await a.send('v2:join',{code,name:'A2'})).ok,false);
+ assert.equal((await b.send('v2:join',{code,name:'B',king:'亞歷山大大帝'})).ok,true);
+ assert.equal((await b.send('v2:join',{code,name:'B2'})).ok,false);
+ assert.equal((await a.send('v2:start',{code})).ok,true);
+ assert.equal(state(a).players[0].king,'秦始皇');
+ assert.equal(state(b).players[1].king,'亞歷山大大帝');
+ assert.equal(state(b).players[0].hand,undefined);
+});
