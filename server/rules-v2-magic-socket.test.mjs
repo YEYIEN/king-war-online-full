@@ -54,3 +54,32 @@ for(const def of MAGIC_DEFS){
   assert.equal(a.send('v2:end',{code}).ok,true,'turn resolution succeeds');
  });
 }
+
+test('poison kills victim at the end of victim owner turn and syncs both players',()=>{
+ const {a,b,code,view}=fixture('毒藥瓶');
+ assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(b.send('v2:end',{code}).ok,true);
+ assert.equal(a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]}).ok,true);
+ assert.equal(view(b).players[1].field.length,1);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(view(b).players[1].field.length,1,'poison does not kill before victim turn end');
+ assert.equal(b.send('v2:end',{code}).ok,true);
+ assert.equal(view(a).players[1].field.length,0);
+ assert.equal(view(b).players[1].field.length,0);
+});
+test('freeze prevents enemy action for one full owner turn',()=>{
+ const {a,b,code,view}=fixture('冰凍術');
+ assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(b.send('v2:end',{code}).ok,true);
+ assert.equal(a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]}).ok,true);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(view(b).players[1].field[0].tapped,true);
+ assert.equal(b.send('v2:attack',{code,attackerIndex:0}).ok,false);
+ assert.equal(b.send('v2:end',{code}).ok,true);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(view(b).players[1].field[0].tapped,false);
+});
