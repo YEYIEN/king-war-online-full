@@ -24,7 +24,7 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  else if(targetIndices.length<1||targetIndices.length>def.maxTargets||targetIndices.some(i=>i>=field.length))throw Error('Invalid target count');
  if(magic.name==='冰凍術'&&targetIndices.some(i=>field[i].status.includes('冰凍')))throw Error('Freeze cannot stack');
  if(magic.name==='燃血術'&&a.hp<=3)throw Error('Insufficient HP');
- const dead=new Set();const add=(u,status)=>{if(!u.status.includes(status))u.status.push(status)};
+ const castingMageId=mage.id;const dead=new Set();const add=(u,status)=>{if(!u.status.includes(status))u.status.push(status)};
  for(const i of targetIndices){const u=field[i];switch(magic.name){
  case '火球術':case '流星雨':if(u.rank==='初級')dead.add(i);else u.modifier=(u.modifier||0)-1;break;
  case '冰凍術':if(u.rank==='高級')u.modifier=(u.modifier||0)-1;else add(u,'冰凍');break;
@@ -36,8 +36,8 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  }}
  if(magic.name==='天殞術')b.field.forEach((u,i)=>{if(u.rank!=='高級')dead.add(i);else add(u,'冰凍')});
  field.splice(0,field.length,...field.filter((_,i)=>!dead.has(i)));
- a.field[mageIndex]&&(a.field[mageIndex].tapped=true);
+ const survivingMage=a.field.find(u=>u===mage||(castingMageId!==undefined&&u.id===castingMageId));if(survivingMage)survivingMage.tapped=true;
  a.magic.splice(magicIndex,1);
  return {caster:a,opponent:b,discarded:magic};
 }
-export function tickMagicTurnV2(player,phase){const p={...player,field:player.field.map(u=>({...u,status:[...(u.status||[])]}))};if(phase==='start')p.field.forEach(u=>{if(u.status.includes('冰凍')){u.tapped=true;u.status=u.status.filter(x=>x!=='冰凍')}else u.tapped=false;for(const s of ['增強術','增強傷害','虛弱禁攻'])if(u.status.includes(s)){u.status=u.status.filter(x=>x!==s);if(s==='增強術')u.modifier=(u.modifier||0)-1}});if(phase==='end'){p.field=p.field.filter(u=>!u.status.includes('下回合死亡'));p.field.forEach(u=>{if(u.status.includes('力量術')){u.modifier=(u.modifier||0)-1;u.status=u.status.filter(x=>x!=='力量術')}})}return p;}
+export function tickMagicTurnV2(player,phase){const p={...player,field:player.field.map(u=>({...u,status:[...(u.status||[])]}))};if(phase==='start')p.field.forEach(u=>{u.tapped=u.status.includes('冰凍')||u.status.includes('虛弱禁攻');u.status=u.status.filter(x=>x!=='冰凍'&&x!=='虛弱禁攻');for(const s of ['增強術','增強傷害'])if(u.status.includes(s)){u.status=u.status.filter(x=>x!==s);if(s==='增強術')u.modifier=(u.modifier||0)-1}});if(phase==='end'){p.field=p.field.filter(u=>!u.status.includes('下回合死亡'));p.field.forEach(u=>{if(u.status.includes('力量術')){u.modifier=(u.modifier||0)-1;u.status=u.status.filter(x=>x!=='力量術')}})}return p;}
