@@ -11,7 +11,7 @@ export const MAGIC_DEFS=[
 {name:'天殞術',count:1,level:3,target:'enemy',maxTargets:0}
 ];
 export function magicComposition(){return MAGIC_DEFS.flatMap(d=>Array.from({length:d.count},()=>({...d})));}
-export function drawMagicV2(player,deck,discard){const p={...player,magic:[...player.magic]},d=[...deck],trash=[...discard];const available=Math.max(0,Math.min(3,magicCapacity(p.field))-p.magic.length);for(let i=0;i<available;i++){if(!d.length&&trash.length)d.push(...trash.splice(0));if(!d.length)break;p.magic.push(d.shift());}return {player:p,deck:d,discard:trash};}
+export function drawMagicV2(player,deck,discard){const p={...player,magic:[...player.magic]},d=[...deck],trash=[...discard];const available=magicCapacity(p.field)>0?Math.max(0,Math.min(3-p.magic.length,magicCapacity(p.field))):0;for(let i=0;i<available;i++){if(!d.length&&trash.length)d.push(...trash.splice(0));if(!d.length)break;p.magic.push(d.shift());}return {player:p,deck:d,discard:trash};}
 export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[]){
  const a={...caster,field:caster.field.map(u=>({...u,status:[...(u.status||[])]})),magic:[...caster.magic]},b={...opponent,field:opponent.field.map(u=>({...u,status:[...(u.status||[])]}))};
  if(!Number.isInteger(magicIndex)||magicIndex<0||magicIndex>=a.magic.length)throw Error('Invalid magic card');
@@ -23,7 +23,7 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  if(def.maxTargets===0){if(targetIndices.length)throw Error('No targets allowed');}
  else if(targetIndices.length<1||targetIndices.length>def.maxTargets||targetIndices.some(i=>i>=field.length))throw Error('Invalid target count');
  if(magic.name==='冰凍術'&&targetIndices.some(i=>field[i].status.includes('冰凍')))throw Error('Freeze cannot stack');
- if(magic.name==='燃血術'&&a.hp<=3)throw Error('Insufficient HP');
+ if(magic.name==='燃血術'&&a.hp<3)throw Error('Insufficient HP');
  const castingMageId=mage.id;const dead=new Set();const add=(u,status)=>{if(!u.status.includes(status))u.status.push(status)};
  for(const i of targetIndices){const u=field[i];switch(magic.name){
  case '火球術':case '流星雨':if(u.rank==='初級')dead.add(i);else u.modifier=(u.modifier||0)-1;break;
