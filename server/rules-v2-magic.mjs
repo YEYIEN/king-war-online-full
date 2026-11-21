@@ -1,4 +1,3 @@
-import {magicCapacity} from './rules-v2-core.mjs';
 export const MAGIC_DEFS=[
 {name:'火球術',count:2,level:1,target:'enemy',maxTargets:1},
 {name:'冰凍術',count:2,level:1,target:'enemy',maxTargets:1},
@@ -11,11 +10,9 @@ export const MAGIC_DEFS=[
 {name:'天殞術',count:1,level:3,target:'enemy',maxTargets:1}
 ];
 export function magicComposition(){return MAGIC_DEFS.flatMap(d=>Array.from({length:d.count},()=>({...d})));}
-export function drawMagicV2(player,deck,discard){const p={...player,magic:[...player.magic]},d=[...deck],trash=[...discard];const available=Math.max(0,Math.min(3,magicCapacity(p.field))-p.magic.length);for(let i=0;i<available;i++){if(!d.length&&trash.length){d.push(...trash.splice(0));for(let j=d.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));[d[j],d[k]]=[d[k],d[j]]}}if(!d.length)break;p.magic.push(d.shift());}return {player:p,deck:d,discard:trash};}
 export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[]){
  const a={...caster,field:caster.field.map(u=>({...u,status:[...(u.status||[])]})),magic:[...caster.magic]},b={...opponent,field:opponent.field.map(u=>({...u,status:[...(u.status||[])]}))};
- if(!Number.isInteger(magicIndex)||magicIndex<0||magicIndex>=a.magic.length)throw Error('Invalid magic card');
- const magic=a.magic[magicIndex],def=MAGIC_DEFS.find(x=>x.name===magic.name);
+ const magic=typeof magicIndex==='string'?magicIndex:MAGIC_DEFS[magicIndex]?.name,def=MAGIC_DEFS.find(x=>x.name===magic);
  if(!def)throw Error('Unknown magic');if(a.magicCastThisTurn)throw Error('Only one magic per turn');
  const mage=a.field[mageIndex];if(!Number.isInteger(mageIndex)||!mage||mage.type!=='法師'||mage.tapped||({初級:1,中級:2,高級:3}[mage.rank]<def.level))throw Error('Mage cannot cast');
  if(!Array.isArray(targetIndices)||new Set(targetIndices).size!==targetIndices.length||targetIndices.some(i=>!Number.isInteger(i)||i<0))throw Error('Invalid targets');
@@ -37,7 +34,7 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  if(magic.name==='流星雨')b.field.forEach((u,i)=>{if(u.rank==='初級')dead.add(i)});if(magic.name==='天殞術')dead.add(targetIndices[0]);
  field.splice(0,field.length,...field.filter((_,i)=>!dead.has(i)));
  const survivingMage=a.field.find(u=>u===mage||(castingMageId!==undefined&&u.id===castingMageId));if(survivingMage)survivingMage.tapped=true;
- a.magic.splice(magicIndex,1);a.magicCastThisTurn=true;
- return {caster:a,opponent:b,discarded:magic};
+ a.magicCastThisTurn=true;
+ return {caster:a,opponent:b,spell:{name:magic,level:def.level}};
 }
 export function tickMagicTurnV2(player,phase){const p={...player,field:player.field.map(u=>({...u,status:[...(u.status||[])]}))};if(phase==='start')p.field.forEach(u=>{for(const debuff of ['虛弱降戰力'])if(u.status.includes(debuff)){u.modifier=(u.modifier||0)+u.status.filter(x=>x===debuff).length;u.status=u.status.filter(x=>x!==debuff)}u.tapped=u.status.includes('冰凍');u.status=u.status.filter(x=>x!=='冰凍');for(const s of ['增強術'])if(u.status.includes(s)){const count=u.status.filter(x=>x===s).length;u.status=u.status.filter(x=>x!==s);if(s==='增強術')u.modifier=(u.modifier||0)-count}});if(phase==='end'){p.field=p.field.filter(u=>!u.status.includes('下回合死亡'));p.field.forEach(u=>{for(const buff of ['力量術','燃血術'])if(u.status.includes(buff)){const count=u.status.filter(x=>x===buff).length;u.modifier=(u.modifier||0)-count*(buff==='燃血術'?2:1);u.status=u.status.filter(x=>x!==buff)}})}return p;}
