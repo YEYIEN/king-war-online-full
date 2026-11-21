@@ -66,10 +66,13 @@ test('five king powers: real Chromium two-player controls and synchronized state
      }else if(king==='屋大維奧古斯都'){
       await a.getByRole('button',{name:'結束回合'}).click();
       await b.waitForFunction(()=>state.current===1);
+      const before=await b.evaluate(()=>({attacker:state.players[1].field[0],defender:state.players[0].field[0],current:state.current,logLength:state.log.length}));
+      console.log('AUGUSTUS BEFORE',JSON.stringify(before));
       await b.locator('button[onclick="select(0)"]').click();
       await b.locator('button[onclick="hit(0,0)"]').click();
+      await b.waitForFunction(n=>state.log.length>n||Boolean(document.querySelector('#error')?.textContent),before.logLength);
       const snapshot=await b.evaluate(()=>({error:document.querySelector('#error')?.textContent,log:state.log.slice(-3),turn:state.turn,current:state.current,attacker:state.players[1].field,defender:state.players[0].field,defenderKing:state.players[0].king}));
-      console.log('AUGUSTUS BATTLE RESULT',JSON.stringify(snapshot));
+      console.log('AUGUSTUS AFTER',JSON.stringify(snapshot));
       assert.equal(snapshot.error,'','attack must not be rejected');
       assert.ok(snapshot.log.some(x=>x.includes('兵種戰鬥')),'battle must be resolved by server');
       assert.equal(snapshot.attacker.length,0,'equal-power attacker must die');
