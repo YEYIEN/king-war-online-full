@@ -89,7 +89,7 @@ test('multiple blood buffs expire without leftover power',()=>{
 
 test('enhancement and blood magic each increase king damage once',()=>{
  for(const spell of ['增強術','燃血術']){
-  const a=player({name:spell}),b={hp:24,field:[]};
+  const a=player({name:spell}),b={hp:24,field:[],hand:[],magic:[]};
   const cast=castMagicV2(a,b,0,0,[0]);
   const ready={...cast.caster,field:cast.caster.field.map(u=>({...u,tapped:false}))};
   const attack=kingAttackV2(ready,b,0);
