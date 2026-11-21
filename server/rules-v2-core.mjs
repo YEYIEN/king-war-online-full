@@ -1,6 +1,6 @@
 // Standalone V2 primitives; not wired to Socket.IO yet.
 export const KING_MAX_HP=24, UNIT_HAND_LIMIT=3, FIELD_LIMIT=3;
-export const COUNTER={步兵:'弓兵',弓兵:'騎兵',騎兵:'法師',法師:'步兵'};
+export const COUNTER={步兵:'弓兵',弓兵:'法師',法師:'騎兵',騎兵:'步兵'};
 export const POWER={初級:1,中級:2,高級:3};
 export const KING_DAMAGE={初級:1,中級:3,高級:5};
 export function unitComposition(){return ['步兵','弓兵','法師','騎兵'].flatMap(type=>Object.entries({初級:7,中級:5,高級:3}).flatMap(([rank,count])=>Array.from({length:count},()=>({type,rank}))));}
