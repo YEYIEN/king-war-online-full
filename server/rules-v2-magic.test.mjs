@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {MAGIC_DEFS,magicComposition,drawMagicV2,castMagicV2,tickMagicTurnV2} from './rules-v2-magic.mjs';
+const unit=(type='法師',rank='高級')=>({type,rank,tapped:false,justDeployed:false,status:[]});
+const player=(magic)=>({king:'秦始皇',hp:24,hand:[],magic:[magic],field:[unit()]});
+test('magic deck has all nine spells and correct counts',()=>{const d=magicComposition();assert.equal(d.length,16);for(const m of MAGIC_DEFS)assert.equal(d.filter(x=>x.name===m.name).length,m.count)});
+test('magic draw requires field mages and respects capacity',()=>{const p=player(null);p.magic=[];const r=drawMagicV2(p,magicComposition(),[]);assert.equal(r.player.magic.length,1);assert.equal(r.deck.length,15)});
+test('fireball kills junior target and consumes caster action',()=>{const a=player({name:'火球術'}),b={hp:24,field:[unit('步兵','初級')]};const r=castMagicV2(a,b,0,0,[0]);assert.equal(r.opponent.field.length,0);assert.equal(r.caster.magic.length,0);assert.equal(r.caster.field[0].tapped,true)});
+test('invalid mage, target and spell do not mutate inputs',()=>{const a=player({name:'火球術'}),b={hp:24,field:[unit('步兵','初級')]};const before=JSON.stringify([a,b]);assert.throws(()=>castMagicV2(a,b,0,1,[0]));assert.throws(()=>castMagicV2(a,b,0,0,[99]));assert.equal(JSON.stringify([a,b]),before)});
+test('poison removes target at turn end',()=>{const a=player({name:'毒藥瓶'}),b={hp:24,field:[unit('步兵','中級')]};const r=castMagicV2(a,b,0,0,[0]);assert.equal(tickMagicTurnV2(r.opponent,'end').field.length,0)});
+test('freeze cannot stack',()=>{const a=player({name:'冰凍術'}),b={hp:24,field:[unit('步兵','初級')]};b.field[0].status.push('冰凍');assert.throws(()=>castMagicV2(a,b,0,0,[0]))});
