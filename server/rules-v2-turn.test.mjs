@@ -39,3 +39,20 @@ test('failed interception reduces direct king damage by one',()=>{const a=startV
 test('half-ready cannot stack after repeated successful defenses',()=>{let d={...newV2Player('秦始皇'),field:[u('步兵','高級')]};for(let i=0;i<2;i++){const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級')]},i+1);d=battleV2(a,d,0,0).defender;}assert.equal(d.field[0].modifier,-1);assert.equal(startV2Turn(d,3).field[0].modifier,0);});
 
 test('interception is per attacking player and resets on defender turn',()=>{const attack=()=>startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('弓兵','初級')]},1);const d={...newV2Player('秦始皇'),hand:[u('步兵','初級'),u('步兵','初級'),u('步兵','初級')]};const first=interceptV2(attack(),d,0,0,'player1');assert.throws(()=>interceptV2(attack(),first.defender,0,0,'player1'),/already used/);const third=interceptV2(attack(),first.defender,0,0,'player3');assert.equal(third.defender.interceptionUsedBy.player3,true);const reset=startV2Turn(third.defender,2);assert.deepEqual(reset.interceptionUsedBy,{});});
+
+test('next-battle strength bonus is consumed after battle, not at turn end',()=>{
+ const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級',{id:'buffed',modifier:1,status:['力量術']})]},3);
+ const d={...newV2Player('秦始皇'),field:[u('步兵','初級',{id:'enemy'})]};
+ const result=battleV2(a,d,0,0);
+ assert.equal(result.result.attack,2);
+ assert.equal(result.attacker.field[0].modifier,0);
+ assert.equal(result.attacker.field[0].status.includes('力量術'),false);
+});
+test('next-battle blood bonus is consumed after battle',()=>{
+ const a=startV2Turn({...newV2Player('亞歷山大大帝'),field:[u('步兵','初級',{id:'blood',modifier:2,status:['燃血術']})]},3);
+ const d={...newV2Player('秦始皇'),field:[u('步兵','初級',{id:'enemy'})]};
+ const result=battleV2(a,d,0,0);
+ assert.equal(result.result.attack,3);
+ assert.equal(result.attacker.field[0].modifier,0);
+ assert.equal(result.attacker.field[0].status.includes('燃血術'),false);
+});
