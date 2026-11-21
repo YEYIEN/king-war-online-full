@@ -19,11 +19,12 @@ test('real TCP Socket.IO clients join and complete a two-player turn', {timeout:
   const created=await send(a,'v2:create',{name:'甲'});assert.equal(created.ok,true);
   const joined=await send(b,'v2:join',{code:created.code,name:'乙'});assert.equal(joined.ok,true);
   const started=await send(a,'v2:start',{code:created.code});assert.equal(started.ok,true);
+  const endTurn=async s=>{const preview=await send(s,'v2:preview-end',{code:created.code});assert.equal(preview.ok,true);const excess=Math.max(0,preview.hand.length+preview.drawn.length-5);return send(s,'v2:end',{code:created.code,overflowDiscardIndices:Array.from({length:excess},(_,i)=>i)});};
   const deployed=await send(a,'v2:deploy',{code:created.code,index:0});assert.equal(deployed.ok,true);
   const illegal=await send(a,'v2:attack',{code:created.code,attackerIndex:0});assert.equal(illegal.ok,false);
-  const ended=await send(a,'v2:end',{code:created.code});assert.equal(ended.ok,true);
+  const ended=await endTurn(a);assert.equal(ended.ok,true);
   const wrongTurn=await send(a,'v2:end',{code:created.code});assert.equal(wrongTurn.ok,false);
   const otherDeployed=await send(b,'v2:deploy',{code:created.code,index:0});assert.equal(otherDeployed.ok,true);
-  const otherEnded=await send(b,'v2:end',{code:created.code});assert.equal(otherEnded.ok,true);
+  const otherEnded=await endTurn(b);assert.equal(otherEnded.ok,true);
  }finally{await close()}
 });
