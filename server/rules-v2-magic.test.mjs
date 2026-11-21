@@ -75,3 +75,13 @@ test('recycled magic discard becomes a fresh draw deck',()=>{
  assert.equal(x.player.magic[0].id,'recycled');
  assert.equal(x.discard.length,0);
 });
+
+test('multiple blood buffs expire without leftover power',()=>{
+ const a=player({name:'燃血術'});a.field.push(unit('步兵','中級'));
+ const first=castMagicV2(a,{hp:24,field:[]},0,0,[1]);
+ const boosted=first.caster.field[1];
+ boosted.modifier+=1;boosted.status.push('燃血傷害');
+ const done=tickMagicTurnV2(first.caster,'end');
+ assert.equal(done.field[1].modifier,0);
+ assert.equal(done.field[1].status.includes('燃血傷害'),false);
+});
