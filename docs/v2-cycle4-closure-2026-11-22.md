@@ -13,7 +13,7 @@
 4. 已部署測試入口之雙瀏覽器建房、部署與回合切換 smoke test：**1 passed, 0 failed**；同一 workflow 的 `v2-live-smoke` job 成功。
 5. `npm test`（V1 回歸）：**102 passed, 0 failed**；`npm run build` 成功（Vite built in 223 ms）；GitHub Actions [44931336223](https://github.com/YEYIEN/king-war-online-full/actions/runs/44931336223)，整體 success。
 
-**以上證據不能直接推論兩個 Chromium 頁面已經完整進行至勝者畫面。**
+**追加驗收（commit `0fabccd1`）：** [GitHub Actions 44931807155](https://github.com/YEYIEN/king-war-online-full/actions/runs/44931807155) 中 `tests/v2-full-browser.test.mjs` **成功**，兩個真實 Chromium 頁面從建房至雙方顯示一致勝者，且驗證對手手牌隱藏；`tests/v2-magic-browser.test.mjs` 亦 **成功**，九種魔法 UI 走查通過。同一流程的五位國王瀏覽器測試仍失敗，整體 workflow 因此呈現 failure，不能將它描述為所有關卡通過。
 
 ## 第四周目已完成的程式與驗證工作
 
@@ -28,17 +28,17 @@
 
 ### P0：雙 Chromium 完整對局（最後驗收目標）
 
-- 新增的 `tests/v2-full-browser.test.mjs` 尚未取得成功的 CI 執行證據。先前網路驗證工作順序將此測試排在國王測試之後，而國王測試先逾時。
-- 因此仍不可宣稱完整雙人可玩驗收成功。
+- **已取得自動化雙 Chromium 完整對局成功證據**：兩頁經可見 UI 完成從建房到勝者顯示，且兩方同意勝者。
+- 該證據覆蓋一組決定性情境；尚不等同涵蓋所有國王、法術、重連及多人操作組合。
 - 已將雙 Chromium 完整對局測試排在網路驗證中九種魔法與國王 UI 測試之前（commit `0fabccd1`），以便優先取得關鍵結果。
-- 最新 commit 的 Actions 在最後一次檢查時仍 queued；**等待執行屬未確認狀態，並非測試失敗**。
+- 關鍵完整瀏覽器對局在 commit `0fabccd1` 的 Actions 已成功；最後的國王 UI 測試未通過，故該 workflow 整體為 failure。
 
 ### P1：五位國王瀏覽器測試
 
 - GitHub Actions [44931342354](https://github.com/YEYIEN/king-war-online-full/actions/runs/44931342354) 記錄 `tests/v2-kings-browser.test.mjs:68` 逾時，發生於屋大維流程。
-- 原因：UI 要求「超額棄牌 2 張」時，測試腳本固定對所有 prompt 輸入 `1`，導致伺服器拒絕結束回合。這是測試腳本的輸入錯誤，不能由該失敗推斷屋大維實際規則錯誤。
-- 已修改為根據 prompt 顯示的超額數量輸入 `1,2,...`（commit `45651eb2`）；新 CI 結果尚未確認。
-- 若新測試仍失敗，須查看新堆疊位置與 `#error` 回報，再確認是否另有規則錯誤。
+- 第一個錯誤是超額棄牌 prompt 固定輸入 `1`；已修為依數量輸入 `1,2,...`（commit `45651eb2`），因此原本在第 68 行的結束回合逾時不再重現。
+- 後續 CI [44931807155](https://github.com/YEYIEN/king-war-online-full/actions/runs/44931807155) 在 **`tests/v2-kings-browser.test.mjs:71`** 仍逾時：屋大維情境的攻擊者兵種未在期待時間內變為 0 張。**真正原因尚未定位**：可能是伺服器拒絕攻擊、測試初始卡組與預期不一致或戰鬥規則結果不同，不能直接猜測。
+- 具體解法：在該攻擊操作後同時輸出兩頁的 `#error`、`state.players[*].field`、國王種類、當前回合與最新 `log`，再比對 `resolveBattle` 的戰力及屋大維相等防守特例；據實際差異修正測試資料或遊戲邏輯，重跑單項瀏覽器測試。
 
 ### P1：前端 lockfile 同步
 
@@ -53,9 +53,9 @@
 
 ## 最終分類
 
-- **已驗收：** V2 72/72、TCP 3/3（包含雙人完整伺服器對局）、九魔法雙 Chromium 互動、部署入口 smoke、V1 102/102、前端 build。
-- **已修改未驗收：** 屋大維與其他國王 Chromium 測試的棄牌提示修正、完整雙瀏覽器對局測試順序。
-- **未完成：** 完整雙 Chromium 從建房到勝者的成功證據、所有五位國王 UI 的通過證據、重連恢復、前端 lockfile 標準化。
-- **阻礙：** 最新 GitHub Actions 排隊，尚無實際結果；本機直接複製 GitHub 倉庫時曾遇 DNS 解析問題。
+- **已驗收：** V2 72/72、TCP 3/3（包含雙人完整伺服器對局）、雙 Chromium 完整對局至勝者、九魔法雙 Chromium 互動、部署入口 smoke、V1 102/102、前端 build。
+- **已修改未驗收：** 五位國王 Chromium 情境（屋大維戰鬥斷言失敗）、用以保證穩定重連的機制。
+- **未完成：** 所有五位國王 UI 的完整通過證據、重連恢復、前端 lockfile 標準化、更多多人與魔法組合實玩驗收。
+- **阻礙：** 屋大維瀏覽器戰鬥測試仍失敗（需新增狀態診斷才能定位）；本機直接複製 GitHub 倉庫時曾遇 DNS 解析問題。
 
-**第四周目依約結案。既有成果保留在 V2 分支；未驗收的完整雙瀏覽器對局不得改寫為已完成。**
+**第四周目依約結案。核心雙瀏覽器對局垂直切片已有成功證據，但五位國王 UI 全面驗收未達標，因此第四周目仍判定未完全達標。**
