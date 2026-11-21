@@ -46,3 +46,12 @@ test('stacked strength and enhancement effects expire without permanent power',(
  const start=tickMagicTurnV2({field:[unitB]},'start');
  assert.equal(start.field[0].modifier,0);
 });
+
+test('fireball, meteor and weakness penalties expire on target owner turn',()=>{
+ for(const name of ['火球術','流星雨','虛弱術']){
+  const a=player({name}),b={hp:24,field:[unit('步兵','高級')]};
+  const x=castMagicV2(a,b,0,0,[0]);
+  assert.equal(x.opponent.field[0].modifier,-1,name);
+  assert.equal(tickMagicTurnV2(x.opponent,'start').field[0].modifier,0,name);
+ }
+});
