@@ -28,9 +28,9 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  for(const i of targetIndices){const u=field[i];switch(magic.name){
  case '火球術':case '流星雨':if(u.rank==='初級')dead.add(i);else u.modifier=(u.modifier||0)-1;break;
  case '冰凍術':if(u.rank==='高級'){u.modifier=(u.modifier||0)-1;add(u,'冰凍降戰力')}else add(u,'冰凍');break;
- case '力量術':u.modifier=(u.modifier||0)+1;add(u,'力量術');break;
+ case '力量術':u.modifier=(u.modifier||0)+1;u.status.push('力量術');break;
  case '虛弱術':if((({初級:1,中級:2,高級:3}[u.rank])+(u.modifier||0))<=1)add(u,'虛弱禁攻');else u.modifier=(u.modifier||0)-1;break;
- case '增強術':u.modifier=(u.modifier||0)+1;add(u,'增強術');if(!u.tapped)add(u,'增強傷害');break;
+ case '增強術':u.modifier=(u.modifier||0)+1;u.status.push('增強術');if(!u.tapped)add(u,'增強傷害');break;
  case '毒藥瓶':add(u,'下回合死亡');break;
  case '燃血術':a.hp-=3;u.modifier=(u.modifier||0)+1;u.tapped=false;add(u,'燃血傷害');break;
  }}
@@ -40,4 +40,4 @@ export function castMagicV2(caster,opponent,magicIndex,mageIndex,targetIndices=[
  a.magic.splice(magicIndex,1);
  return {caster:a,opponent:b,discarded:magic};
 }
-export function tickMagicTurnV2(player,phase){const p={...player,field:player.field.map(u=>({...u,status:[...(u.status||[])]}))};if(phase==='start')p.field.forEach(u=>{if(u.status.includes('冰凍降戰力')){u.modifier=(u.modifier||0)+1;u.status=u.status.filter(x=>x!=='冰凍降戰力')}u.tapped=u.status.includes('冰凍')||u.status.includes('虛弱禁攻');u.status=u.status.filter(x=>x!=='冰凍'&&x!=='虛弱禁攻');for(const s of ['增強術','增強傷害'])if(u.status.includes(s)){u.status=u.status.filter(x=>x!==s);if(s==='增強術')u.modifier=(u.modifier||0)-1}});if(phase==='end'){p.field=p.field.filter(u=>!u.status.includes('下回合死亡'));p.field.forEach(u=>{for(const buff of ['力量術','燃血傷害'])if(u.status.includes(buff)){u.modifier=(u.modifier||0)-1;u.status=u.status.filter(x=>x!==buff)}})}return p;}
+export function tickMagicTurnV2(player,phase){const p={...player,field:player.field.map(u=>({...u,status:[...(u.status||[])]}))};if(phase==='start')p.field.forEach(u=>{if(u.status.includes('冰凍降戰力')){u.modifier=(u.modifier||0)+u.status.filter(x=>x==='冰凍降戰力').length;u.status=u.status.filter(x=>x!=='冰凍降戰力')}u.tapped=u.status.includes('冰凍')||u.status.includes('虛弱禁攻');u.status=u.status.filter(x=>x!=='冰凍'&&x!=='虛弱禁攻');for(const s of ['增強術','增強傷害'])if(u.status.includes(s)){const count=u.status.filter(x=>x===s).length;u.status=u.status.filter(x=>x!==s);if(s==='增強術')u.modifier=(u.modifier||0)-count}});if(phase==='end'){p.field=p.field.filter(u=>!u.status.includes('下回合死亡'));p.field.forEach(u=>{for(const buff of ['力量術','燃血傷害'])if(u.status.includes(buff)){const count=u.status.filter(x=>x===buff).length;u.modifier=(u.modifier||0)-count;u.status=u.status.filter(x=>x!==buff)}})}return p;}
