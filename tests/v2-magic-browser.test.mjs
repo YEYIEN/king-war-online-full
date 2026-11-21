@@ -13,7 +13,7 @@ const ordered=spell=>cards=>{
  const ids=new Set([...m,...i].map(c=>c.id));return [...m,...i,...cards.filter(c=>!ids.has(c.id))];
 };
 test('real Chromium UI: two players cast all nine spells via visible controls', {timeout:120000},async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',args:['--no-sandbox']});
  try{
   for(const spell of MAGIC_DEFS){
    const http=createServer((req,res)=>{if(req.url?.startsWith('/v2-playtest')){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}else{res.writeHead(404);res.end('not found')}});
