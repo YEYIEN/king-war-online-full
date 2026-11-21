@@ -103,3 +103,11 @@ test('invalid socket actions preserve current player state',async()=>{
  assert.equal((await a.send('v2:end',{code,discard:['0']})).ok,false);
  assert.equal(JSON.stringify(state(a)),before);
 });
+
+test('one socket cannot create multiple waiting rooms',async()=>{
+ const {connect}=setup(),a=connect('doubleCreator');
+ const first=await a.send('v2:create',{name:'First'});
+ assert.equal(first.ok,true);
+ assert.equal((await a.send('v2:create',{name:'Second'})).ok,false);
+ assert.equal(state(a).code,first.code);
+});
