@@ -91,3 +91,15 @@ test('Qin preview does not leak a card and handles discarded hand',async()=>{
  assert.equal((await a.send('v2:end',{code,discard:[0],qinBottomIndex:3})).ok,true);
  assert.deepEqual(state(a).players[0].hand,preview.choices.slice(0,3));
 });
+
+test('invalid socket actions preserve current player state',async()=>{
+ const {connect}=setup(),a=connect('invalidA'),b=connect('invalidB');
+ const code=(await a.send('v2:create',{name:'A'})).code;
+ assert.equal((await b.send('v2:join',{code,name:'B'})).ok,true);
+ assert.equal((await a.send('v2:start',{code})).ok,true);
+ const before=JSON.stringify(state(a));
+ assert.equal((await a.send('v2:deploy',{code,index:'0'})).ok,false);
+ assert.equal((await a.send('v2:deploy',{code,index:null})).ok,false);
+ assert.equal((await a.send('v2:end',{code,discard:['0']})).ok,false);
+ assert.equal(JSON.stringify(state(a)),before);
+});
