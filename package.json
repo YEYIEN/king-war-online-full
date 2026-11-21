@@ -10,7 +10,7 @@
     "build": "npm --prefix client run build",
     "start": "NODE_ENV=production node server/index.js",
     "bump-version": "node scripts/bump-version.cjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/run-v1-tests.mjs",
     "release:check": "node scripts/release-readiness.mjs",
     "test:v2": "node --test server/rules-v2-*.test.mjs server/v2-playtest-integration.test.mjs",
     "test:all": "npm test && npm run test:v2"
