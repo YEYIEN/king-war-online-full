@@ -69,7 +69,7 @@ test('poison kills victim at the end of victim owner turn and syncs both players
  assert.equal(view(a).players[1].field.length,0);
  assert.equal(view(b).players[1].field.length,0);
 });
-test('freeze prevents enemy action for one full owner turn',()=>{
+test('freeze high-rank penalty expires at next owner turn',()=>{
  const {a,b,code,view}=fixture('冰凍術');
  assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
  assert.equal(a.send('v2:end',{code}).ok,true);
@@ -77,9 +77,8 @@ test('freeze prevents enemy action for one full owner turn',()=>{
  assert.equal(b.send('v2:end',{code}).ok,true);
  assert.equal(a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]}).ok,true);
  assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(view(b).players[1].field[0].tapped,true);
- assert.equal(b.send('v2:attack',{code,attackerIndex:0}).ok,false);
+ assert.equal(view(b).players[1].field[0].modifier,0,'high-rank freeze penalty expires at turn start');
  assert.equal(b.send('v2:end',{code}).ok,true);
  assert.equal(a.send('v2:end',{code}).ok,true);
- assert.equal(view(b).players[1].field[0].tapped,false);
+ assert.equal(view(b).players[1].field[0].modifier,0);
 });
