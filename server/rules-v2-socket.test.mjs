@@ -60,3 +60,20 @@ test('room rejects duplicate participants and invalid king selections',async()=>
  assert.equal(state(b).players[1].king,'亞歷山大大帝');
  assert.equal(state(b).players[0].hand,undefined);
 });
+
+test('Qin preview is private, does not mutate match, and matches selected end-turn hand',async()=>{
+ const {connect}=setup(),a=connect('qinA'),b=connect('qinB');
+ const code=(await a.send('v2:create',{king:'秦始皇'})).code;
+ assert.equal((await b.send('v2:join',{code})).ok,true);
+ assert.equal((await a.send('v2:start',{code})).ok,true);
+ const before=JSON.stringify(state(a));
+ const preview=await a.send('v2:preview-end',{code,discard:[]});
+ assert.equal(preview.ok,true);
+ assert.equal(JSON.stringify(state(a)),before);
+ assert.equal((await b.send('v2:preview-end',{code})).ok,false);
+ if(preview.hasExtra){
+   assert.equal(preview.choices.length,4);
+   assert.equal((await a.send('v2:end',{code,qinBottomIndex:3})).ok,true);
+   assert.deepEqual(state(a).players[0].hand,preview.choices.slice(0,3));
+ }else assert.equal((await a.send('v2:end',{code})).ok,true);
+});
