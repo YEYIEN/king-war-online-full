@@ -55,3 +55,23 @@ test('fireball, meteor and weakness penalties expire on target owner turn',()=>{
   assert.equal(tickMagicTurnV2(x.opponent,'start').field[0].modifier,0,name);
  }
 });
+
+test('weakness reduces rank-one power and prevents next owner attack',()=>{
+ const a=player({name:'虛弱術'}),b={hp:24,field:[unit('步兵','初級')]};
+ const x=castMagicV2(a,b,0,0,[0]);
+ assert.equal(x.opponent.field[0].modifier,-1);
+ assert.ok(x.opponent.field[0].status.includes('虛弱禁攻'));
+ const next=tickMagicTurnV2(x.opponent,'start');
+ assert.equal(next.field[0].tapped,true);
+ assert.equal(next.field[0].modifier,0);
+});
+test('blood magic cannot kill its own caster king',()=>{
+ const a=player({name:'燃血術'});a.hp=3;
+ assert.throws(()=>castMagicV2(a,{hp:24,field:[]},0,0,[0]),/Insufficient HP/);
+});
+test('recycled magic discard becomes a fresh draw deck',()=>{
+ const a=player(null);a.magic=[];
+ const x=drawMagicV2(a,[],[{name:'力量術',id:'recycled'}]);
+ assert.equal(x.player.magic[0].id,'recycled');
+ assert.equal(x.discard.length,0);
+});
