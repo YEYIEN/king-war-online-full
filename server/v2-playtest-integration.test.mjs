@@ -50,7 +50,7 @@ for(const count of [2,3,4,5]){
     const excess=Math.max(0,me.hand.length+2-5);
     ok(0,'v2:end',{code,overflowDiscardIndices:Array.from({length:excess},(_,i)=>i)});
    }else{
-    const me=v.players[cur];
+    const me=view(cur).players[cur];
     const excess=Math.max(0,me.hand.length+2-5);
     ok(cur,'v2:end',{code,overflowDiscardIndices:Array.from({length:excess},(_,i)=>i)});
    }
