@@ -1,0 +1,23 @@
+name: V2 second-cycle acceptance
+on:
+  push:
+    branches: [rules-v2-tabletop-rebuild]
+  workflow_dispatch:
+jobs:
+  test-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      # Client lockfile predates added Supabase dependencies; use install until regenerated.
+      - run: npm --prefix client install --no-audit --no-fund
+      - name: V2 unit and 2-5 player integration tests
+        run: npm run test:v2
+      - name: V1 regression tests
+        run: npm test
+      - name: Client build
+        run: npm run build
