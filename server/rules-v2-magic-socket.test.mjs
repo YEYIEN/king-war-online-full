@@ -83,3 +83,25 @@ test('freeze blocks low-rank unit for one owner turn',()=>{
  assert.equal(a.send('v2:end',{code}).ok,true);
  assert.equal(view(b).players[1].field[0].tapped,false);
 });
+
+test('losing last mage requires explicit magic discard before ending turn',()=>{
+ const unitOrder=cards=>{
+  const mage=cards.find(c=>c.type==='法師'&&c.rank==='高級');
+  const infantry=cards.filter(c=>c.type==='步兵'&&c.rank==='初級');
+  const used=new Set([mage,...infantry.slice(0,5)].map(c=>c.id));
+  return [mage,...infantry,...cards.filter(c=>!used.has(c.id))];
+ };
+ const {a,b,code,view}=fixture('火球術',{kingA:'成吉思汗',unitOrder});
+ assert.equal(a.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,true);
+ assert.equal(b.send('v2:end',{code}).ok,true);
+ assert.equal(view(a).players[0].magic.length,1);
+ assert.equal(a.send('v2:ability',{code,fieldIndex:0,handIndex:0}).ok,true);
+ assert.equal(view(a).players[0].field[0].type,'步兵');
+ assert.equal(a.send('v2:end',{code}).ok,false);
+ assert.equal(a.send('v2:discard-magic',{code,indices:[0]}).ok,true);
+ assert.equal(view(a).players[0].magic.length,0);
+ assert.equal(a.send('v2:end',{code}).ok,true);
+ assert.equal(view(b).players[0].magic,undefined);
+});
