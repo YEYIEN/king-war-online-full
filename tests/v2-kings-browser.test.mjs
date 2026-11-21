@@ -68,8 +68,12 @@ test('five king powers: real Chromium two-player controls and synchronized state
       await b.waitForFunction(()=>state.current===1);
       await b.locator('button[onclick="select(0)"]').click();
       await b.locator('button[onclick="hit(0,0)"]').click();
-      await b.waitForFunction(()=>state.players[1].field.length===0);
-      assert.equal((await a.evaluate(()=>state.players[0].field.length)),1,'Augustus defender survives equal-power tie');
+      const snapshot=await b.evaluate(()=>({error:document.querySelector('#error')?.textContent,log:state.log.slice(-3),turn:state.turn,current:state.current,attacker:state.players[1].field,defender:state.players[0].field,defenderKing:state.players[0].king}));
+      console.log('AUGUSTUS BATTLE RESULT',JSON.stringify(snapshot));
+      assert.equal(snapshot.error,'','attack must not be rejected');
+      assert.ok(snapshot.log.some(x=>x.includes('兵種戰鬥')),'battle must be resolved by server');
+      assert.equal(snapshot.attacker.length,0,'equal-power attacker must die');
+      assert.equal(snapshot.defender.length,1,'Augustus defender survives equal-power tie');
      }
     }
    }finally{await ctx.close();await new Promise(r=>io.close(r));}
