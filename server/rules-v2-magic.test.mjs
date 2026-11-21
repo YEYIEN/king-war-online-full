@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MAGIC_DEFS,magicComposition,castMagicV2,tickMagicTurnV2} from './rules-v2-magic.mjs';
+import {MAGIC_DEFS,castMagicV2,tickMagicTurnV2} from './rules-v2-magic.mjs';
 const u=(type='法師',rank='高級',extra={})=>({type,rank,tapped:false,justDeployed:false,status:[],...extra});
 const player=(name)=>({king:'秦始皇',hp:24,hand:[],magic:[],field:[u()],magicCastThisTurn:false});
 const cast=(name,targets=[0],enemy=[u('步兵','中級')])=>castMagicV2(player(name),{hp:24,field:enemy},name,0,targets);
 test('nine selectable spells are available without a deck',()=>{assert.equal(MAGIC_DEFS.length,9)});
-test('magic is selected without drawing cards',()=>{const r=cast('火球術',[0],[u('步兵','初級')]);assert.equal(r.spell.name,'火球術');assert.equal(r.caster.magic.length,0)});
+test('magic is selected without drawing cards',()=>{const r=cast('火球術',[0],[u('步兵','初級')]);assert.equal(r.spell.name,'火球術');assert.equal('magic' in r.caster,false)});
 test('fireball kills basic and half-readies higher rank',()=>{assert.equal(cast('火球術',[0],[u('步兵','初級')]).opponent.field.length,0);const r=cast('火球術');assert.equal(r.opponent.field[0].modifier,-1);assert.equal(r.opponent.field[0].halfReadyUntilOwnerTurn,true)});
 test('freeze applies equally to high rank and blocks next attack',()=>{const r=cast('冰凍術',[0],[u('騎兵','高級')]);const next=tickMagicTurnV2(r.opponent,'start');assert.equal(next.field[0].tapped,true)});
 test('weakness does not stack on same target',()=>{const r=cast('虛弱術');assert.equal(r.opponent.field[0].modifier,-1);assert.equal(r.opponent.field[0].status.includes('虛弱降戰力'),true)});
