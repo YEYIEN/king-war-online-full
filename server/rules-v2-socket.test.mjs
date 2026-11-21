@@ -77,3 +77,17 @@ test('Qin preview is private, does not mutate match, and matches selected end-tu
    assert.deepEqual(state(a).players[0].hand,preview.choices.slice(0,3));
  }else assert.equal((await a.send('v2:end',{code})).ok,true);
 });
+
+test('Qin preview does not leak a card and handles discarded hand',async()=>{
+ const {connect}=setup(),a=connect('qinDiscardA'),b=connect('qinDiscardB');
+ const code=(await a.send('v2:create',{king:'秦始皇'})).code;
+ assert.equal((await b.send('v2:join',{code})).ok,true);
+ assert.equal((await a.send('v2:start',{code})).ok,true);
+ const before=JSON.stringify(state(a));
+ const preview=await a.send('v2:preview-end',{code,discard:[0]});
+ assert.equal(preview.ok,true);
+ assert.equal(preview.choices.length,4);
+ assert.equal(JSON.stringify(state(a)),before);
+ assert.equal((await a.send('v2:end',{code,discard:[0],qinBottomIndex:3})).ok,true);
+ assert.deepEqual(state(a).players[0].hand,preview.choices.slice(0,3));
+});
