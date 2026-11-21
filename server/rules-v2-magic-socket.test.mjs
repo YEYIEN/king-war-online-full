@@ -88,7 +88,7 @@ test('losing last mage requires explicit magic discard before ending turn',()=>{
  const unitOrder=cards=>{
   const mage=cards.find(c=>c.type==='法師'&&c.rank==='高級');
   const infantry=cards.filter(c=>c.type==='步兵'&&c.rank==='初級');
-  const used=new Set([mage,...infantry.slice(0,5)].map(c=>c.id));
+  const used=new Set([mage,...infantry].map(c=>c.id));
   return [mage,...infantry,...cards.filter(c=>!used.has(c.id))];
  };
  const {a,b,code,view}=fixture('火球術',{kingA:'成吉思汗',unitOrder});
