@@ -111,3 +111,16 @@ test('one socket cannot create multiple waiting rooms',async()=>{
  assert.equal((await a.send('v2:create',{name:'Second'})).ok,false);
  assert.equal(state(a).code,first.code);
 });
+
+test('magic socket rejects illegal casts without mutating state or revealing private magic',async()=>{
+ const {connect}=setup(),a=connect('magicA'),b=connect('magicB');
+ const code=(await a.send('v2:create',{name:'Mage'})).code;
+ assert.equal((await b.send('v2:join',{code,name:'Enemy'})).ok,true);
+ assert.equal((await a.send('v2:start',{code})).ok,true);
+ assert.equal(state(a).players[1].magic,undefined);
+ assert.equal(state(b).players[0].magic,undefined);
+ const before=JSON.stringify(state(a));
+ assert.equal((await a.send('v2:cast',{code,magicIndex:0,mageIndex:0,targetIndices:[0]})).ok,false);
+ assert.equal((await a.send('v2:cast',{code,magicIndex:-1,mageIndex:0,targetIndices:[0]})).ok,false);
+ assert.equal(JSON.stringify(state(a)),before);
+});
