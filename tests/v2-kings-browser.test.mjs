@@ -10,7 +10,9 @@ const deckOrder=cards=>{
  if(cards[0]?.name)return cards;
  const infantry=cards.filter(c=>c.type==='步兵'&&c.rank==='中級');
  const archers=cards.filter(c=>c.type==='弓兵'&&c.rank==='高級');
- const picked=[...infantry,...archers],ids=new Set(picked.map(c=>c.id));
+ const cavalry=cards.find(c=>c.type==='騎兵'&&c.rank==='高級');
+ // Seat A gets a medium infantry first; seat B gets a matching infantry first.
+ const picked=[infantry[0],...archers,cavalry,infantry[1]],ids=new Set(picked.map(c=>c.id));
  return [...picked,...cards.filter(c=>!ids.has(c.id))];
 };
 test('five king powers: real Chromium two-player controls and synchronized state',{timeout:180000},async()=>{
@@ -41,7 +43,7 @@ test('five king powers: real Chromium two-player controls and synchronized state
      await a.getByRole('button',{name:'使用國王能力'}).click();
      await a.waitForFunction(()=>state.players[0].abilityUsed===true);
      assert.equal((await b.evaluate(()=>state.players[0].field.length)),1);
-     assert.equal((await a.evaluate(()=>state.players[0].hand.length)),2);
+     assert.equal((await a.evaluate(()=>state.players[0].hand.length)),4);
     }else{
      await a.getByRole('button',{name:'結束回合'}).click();
      await b.waitForFunction(()=>state.current===1);
@@ -55,17 +57,17 @@ test('five king powers: real Chromium two-player controls and synchronized state
      }else if(king==='秦始皇'){
       await a.getByRole('button',{name:'結束回合'}).click();
       await b.waitForFunction(()=>state.current===1);
-      assert.equal((await a.evaluate(()=>state.players[0].hand.length)),3);
+      assert.equal((await a.evaluate(()=>state.players[0].hand.length)),5);
      }else if(king==='亞歷山大大帝'){
       await a.locator('button[onclick="select(0)"]').click();
-      await a.locator('button[onclick="hit(0)"]').click();
+      await a.locator('button[onclick="hit(0,1)"]').click();
       await a.waitForFunction(()=>state.players[0].abilityUsed===true);
       assert.equal((await b.evaluate(()=>state.players[0].abilityUsed)),true);
      }else if(king==='屋大維奧古斯都'){
       await a.getByRole('button',{name:'結束回合'}).click();
       await b.waitForFunction(()=>state.current===1);
       await b.locator('button[onclick="select(0)"]').click();
-      await b.locator('button[onclick="hit(0)"]').click();
+      await b.locator('button[onclick="hit(0,0)"]').click();
       await b.waitForFunction(()=>state.players[1].field.length===0);
       assert.equal((await a.evaluate(()=>state.players[0].field.length)),1,'Augustus defender survives equal-power tie');
      }
