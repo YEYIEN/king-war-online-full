@@ -116,3 +116,18 @@ test('king attacks and Louis sacrifice preserve the shared 60-card inventory',()
  ok(1,'v2:ability',{code,fieldIndex:0});
  assert.equal(view(1).players[1].field.length,0);
 });
+
+test('three-player disconnect returns cards and skips eliminated player without leaking hands',()=>{
+ const h=harness(3),{ok,code,view}=h;
+ assert.equal(view(1).players[1].hand.length,5);
+ h.connections[1].disconnect();
+ assert.equal(view(0).players[1].hp,0);
+ assert.equal(view(0).players[1].field.length,0);
+ assert.equal(view(0).players[1].handCount,0);
+ assert.equal(view(0).players[2].hand,undefined);
+ ok(0,'v2:end',{code,overflowDiscardIndices:[0,1]});
+ assert.equal(view(0).current,2);
+ ok(2,'v2:end',{code,overflowDiscardIndices:[0,1]});
+ assert.equal(view(0).current,0);
+ assert.equal(view(0).status,'playing');
+});
