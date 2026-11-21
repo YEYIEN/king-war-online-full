@@ -26,7 +26,7 @@ test('five king powers: real Chromium two-player controls and synchronized state
    const ctx=await browser.newContext(),a=await ctx.newPage(),b=await ctx.newPage();
    try{
     a.setDefaultTimeout(10000);b.setDefaultTimeout(10000);
-    for(const p of [a,b])p.on('dialog',async d=>{if(d.type()==='confirm')await d.accept();else await d.accept('1')});
+    for(const p of [a,b])p.on('dialog',async d=>{if(d.type()==='confirm')return d.accept();if(d.type()==='prompt'){const match=d.message().match(/請選擇 (\\d+) 張棄置/);const count=match?Number(match[1]):1;return d.accept(Array.from({length:count},(_,i)=>i+1).join(','))}return d.accept()});
     const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
     await Promise.all([a.goto(url),b.goto(url)]);
     await a.locator('#king').selectOption({label:king});
