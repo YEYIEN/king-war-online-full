@@ -2214,7 +2214,7 @@ function App() {
             {["front","center","rear"].map(pos=><button key={pos} disabled={!r21MoveFrom||r21MoveFrom===pos} onClick={()=>emit("game:r21Move",{from:r21MoveFrom,to:pos})}>移至{({front:"前排",center:"中排",rear:"後排"})[pos]}（1 AP）</button>)}
           </div>
           {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button disabled={!r21AbilityAvailable} onClick={()=>{setR21AbilityOpen(true);setR21AbilityFrom("");setR21AbilityCard("");}}>{me.king.name}能力（1 AP）{me.abilityUsed?" · 已使用":room.ap<1?" · AP 不足":""}</button>}
-          {me.king?.name==="屋大維奧古斯都"&&<p>羅馬秩序：防守平手時保留兵種，該兵種下一次自己回合暫時不能攻擊；不消耗 AP。</p>}}
+          {me.king?.name==="屋大維奧古斯都"&&<p>羅馬秩序：防守平手時保留兵種，該兵種下一次自己回合暫時不能攻擊；不消耗 AP。</p>}
         </div>}
       </section>}
 
