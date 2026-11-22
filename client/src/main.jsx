@@ -1846,47 +1846,6 @@ function App() {
         )}
       </section>
 
-      {isR21 && <section className="zoneCard" aria-label="R2.1 回合資訊">
-        <h2>國王戰爭 · R2.1 規則</h2>
-        <p>行動點 AP：{room.ap} / 2　｜　前排／中排／後排各限一名兵種　｜　國王生命：24</p><p>R2.1 魔法不使用手牌：場上法師依等級施法（初級可施 1 級、中級可施 1–2 級、高級可施 1–3 級），每回合最多施法一次。</p>
-        {r21DeployCard && isMyTurn && <div className="r21ControlRow" role="group" aria-label="選擇部署位置"><strong>部署 {r21DeployCard.name}：</strong>{["front","center","rear"].map(pos=><button key={pos} disabled={me.field.some(u=>u.position===pos)} onClick={()=>{emit("game:deploy",{cardId:r21DeployCard.id,position:pos});setR21DeployCard(null);}}>放到{({front:"前排",center:"中排",rear:"後排"})[pos]}</button>)}<button onClick={()=>setR21DeployCard(null)}>取消</button></div>}
-        {mustGuard && <div role="group" aria-label="保牌回應">
-          <strong>{room.pending?.attackerPlayerName} 使用「{room.pending?.attackerName}」攻擊你的國王，預計傷害 {room.pending?.damage}！請選擇保牌或承受傷害。</strong>
-          <button onClick={()=>emit("game:r21Guard",{})}>不保牌，承受傷害</button>
-          {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
-        </div>}
-        {isMyTurn && <div role="group" aria-label="R2.1 行動">
-          <div className="r21ControlRow">
-            <label>施法者
-              <select value={r21CastFrom} onChange={e=>setR21CastFrom(e.target.value)}>
-                <option value="">選擇我方法師</option>
-                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position}>{u.name}（{({front:"前排",center:"中排",rear:"後排"})[u.position]}）</option>)}
-              </select>
-            </label>
-            <label>魔法
-              <select value={r21Spell} onChange={e=>setR21Spell(e.target.value)}>
-                {["火球術","冰凍術","力量術","虛弱術","增強術","流星雨","毒藥瓶","燃血術","天殞術"].map(spell=><option key={spell} value={spell}>{spell}</option>)}
-              </select>
-            </label>
-            <label>目標站位
-              <select value={r21CastTo} onChange={e=>setR21CastTo(e.target.value)}>
-                <option value="front">前排</option><option value="center">中排</option><option value="rear">後排</option>
-              </select>
-            </label>
-            <button disabled={!r21CastFrom} onClick={()=>{const self=["力量術","增強術","燃血術"].includes(r21Spell);const target=self?me:targetPlayer;emit("game:r21Cast",{from:r21CastFrom,spell:r21Spell,player:target.id,to:r21CastTo});}}>確認施法（1 AP）</button>
-          </div>
-          <div className="r21ControlRow">
-            <label>移動兵種
-              <select value={r21MoveFrom} onChange={e=>setR21MoveFrom(e.target.value)}>
-                <option value="">選擇兵種</option>
-                {me.field.map(u=><option key={u.id} value={u.position}>{u.name}（{({front:"前排",center:"中排",rear:"後排"})[u.position]}）</option>)}
-              </select>
-            </label>
-            {["front","center","rear"].map(pos=><button key={pos} disabled={!r21MoveFrom||r21MoveFrom===pos} onClick={()=>emit("game:r21Move",{from:r21MoveFrom,to:pos})}>移至{({front:"前排",center:"中排",rear:"後排"})[pos]}（1 AP）</button>)}
-          </div>
-          {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button onClick={()=>{const from=window.prompt("能力發動站位：front / center / rear");const cardId=me.king.name==="成吉思汗"?window.prompt("交換的手牌 ID（點選卡牌資訊查看）"):undefined;if(from)emit("game:r21Ability",{from,cardId});}}>國王能力（1 AP）</button>}
-        </div>}
-      </section>}
       <section className="handAndLog" id="kw-hand">
         <div className="mobileDeckControls" role="group" aria-label="選擇手牌種類">
           <button type="button" className={mobileDeckTab === "units" ? "selected" : ""} onClick={() => {setMobileDeckTab("units");setMobileHandPage(0);}}>兵種 {me?.hand?.length || 0}</button>
@@ -2153,6 +2112,47 @@ function App() {
         </section>
       </section>
       </div>
+      {isR21 && <section className="zoneCard" aria-label="R2.1 回合資訊">
+        <h2>國王戰爭 · R2.1 規則</h2>
+        <p>行動點 AP：{room.ap} / 2　｜　前排／中排／後排各限一名兵種　｜　國王生命：24</p><p>R2.1 魔法不使用手牌：場上法師依等級施法（初級可施 1 級、中級可施 1–2 級、高級可施 1–3 級），每回合最多施法一次。</p>
+        {r21DeployCard && isMyTurn && <div className="r21ControlRow" role="group" aria-label="選擇部署位置"><strong>部署 {r21DeployCard.name}：</strong>{["front","center","rear"].map(pos=><button key={pos} disabled={me.field.some(u=>u.position===pos)} onClick={()=>{emit("game:deploy",{cardId:r21DeployCard.id,position:pos});setR21DeployCard(null);}}>放到{({front:"前排",center:"中排",rear:"後排"})[pos]}</button>)}<button onClick={()=>setR21DeployCard(null)}>取消</button></div>}
+        {mustGuard && <div role="group" aria-label="保牌回應">
+          <strong>{room.pending?.attackerPlayerName} 使用「{room.pending?.attackerName}」攻擊你的國王，預計傷害 {room.pending?.damage}！請選擇保牌或承受傷害。</strong>
+          <button onClick={()=>emit("game:r21Guard",{})}>不保牌，承受傷害</button>
+          {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
+        </div>}
+        {isMyTurn && <div role="group" aria-label="R2.1 行動">
+          <div className="r21ControlRow">
+            <label>施法者
+              <select value={r21CastFrom} onChange={e=>setR21CastFrom(e.target.value)}>
+                <option value="">選擇我方法師</option>
+                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position}>{u.name}（{({front:"前排",center:"中排",rear:"後排"})[u.position]}）</option>)}
+              </select>
+            </label>
+            <label>魔法
+              <select value={r21Spell} onChange={e=>setR21Spell(e.target.value)}>
+                {["火球術","冰凍術","力量術","虛弱術","增強術","流星雨","毒藥瓶","燃血術","天殞術"].map(spell=><option key={spell} value={spell}>{spell}</option>)}
+              </select>
+            </label>
+            <label>目標站位
+              <select value={r21CastTo} onChange={e=>setR21CastTo(e.target.value)}>
+                <option value="front">前排</option><option value="center">中排</option><option value="rear">後排</option>
+              </select>
+            </label>
+            <button disabled={!r21CastFrom} onClick={()=>{const self=["力量術","增強術","燃血術"].includes(r21Spell);const target=self?me:targetPlayer;emit("game:r21Cast",{from:r21CastFrom,spell:r21Spell,player:target.id,to:r21CastTo});}}>確認施法（1 AP）</button>
+          </div>
+          <div className="r21ControlRow">
+            <label>移動兵種
+              <select value={r21MoveFrom} onChange={e=>setR21MoveFrom(e.target.value)}>
+                <option value="">選擇兵種</option>
+                {me.field.map(u=><option key={u.id} value={u.position}>{u.name}（{({front:"前排",center:"中排",rear:"後排"})[u.position]}）</option>)}
+              </select>
+            </label>
+            {["front","center","rear"].map(pos=><button key={pos} disabled={!r21MoveFrom||r21MoveFrom===pos} onClick={()=>emit("game:r21Move",{from:r21MoveFrom,to:pos})}>移至{({front:"前排",center:"中排",rear:"後排"})[pos]}（1 AP）</button>)}
+          </div>
+          {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button onClick={()=>{const from=window.prompt("能力發動站位：front / center / rear");const cardId=me.king.name==="成吉思汗"?window.prompt("交換的手牌 ID（點選卡牌資訊查看）"):undefined;if(from)emit("game:r21Ability",{from,cardId});}}>國王能力（1 AP）</button>}
+        </div>}
+      </section>}
 
     </main>
   );
