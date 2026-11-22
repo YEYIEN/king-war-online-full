@@ -36,6 +36,10 @@ test('real Chromium: two players complete full match using page-native attack an
   assert.equal(await a.evaluate(()=>state.players[1].hand),undefined);
   assert.equal(await b.evaluate(()=>state.players[0].hand),undefined);
   assert.equal(await a.evaluate(()=>state.players[0].hand.length),5);
+  assert.equal(await a.getByRole('button',{name:'結束回合',exact:true}).count(),0,'default UI must hide native-prompt legacy end action');
+  assert.equal(await a.getByRole('button',{name:'使用國王能力',exact:true}).count(),0,'default UI must hide native-prompt legacy ability');
+  assert.equal(await a.getByRole('button',{name:'可視化抽牌／棄牌'}).count(),1);
+  assert.equal(await a.getByRole('button',{name:'可視化攻擊／選目標'}).count(),1);
   await a.locator('button[onclick="deploy(0)"]').click();
   await a.waitForFunction(()=>state.players[0].field.length===1);
   const end=async(page,expected)=>{
