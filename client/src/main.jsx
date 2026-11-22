@@ -1017,7 +1017,7 @@ function App() {
             {accountMessage && <p role="status">{accountMessage}</p>}
           </div>
           <div className="titleBadge">Online Multiplayer</div>
-          <h1>國王戰爭</h1>
+          <h1>國王戰爭 {isR21 ? "· R2.1" : ""}</h1>
           <p>和朋友對戰、挑戰電腦，或尋找線上對手。</p>
 
           <label>暱稱 / 遊戲 ID</label>
@@ -1126,6 +1126,12 @@ function App() {
         <section className="card hero lobbyCard">
           <div className="titleBadge">{room.roomType || "房間"} Code</div>
           <h1>{room.roomCode}</h1>
+          <p><strong>測試規則 R2.1：</strong>此房間以原版介面進行新規則對戰，24 HP、每回合 2 AP、三個站位。請使用兩位真人玩家加入並開始遊戲。</p>
+          <label htmlFor="r21-king-select">選擇本局國王</label>
+          <select id="r21-king-select" value={me?.r21King||""} onChange={e=>emit("room:r21SelectKing",{king:e.target.value})}>
+            <option value="">尚未選擇（開始時自動分配）</option>
+            {["亞歷山大","屋大維","成吉思汗","秦始皇","路易十四"].map(k=><option key={k} value={k} disabled={room.players.some(p=>p.id!==playerId&&p.r21King===k)}>{k}</option>)}
+          </select>
           <p>{room.isPublic ? "這是公開房間。其他玩家可以透過隨機匹配或輸入房間代碼加入。" : "這是私人房間。只有知道房間代碼的玩家可以加入。"}</p>
 
           <div className="playerList">
