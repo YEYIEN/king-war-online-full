@@ -936,7 +936,9 @@ function App() {
       if (!ok) return;
     }
 
-    requestNow("room:leave", {}, () => {});
+    requestNow("room:leave", {}, (res) => {
+      if (!res?.ok) setMessage(res?.error || "離開房間失敗");
+    });
 
     localStorage.removeItem("kw_session");
     setRoom(null);
@@ -1121,7 +1123,7 @@ function App() {
       : null;
 
   const gameEnded = room.status === "ended";
-  const winner = gameEnded ? room.players.find((p) => !p.eliminated && p.hp > 0) : null;
+  const winner = gameEnded ? (isR21 ? room.players.find((p) => p.id === room.winnerId) : room.players.find((p) => !p.eliminated && p.hp > 0)) : null;
   const didWin = gameEnded && winner?.id === playerId;
   const isSingleplayerRoom = room.players.some((p) => p.isAI);
 
