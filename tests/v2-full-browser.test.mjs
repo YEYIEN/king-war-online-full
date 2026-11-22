@@ -31,7 +31,7 @@ test('real Chromium: two browser players complete a match and see the same winne
     await dialog.accept();
    });
   }
-  const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
+  const url='http://127.0.0.1:'+http.address().port+'/v2-playtest?legacy=1';
   await Promise.all([a.goto(url),b.goto(url)]);
   await a.locator('#name').fill('A');
   await b.locator('#name').fill('B');
