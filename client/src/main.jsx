@@ -1918,6 +1918,7 @@ function App() {
             </div>
           </div>
 
+          {isR21&&r21DeployCard&&<div className="r21ControlRow"><strong>部署 {r21DeployCard.name} · 選擇站位（1 AP）</strong>{["front","center","rear"].map(pos=><button key={pos} disabled={!isMyTurn||room.ap<1||me.field.some(u=>u.position===pos)} onClick={()=>{emit("game:deploy",{cardId:r21DeployCard.id,position:pos});setR21DeployCard(null);setR21HandOpen(false);}}>{r21Positions[pos]}</button>)}<button onClick={()=>setR21DeployCard(null)}>取消選卡</button></div>}
           <div className="cardGrid">
             {me?.hand?.length ? (
               me.hand.map((card) => (
