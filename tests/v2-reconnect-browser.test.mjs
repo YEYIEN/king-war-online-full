@@ -54,3 +54,32 @@ test('real Chromium: disconnected player reloads into the same seat with private
   await a.waitForFunction(()=>state.players[1].field.length===1);
  }finally{await ctx.close();await browser.close();await new Promise(resolve=>io.close(resolve))}
 });
+
+test('real Chromium: immediate refresh reclaims same seat before server observes disconnect',{timeout:60000},async()=>{
+ const http=createServer((req,res)=>{if(req.url?.startsWith('/v2-playtest')){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}else{res.writeHead(404);res.end('not found')}});
+ const io=new Server(http);registerV2Playtest(io,{reconnectGraceMs:30000});
+ await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',args:['--no-sandbox']});
+ const ctx=await browser.newContext(),a=await ctx.newPage(),b=await ctx.newPage();
+ try{
+  for(const p of [a,b])p.setDefaultTimeout(12000);
+  const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
+  await Promise.all([a.goto(url),b.goto(url)]);
+  await a.getByRole('button',{name:'建立房間'}).click();
+  await a.waitForFunction(()=>document.querySelector('#code').value.length===8);
+  const code=await a.locator('#code').inputValue();
+  await b.locator('#code').fill(code);
+  await b.getByRole('button',{name:'加入房間'}).click();
+  await b.waitForFunction(()=>state?.you===1);
+  await a.getByRole('button',{name:'開始對戰'}).click();
+  await b.waitForFunction(()=>state?.status==='playing');
+  const before=await b.evaluate(()=>({hand:state.players[1].hand.map(c=>c.id),token:JSON.parse(sessionStorage.getItem('kw_v2_resume')).resumeToken}));
+  await b.reload();
+  await b.waitForFunction(()=>state?.you===1&&state?.status==='playing'&&state?.players[1]?.connected===true);
+  const after=await b.evaluate(()=>({hand:state.players[1].hand.map(c=>c.id),token:JSON.parse(sessionStorage.getItem('kw_v2_resume')).resumeToken}));
+  assert.deepEqual(after.hand,before.hand);
+  assert.notEqual(after.token,before.token);
+  assert.equal(await a.evaluate(()=>state.players[1].hand),undefined);
+  assert.equal(await a.evaluate(()=>state.players[1].hp),24);
+ }finally{await ctx.close();await browser.close();await new Promise(resolve=>io.close(resolve))}
+});
