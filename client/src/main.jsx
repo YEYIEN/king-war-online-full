@@ -1124,7 +1124,9 @@ function App() {
 
   const gameEnded = room.status === "ended";
   const winner = gameEnded ? (isR21 ? room.players.find((p) => p.id === room.winnerId) : room.players.find((p) => !p.eliminated && p.hp > 0)) : null;
-  const didWin = gameEnded && winner?.id === playerId;
+  // R2.1 settlement is authoritative: compare stable server winnerId directly.
+  // Another participant leaving the result screen must never change this result.
+  const didWin = gameEnded && (isR21 ? room.winnerId != null && room.winnerId === playerId : winner?.id === playerId);
   const isSingleplayerRoom = room.players.some((p) => p.isAI);
 
   if (room.status === "lobby") {
