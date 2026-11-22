@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {registerV2Playtest} from './v2-playtest-socket.mjs';
 
-function setup({reconnectGraceMs=60000}={}){
+function setup({reconnectGraceMs=60000,players=2}={}){
  const sockets=new Map(),nsp={on(event,fn){if(event==='connection')this.connect=fn},to(id){return {emit(event,payload){sockets.get(id)?.messages.push({event,payload})}}}};
  registerV2Playtest({of(){return nsp}},{reconnectGraceMs});
  const connect=id=>{
@@ -16,8 +16,10 @@ function setup({reconnectGraceMs=60000}={}){
  assert.equal(created.ok,true);
  const joined=b.send('v2:join',{code,king:'屋大維奧古斯都'});
  assert.equal(joined.ok,true);
+ const c=players===3?connect('c'):null;
+ if(c)assert.equal(c.send('v2:join',{code,king:'秦始皇'}).ok,true);
  assert.equal(a.send('v2:start',{code}).ok,true);
- return {a,b,connect,state,code,created,joined};
+ return {a,b,c,connect,state,code,created,joined};
 }
 test('disconnected seat resumes with same hidden hand and rotating token',()=>{
  const {a,b,connect,state,code,joined}=setup();
@@ -81,4 +83,19 @@ test('waiting lobby requires all seats connected before starting',()=>{
  })();
  b.disconnect();
  assert.equal(a.send('v2:start',{code}).ok,false);
+});
+
+test('expired seat cannot reuse old token while a three-player match continues',async()=>{
+ const {a,b,c,connect,state,code,joined}=setup({reconnectGraceMs:10,players:3});
+ b.disconnect();
+ assert.equal(state(a).status,'playing');
+ await new Promise(resolve=>setTimeout(resolve,40));
+ assert.equal(state(a).players[1].hp,0);
+ assert.equal(state(a).players[1].handCount,0);
+ assert.equal(state(a).status,'playing');
+ const impostor=connect('expired-return');
+ assert.equal(impostor.send('v2:resume',{code,resumeToken:joined.resumeToken}).ok,false,'expired seat is not reclaimable');
+ assert.equal(a.send('v2:end',{code,overflowDiscardIndices:[0,1]}).ok,true);
+ assert.equal(state(c).current,2,'eliminated player must be skipped');
+ assert.equal(state(c).players[0].hand,undefined);
 });
