@@ -1462,3 +1462,52 @@
   .kwCombatV3.kwR21PersistentHand .r21PersistentHand .mobileHandHidden {display:flex !important;}
   .kwCombatV3.kwR21PersistentHand .r21TurnStatus {font-size:12px;}
 }
+
+/* Stage 1 visibility correction: old mobile grid and footer rules occupied the viewport. */
+.kwCombatV3.kwR21PersistentHand {gap:4px !important;}
+.kwCombatV3.kwR21PersistentHand > .kwBattleFrame {
+  flex:1 1 0 !important;min-height:0 !important;max-height:none !important;
+  grid-template-areas:"score" "arena" "hand" !important;
+  grid-template-rows:minmax(66px,auto) minmax(0,1fr) minmax(152px,25dvh) !important;
+  overflow:hidden !important;
+}
+.kwCombatV3.kwR21PersistentHand .kwScoreStrip {
+  height:auto !important;min-height:66px !important;max-height:none !important;
+  overflow:visible !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21TurnStatus {
+  flex:1 0 100% !important;min-height:30px !important;
+  background:#365878 !important;border:1px solid #e6bd73 !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .cardGrid {
+  display:flex !important;grid-template-columns:none !important;grid-template-rows:none !important;
+  flex-wrap:nowrap !important;overflow-x:auto !important;overflow-y:hidden !important;
+  touch-action:pan-x !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .handCard {
+  flex:0 0 94px !important;width:94px !important;min-width:94px !important;
+  height:100% !important;
+}
+.kwCombatV3.kwR21PersistentHand > .r21AuxControls {
+  order:2 !important;flex:0 0 auto !important;
+  height:auto !important;min-height:0 !important;max-height:34dvh !important;
+  padding:4px 8px !important;overflow-y:auto !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21AdvancedActions > summary {
+  cursor:pointer;padding:7px 10px;border:1px solid #6c8ba6;border-radius:8px;
+  background:#1e3953;color:#f6e5bd;font-weight:700;
+}
+.kwCombatV3.kwR21PersistentHand .r21AdvancedActions:not([open]) {min-height:0;}
+.kwCombatV3.kwR21PersistentHand .r21AdvancedActions[open] > div {padding:8px 0;}
+@media(max-width:800px) {
+  .kwCombatV3.kwR21PersistentHand > .kwBattleFrame {
+    min-height:0 !important;
+    grid-template-rows:minmax(66px,auto) minmax(0,1fr) minmax(148px,26dvh) !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .battleHandPrimary {
+    display:flex !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .cardGrid {
+    display:flex !important;overflow-x:auto !important;touch-action:pan-x !important;
+  }
+}
