@@ -1375,3 +1375,14 @@
 .r21SpellFooter button,.r21SpellHeader button {min-height:40px;padding:8px 14px;border:1px solid #8090a5;border-radius:8px;background:#263950;color:white;}
 .r21SpellFooter button:disabled {opacity:.5;cursor:not-allowed;}
 @media(max-width:600px){.r21SpellBackdrop {padding:6px;align-items:stretch;}.r21SpellDialog {max-height:calc(100dvh - 12px);margin:auto 0;}.r21SpellHeader,.r21SpellFooter {padding:10px;}.r21SpellBody {padding:10px;}}
+
+
+/* R2.1 condensed HUD and private hand/deployment overlay */
+.kwCombatV3 .r21HandEntry {display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid #64748b;border-radius:10px;background:#1a2a42;color:#fff;}
+.kwCombatV3 .r21HandEntry button {padding:10px 16px;border:1px solid #d2b36a;border-radius:8px;background:#30445f;color:#fff;font-weight:700;}
+.kwCombatV3 .r21HandModal {position:fixed;z-index:99990;inset:0;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;background:rgba(0,0,0,.83);}
+.kwCombatV3 .r21HandModal .battleHandPrimary {max-width:min(880px,100%);width:100%;background:#13223a;padding:16px;border:1px solid #8794a7;border-radius:14px;}
+.kwCombatV3 .r21HandModal .sideColumn,.kwCombatV3 .r21HandModal .mobileDeckControls {display:none;}
+.kwCombatV3 .r21KingToggle {display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #b79b59;border-radius:8px;background:#29344c;color:#fff;}
+.kwCombatV3 .r21KingToggle input {width:18px;height:18px;}
+@media(max-width:600px){.kwCombatV3 .r21HandModal {padding:2vh 5px;}.kwCombatV3 .r21HandModal .battleHandPrimary {padding:8px;}}
