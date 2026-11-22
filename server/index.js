@@ -1,6 +1,7 @@
 
 import express from "express";
 import { registerV2Playtest } from "./v2-playtest-socket.mjs";
+import { registerR21V2 } from "./r21-v2-socket-adapter.mjs";
 import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
@@ -33,7 +34,10 @@ const io = new Server(server, {
   maxHttpBufferSize:32*1024
 });
 registerV2Playtest(io);
+registerR21V2(io);
 app.get("/v2-playtest", (_req,res)=>res.sendFile(path.join(__dirname,"v2-playtest.html")));
+app.get("/v2-r21", (_req,res)=>res.sendFile(path.join(__dirname,"r21-playtest.html")));
+app.get("/v2-r21/health", (_req,res)=>res.json({ok:true,namespace:"/v2-r21",rules:"R2.1"}));
 const rooms = new Map();
 const MAX_LIVE_ROOMS = Math.max(1,Math.min(10000,Number(process.env.KW_MAX_ROOMS)||200));
 function atRoomCapacity(){return process.env.KW_SIMULATION!=="1" && rooms.size>=MAX_LIVE_ROOMS;}
