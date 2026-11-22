@@ -474,6 +474,7 @@ function App() {
   const [r21CastFrom, setR21CastFrom] = useState("");
   const [r21Spell, setR21Spell] = useState("火球術");
   const [r21CastTo, setR21CastTo] = useState("front");
+  const [r21CastPlayerId, setR21CastPlayerId] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -1098,6 +1099,39 @@ function App() {
     .every((p) => p.ready);
   const isMyTurn = room.currentPlayerId === playerId && room.phase !== "guard";
   const isR21 = room.rules === "R2.1";
+  const r21SpellDetails = {
+    "火球術":[1,"enemy","消滅初級兵種；其他兵種戰力 -1（不可重複）。"],
+    "冰凍術":[1,"enemy","凍結敵方兵種，使其下一回合無法行動。"],
+    "力量術":[1,"self","我方兵種下一次戰鬥戰力 +1。"],
+    "虛弱術":[2,"enemy","敵方兵種下一次戰鬥戰力 -1。"],
+    "增強術":[2,"self","我方兵種攻擊國王時傷害 +1。"],
+    "流星雨":[2,"enemy","消滅指定敵方玩家場上所有初級兵種，無須選站位。"],
+    "毒藥瓶":[3,"enemy","敵方兵種在其回合結束時被消滅。"],
+    "燃血術":[3,"self","消耗我方國王 3 HP，使我方兵種下一次戰鬥戰力 +2。"],
+    "天殞術":[3,"enemy","消滅敵方兵種；施法法師下一回合無法行動。"]
+  };
+  const r21Positions = {front:"前排",center:"中排",rear:"後排"};
+  const r21Caster = me?.field?.find(u=>u.position===r21CastFrom && u.type==="魔法師");
+  const r21CasterLevel = r21Caster ? ["初級","中級","高級"].indexOf(r21Caster.rank)+1 : 0;
+  const r21AvailableSpells = Object.entries(r21SpellDetails).filter(([,info])=>info[0]<=r21CasterLevel);
+  const r21ChosenSpell = r21AvailableSpells.some(([name])=>name===r21Spell) ? r21Spell : (r21AvailableSpells[0]?.[0] || "");
+  const r21SpellInfo = r21SpellDetails[r21ChosenSpell];
+  const r21SpellTargets = r21SpellInfo?.[1]==="self" ? (me?[me]:[]) : room.players.filter(p=>p.id!==playerId&&!p.eliminated);
+  const r21CastPlayer = r21SpellTargets.find(p=>p.id===r21CastPlayerId) || r21SpellTargets[0];
+  const r21ValidUnits = (r21CastPlayer?.field || []).filter(u=>
+    r21ChosenSpell==="流星雨" ? u.rank==="初級" :
+    !(u.status||[]).includes(r21ChosenSpell)
+  );
+  const r21CastPosition = r21ValidUnits.find(u=>u.position===r21CastTo)?.position || r21ValidUnits[0]?.position || "";
+  const r21CastBlocked = !r21Caster ? "請先選擇我方法師。" :
+    r21Caster.tapped ? "這名法師目前無法行動。" :
+    room.ap<=0 ? "行動點不足（需要 1 AP）。" :
+    room.spellUsed ? "本回合已施放過魔法。" :
+    !r21SpellInfo ? "沒有可施放的法術。" :
+    !r21CastPlayer ? "沒有合法目標玩家。" :
+    !r21ValidUnits.length ? "目前沒有符合條件的目標兵種。" :
+    r21ChosenSpell==="燃血術" && me.hp<=3 ? "國王生命須高於 3 才能施放燃血術。" : "";
+
   const mustGuard = isR21 && room.phase === "guard" && room.pending?.defenderId === playerId;
   const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
   const targetPlayer = enemies.find((p) => p.id === targetPlayerId) || enemies[0];
@@ -2125,24 +2159,37 @@ function App() {
           {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
         </div>}
         {isMyTurn && <div role="group" aria-label="R2.1 行動">
-          <div className="r21ControlRow">
-            <label>施法者
-              <select value={r21CastFrom} onChange={e=>setR21CastFrom(e.target.value)}>
+
+          <div className="r21CastFlow" aria-label="R2.1 法師施法流程">
+            <h3>法師施法 <small>1 AP · 每回合一次</small></h3>
+            <label>① 選擇我方法師
+              <select value={r21CastFrom} onChange={e=>{setR21CastFrom(e.target.value);setR21CastTo("");}}>
                 <option value="">選擇我方法師</option>
-                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position}>{u.name}（{({front:"前排",center:"中排",rear:"後排"})[u.position]}）</option>)}
+                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}{u.tapped?"（無法行動）":""}</option>)}
               </select>
             </label>
-            <label>魔法
-              <select value={r21Spell} onChange={e=>setR21Spell(e.target.value)}>
-                {["火球術","冰凍術","力量術","虛弱術","增強術","流星雨","毒藥瓶","燃血術","天殞術"].map(spell=><option key={spell} value={spell}>{spell}</option>)}
-              </select>
-            </label>
-            <label>目標站位
-              <select value={r21CastTo} onChange={e=>setR21CastTo(e.target.value)}>
-                <option value="front">前排</option><option value="center">中排</option><option value="rear">後排</option>
-              </select>
-            </label>
-            <button disabled={!r21CastFrom} onClick={()=>{const self=["力量術","增強術","燃血術"].includes(r21Spell);const target=self?me:targetPlayer;emit("game:r21Cast",{from:r21CastFrom,spell:r21Spell,player:target.id,to:r21CastTo});}}>確認施法（1 AP）</button>
+            {r21Caster && <>
+              <p className="r21CastHint">② 可用法術（{r21Caster.rank}法師：1–{r21CasterLevel} 級）</p>
+              <div className="r21SpellChoices" role="group" aria-label="可用法術">
+                {r21AvailableSpells.map(([spell,info])=><button type="button" key={spell} className={r21ChosenSpell===spell?"r21SpellSelected":""} aria-pressed={r21ChosenSpell===spell} onClick={()=>{setR21Spell(spell);setR21CastTo("");}}>{spell} · {info[0]} 級</button>)}
+              </div>
+              {r21SpellInfo && <p className="r21SpellDescription"><strong>{r21ChosenSpell}：</strong>{r21SpellInfo[2]}</p>}
+              <p className="r21CastHint">③ 選擇合法目標（{r21SpellInfo?.[1]==="self"?"我方":"敵方"}）</p>
+              {r21SpellInfo?.[1]==="enemy" && <label>目標玩家
+                <select value={r21CastPlayer?.id || ""} onChange={e=>{setR21CastPlayerId(e.target.value);setR21CastTo("");}}>
+                  {r21SpellTargets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>}
+              {r21ChosenSpell!=="流星雨" && <label>目標兵種
+                <select value={r21CastPosition} onChange={e=>setR21CastTo(e.target.value)} disabled={!r21ValidUnits.length}>
+                  {!r21ValidUnits.length && <option value="">沒有合法目標</option>}
+                  {r21ValidUnits.map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}</option>)}
+                </select>
+              </label>}
+              {r21ChosenSpell==="流星雨" && <p className="r21CastHint">目標：{r21CastPlayer?.name || "尚未選擇"}場上全部初級兵種（{r21ValidUnits.length} 名）</p>}
+              {r21CastBlocked && <p className="r21CastWarning" role="status">{r21CastBlocked}</p>}
+              <button type="button" className="primaryBtn" disabled={!!r21CastBlocked} onClick={()=>emit("game:r21Cast",{from:r21CastFrom,spell:r21ChosenSpell,player:r21CastPlayer.id,to:r21ChosenSpell==="流星雨"?"front":r21CastPosition})}>④ 確認施法（消耗 1 AP）</button>
+            </>}
           </div>
           <div className="r21ControlRow">
             <label>移動兵種
