@@ -15,6 +15,14 @@ test('real Chromium: disconnected player reloads into the same seat with private
  const ctx=await browser.newContext(),a=await ctx.newPage(),b=await ctx.newPage();
  try{
   a.setDefaultTimeout(12000);b.setDefaultTimeout(12000);
+  a.on('dialog',async dialog=>{
+   if(dialog.type()==='prompt'){
+    const match=dialog.message().match(/請選擇 ([0-9]+) 張棄置/);
+    if(match)return dialog.accept(Array.from({length:Number(match[1])},(_,i)=>i+1).join(','));
+   }
+   if(dialog.type()==='confirm')return dialog.dismiss();
+   return dialog.accept('1');
+  });
   const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
   await Promise.all([a.goto(url),b.goto(url)]);
   await a.getByRole('button',{name:'建立房間'}).click();
@@ -40,6 +48,7 @@ test('real Chromium: disconnected player reloads into the same seat with private
   assert.equal(await a.evaluate(()=>state.players[1].hand),undefined);
   await a.getByRole('button',{name:'結束回合'}).click();
   await b.waitForFunction(()=>state.current===1);
+  assert.equal(await a.locator('#error').textContent(),'','end turn after reconnect must succeed');
   assert.equal(await b.evaluate(()=>state.you),1);
   await b.locator('button[onclick="deploy(0)"]').click();
   await a.waitForFunction(()=>state.players[1].field.length===1);
