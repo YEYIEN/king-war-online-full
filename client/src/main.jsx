@@ -1120,11 +1120,12 @@ function App() {
   const r21CastPlayer = r21SpellTargets.find(p=>p.id===r21CastPlayerId) || r21SpellTargets[0];
   const r21ValidUnits = (r21CastPlayer?.field || []).filter(u=>
     r21ChosenSpell==="流星雨" ? u.rank==="初級" :
+    r21ChosenSpell==="火球術" && u.rank==="初級" ? true :
     !(u.status||[]).includes(r21ChosenSpell)
   );
   const r21CastPosition = r21ValidUnits.find(u=>u.position===r21CastTo)?.position || r21ValidUnits[0]?.position || "";
   const r21CastBlocked = !r21Caster ? "請先選擇我方法師。" :
-    r21Caster.tapped ? "這名法師目前無法行動。" :
+    r21Caster.tapped ? "這名法師目前無法行動（已行動、剛部署或受限制）。" :
     room.ap<=0 ? "行動點不足（需要 1 AP）。" :
     room.spellUsed ? "本回合已施放過魔法。" :
     !r21SpellInfo ? "沒有可施放的法術。" :
@@ -2165,7 +2166,7 @@ function App() {
             <label>① 選擇我方法師
               <select value={r21CastFrom} onChange={e=>{setR21CastFrom(e.target.value);setR21CastTo("");}}>
                 <option value="">選擇我方法師</option>
-                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}{u.tapped?"（無法行動）":""}</option>)}
+                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position} disabled={u.tapped}>{u.name} · {r21Positions[u.position]}{u.tapped?"（無法行動）":""}</option>)}
               </select>
             </label>
             {r21Caster && <>
@@ -2173,7 +2174,7 @@ function App() {
               <div className="r21SpellChoices" role="group" aria-label="可用法術">
                 {r21AvailableSpells.map(([spell,info])=><button type="button" key={spell} className={r21ChosenSpell===spell?"r21SpellSelected":""} aria-pressed={r21ChosenSpell===spell} onClick={()=>{setR21Spell(spell);setR21CastTo("");}}>{spell} · {info[0]} 級</button>)}
               </div>
-              {r21SpellInfo && <p className="r21SpellDescription"><strong>{r21ChosenSpell}：</strong>{r21SpellInfo[2]}</p>}
+              {r21SpellInfo && <p className="r21SpellDescription" role="status"><strong>{r21ChosenSpell}（{r21SpellInfo[0]} 級）：</strong>{r21SpellInfo[2]}<span> · 消耗 1 AP · 本回合最多一次</span></p>}
               <p className="r21CastHint">③ 選擇合法目標（{r21SpellInfo?.[1]==="self"?"我方":"敵方"}）</p>
               {r21SpellInfo?.[1]==="enemy" && <label>目標玩家
                 <select value={r21CastPlayer?.id || ""} onChange={e=>{setR21CastPlayerId(e.target.value);setR21CastTo("");}}>
