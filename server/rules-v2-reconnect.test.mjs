@@ -99,3 +99,19 @@ test('expired seat cannot reuse old token while a three-player match continues',
  assert.equal(state(c).current,2,'eliminated player must be skipped');
  assert.equal(state(c).players[0].hand,undefined);
 });
+
+test('atomic seat takeover works before old connection disconnects',()=>{
+ const {a,b,connect,state,code,joined}=setup();
+ const newer=connect('instant-reload');
+ const resumed=newer.send('v2:resume',{code,resumeToken:joined.resumeToken});
+ assert.equal(resumed.ok,true,resumed.error);
+ assert.equal(state(newer).you,1);
+ assert.equal(state(b).players[1].hand.length,5,'old snapshot stays unchanged but is not authoritative');
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,false,'old live connection must lose authority');
+ assert.equal(a.send('v2:end',{code,overflowDiscardIndices:[0,1]}).ok,true);
+ assert.equal(newer.send('v2:deploy',{code,index:0}).ok,true);
+ b.disconnect();
+ assert.equal(state(a).players[1].connected,true,'late old socket disconnect cannot eliminate resumed seat');
+ assert.equal(state(a).players[1].hp,24);
+ assert.equal(a.send('v2:resume',{code,resumeToken:joined.resumeToken}).ok,false);
+});
