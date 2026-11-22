@@ -2001,6 +2001,7 @@ io.on("connection", socket => {
 
   guardedOn("game:r21Guard", ({cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"GUARD",cardId});});
   guardedOn("game:r21Move", ({from,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"MOVE",from,to});});
+  guardedOn("game:r21Cast", ({from,spell,player,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});const targetIndex=rf.room.players.findIndex(p=>p.id===player);return r21Handle(rf.room,rf.player,reply,{type:"CAST",from,spell,player:targetIndex,to});});
   guardedOn("game:r21Ability", ({from,cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"ABILITY",from,cardId});});
   guardedOn("game:lastStand", ({ mode = "assault" } = {}, reply) => {
     const found = findBySocket(socket.id);
