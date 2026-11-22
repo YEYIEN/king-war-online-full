@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
-const url=process.env.V2_LIVE_URL||'https://king-war-v2-playtest.onrender.com/v2-playtest';
+const url=(process.env.V2_LIVE_URL||'https://king-war-v2-playtest.onrender.com/v2-playtest')+'?legacy=1';
 test('deployed V2: two independent Chromium clients can join, deploy, and alternate turns',{timeout:100000},async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',args:['--no-sandbox']});
  const ctx=await browser.newContext(),a=await ctx.newPage(),b=await ctx.newPage();
