@@ -54,7 +54,11 @@ test('nine spells: two Chromium clients use page-native mage, opponent and targe
     await a.getByRole('button',{name:'可視化施放｜'+spell.name}).click();
     await a.locator('#magic-choice').waitFor();
     await a.locator('#magic-choice button[onclick="chooseMagicMage(0)"]').click();
-    await a.locator('#magic-choice button[onclick="chooseMagicOpponent(1)"]').click();
+    if(spell.target==='enemy')await a.locator('#magic-choice button[onclick="chooseMagicOpponent(1)"]').click();
+    else{
+     assert.equal(await a.locator('#magic-choice button[onclick^="chooseMagicOpponent"]').count(),0,'self spell should not request opponent');
+     assert.equal(await a.evaluate(()=>magicDraft.defenderPlayerIndex),1,'self spell uses an internal living opponent for server contract');
+    }
     if(spell.maxTargets>0){
      await a.locator('#magic-choice button[onclick="chooseMagicTarget(0)"]').click();
     }else assert.equal(await a.locator('#magic-choice button[onclick^="chooseMagicTarget"]').count(),0,'meteor no unit targets');
