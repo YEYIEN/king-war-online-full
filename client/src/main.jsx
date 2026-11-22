@@ -1017,7 +1017,7 @@ function App() {
             {accountMessage && <p role="status">{accountMessage}</p>}
           </div>
           <div className="titleBadge">Online Multiplayer</div>
-          <h1>國王戰爭 {isR21 ? "· R2.1" : ""}</h1>
+          <h1>國王戰爭 {room?.rules === "R2.1" ? "· R2.1" : ""}</h1>
           <p>和朋友對戰、挑戰電腦，或尋找線上對手。</p>
 
           <label>暱稱 / 遊戲 ID</label>
