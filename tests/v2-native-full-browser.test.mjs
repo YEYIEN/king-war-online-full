@@ -12,7 +12,7 @@ const order=cards=>{
  const used=new Set(archers.map(x=>x.id));
  return [...archers,...cards.filter(c=>!used.has(c.id))];
 };
-test('real Chromium: two players complete a full match using page-native end turn choices',{timeout:120000},async()=>{
+test('real Chromium: two players complete full match using page-native attack and end-turn choices',{timeout:120000},async()=>{
  const http=createServer((req,res)=>{if(req.url?.startsWith('/v2-playtest')){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}else{res.writeHead(404);res.end('not found')}});
  const io=new Server(http);registerV2Playtest(io,{deckOrder:order});
  await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
@@ -53,8 +53,11 @@ test('real Chromium: two players complete a full match using page-native end tur
   await end(a,1);
   await end(b,0);
   for(let attack=1;attack<=5;attack++){
-   await a.locator('button[onclick="select(0)"]').click();
-   await a.locator('button[onclick="kingHit(1)"]').click();
+   await a.getByRole('button',{name:'可視化攻擊／選目標'}).click();
+   await a.locator('#tactic-choice button[onclick="chooseTactic(\\'attackerIndex\\',0)"]').click();
+   await a.locator('#tactic-choice button[onclick="chooseTactic(\\'defenderPlayerIndex\\',1)"]').click();
+   await a.locator('#tactic-choice button[onclick="chooseTacticKing()"]').click();
+   await a.getByRole('button',{name:'確認戰術操作'}).click();
    await b.getByRole('button',{name:'不保牌，承受傷害'}).click();
    await Promise.all([a.waitForFunction(i=>state?.players?.[1]?.hp===Math.max(0,24-i*5),attack),b.waitForFunction(i=>state?.players?.[1]?.hp===Math.max(0,24-i*5),attack)]);
    if(attack!==5){await end(a,1);await end(b,0)}
@@ -66,6 +69,6 @@ test('real Chromium: two players complete a full match using page-native end tur
   assert.equal(await b.evaluate(()=>state.players[0].hand),undefined);
   assert.match(await a.locator('#game').innerText(),/勝者 A/);
   assert.match(await b.locator('#game').innerText(),/勝者 A/);
-  assert.equal(dialogs,0,'native end-choice full match must not use browser dialogs');
+  assert.equal(dialogs,0,'native attack + end-choice match must not use browser dialogs');
  }finally{await ctx.close();await browser.close();await new Promise(resolve=>io.close(resolve))}
 });
