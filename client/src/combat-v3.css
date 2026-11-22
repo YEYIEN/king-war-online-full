@@ -1314,3 +1314,35 @@
 .kwCombatV3 .r21CastWarning {color:#fbbf24;font-weight:600;}
 .kwCombatV3 .r21CastHint {font-weight:600;opacity:.9;}
 .kwCombatV3 .r21CastFlow .primaryBtn:disabled {opacity:.45;cursor:not-allowed;}
+
+
+/* Spell flow: a readable, scrollable action panel without hiding the arena. */
+.kwCombatV3 > .r21AuxControls {
+  max-height: clamp(260px, 42dvh, 460px) !important;
+  scrollbar-gutter: stable;
+}
+.kwCombatV3 .r21CastFlow {
+  gap: 10px;
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid rgba(148,163,184,.4);
+  border-radius: 10px;
+  background: rgba(15,23,42,.55);
+}
+.kwCombatV3 .r21SpellChoices button[aria-pressed="true"] {
+  outline: 2px solid #f5c66a;
+  outline-offset: 1px;
+}
+.kwCombatV3 .r21SpellDescription {
+  padding: 10px 12px;
+  border-left: 3px solid #f5c66a;
+  background: rgba(245,198,106,.1);
+  line-height: 1.6;
+}
+.kwCombatV3 .r21CastHint {margin: 2px 0; font-weight: 600;}
+@media (max-width: 800px) and (orientation: portrait) {
+  .kwCombatV3 > .r21AuxControls {
+    max-height: clamp(210px, 38dvh, 360px) !important;
+  }
+  .kwCombatV3 .r21CastFlow {padding: 8px;}
+}
