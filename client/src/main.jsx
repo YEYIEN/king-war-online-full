@@ -2134,7 +2134,7 @@ function App() {
                   key={card.id}
                   card={card}
                   selected={magicPlan?.targetUnitIds.includes(card.id)}
-                  disabled={!isMyTurn || (isR21&&r21UnitAction!=="attack") || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
+                  disabled={!isMyTurn || (isR21&&(!attackerId||r21UnitAction!=="attack")) || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
                   onClick={() => (magicPlan ? chooseMagicTarget(card.id) : attackUnit(card.id))}
                   actionLabel={enemyCardActionLabel(card)}
                   highlight={attackerId && !magicPlan ? "attackable" : ""}
@@ -2210,7 +2210,7 @@ function App() {
           <button onClick={()=>emit("game:r21Guard",{})}>不保牌，承受傷害</button>
           {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
         </div>}
-        {isMyTurn && <details className="r21AdvancedActions"><summary>更多操作：魔法、移動與國王能力</summary><div role="group" aria-label="R2.1 行動">
+        {isMyTurn && <details className="r21AdvancedActions"><summary>國王能力與特殊效果</summary><div role="group" aria-label="R2.1 行動">
 
           {me.king?.name==="亞歷山大大帝"&&<label className="r21KingToggle"><input type="checkbox" checked={r21Alexander&&!me.abilityUsed} disabled={!isMyTurn||me.abilityUsed||room.ap<1} onChange={e=>setR21Alexander(e.target.checked)}/>亞歷山大戰術 +1（{me.abilityUsed?"本回合已使用":"每回合一次；攻王不額外加傷害"}）</label>}
 
