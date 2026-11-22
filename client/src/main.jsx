@@ -1842,6 +1842,7 @@ function App() {
           {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
         </div>}
         {isMyTurn && <div role="group" aria-label="R2.1 行動">
+          <button onClick={()=>{const from=window.prompt("施法法師站位：front / center / rear");if(!from)return;const spell=window.prompt("魔法名稱：火球術、冰凍術、力量術、虛弱術、增強術、流星雨、毒藥瓶、燃血術、天殞術");if(!spell)return;const self=["力量術","增強術","燃血術"].includes(spell);const target=self?me:targetPlayer;const to=spell==="流星雨"?"front":window.prompt("魔法目標站位：front / center / rear");if(!to)return;emit("game:r21Cast",{from,spell,player:target.id,to});}}>施放魔法（1 AP）</button>
           <button onClick={()=>{const from=window.prompt("移動哪個站位？front / center / rear");const to=window.prompt("移動至哪個站位？front / center / rear");if(from&&to)emit("game:r21Move",{from,to});}}>移動兵種（1 AP）</button>
           {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button onClick={()=>{const from=window.prompt("能力發動站位：front / center / rear");const cardId=me.king.name==="成吉思汗"?window.prompt("交換的手牌 ID（點選卡牌資訊查看）"):undefined;if(from)emit("game:r21Ability",{from,cardId});}}>國王能力（1 AP）</button>}
         </div>}
