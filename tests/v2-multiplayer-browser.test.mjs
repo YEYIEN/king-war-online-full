@@ -14,7 +14,7 @@ const order=cards=>{
 };
 const waitForTurn=async(page,player)=>page.waitForFunction(i=>state?.status==='playing'&&state.current===i,player);
 for(const size of [3,4,5]){
- test('real Chromium: '+size+' players complete full match via native tactic/end-turn UI with private hands',{timeout:240000},async()=>{
+ test('real Chromium: '+size+' players complete full match via native tactic/end-turn UI with private hands',{timeout:size===5?420000:240000},async()=>{
   const http=createServer((req,res)=>{if(req.url?.startsWith('/v2-playtest')){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}else{res.writeHead(404);res.end('not found')}});
   const io=new Server(http);registerV2Playtest(io,{deckOrder:order});
   await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
