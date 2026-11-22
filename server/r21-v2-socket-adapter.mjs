@@ -1,0 +1,15 @@
+import {randomBytes} from 'node:crypto';
+import {newGame,applyCommand,checkInvariants,KINGS} from './rules-r21-engine.mjs';
+const token=()=>randomBytes(24).toString('hex');
+const publicView=(state,seat)=>({rules:state.rules,phase:state.phase,turn:state.turn,current:state.current,ap:state.ap,winner:state.winner,pending:state.pending&&{defenderId:state.pending.defenderId,attackerId:state.pending.attackerId,damage:state.pending.damage},deckCount:state.deck.length,discardCount:state.discard.length,players:state.players.map(p=>({id:p.id,king:p.king,hp:p.hp,field:p.field,handCount:p.hand.length,...(p.id===seat?{hand:p.hand}:{})}))});
+export function registerR21V2(io){const nsp=io.of('/v2-r21'),rooms=new Map();nsp.on('connection',socket=>{
+ const reply=(ack,value)=>{if(typeof ack==='function')ack(value)};
+ const publish=r=>{for(const [sid,seat] of r.seats)nsp.to(sid).emit('r21:state',{room:r.code,started:!!r.game,players:r.members.map(({king})=>({king})),...(r.game?{state:publicView(r.game,seat)}:{})})};
+ const safe=(ack,fn)=>{try{reply(ack,{ok:true,...fn()})}catch(e){reply(ack,{ok:false,error:e.message})}};
+ socket.on('r21:create',({king}={},ack)=>safe(ack,()=>{if(!KINGS.includes(king))throw Error('Invalid king');const code=randomBytes(4).toString('hex');const t=token();const r={code,members:[{king,token:t}],seats:new Map([[socket.id,0]]),game:null};rooms.set(code,r);socket.join(code);publish(r);return {code,seat:0,token:t}}));
+ socket.on('r21:join',({code,king}={},ack)=>safe(ack,()=>{const r=rooms.get(code);if(!r||r.game)throw Error('Room unavailable');if(!KINGS.includes(king)||r.members.some(m=>m.king===king)||r.members.length>=5)throw Error('Invalid king or full room');const seat=r.members.length,t=token();r.members.push({king,token:t});r.seats.set(socket.id,seat);socket.join(code);publish(r);return {code,seat,token:t}}));
+ socket.on('r21:resume',({code,seat,token:t}={},ack)=>safe(ack,()=>{const r=rooms.get(code);if(!r||!Number.isInteger(seat)||r.members[seat]?.token!==t)throw Error('Invalid resume credentials');for(const [sid,i] of r.seats)if(i===seat)r.seats.delete(sid);r.seats.set(socket.id,seat);socket.join(code);publish(r);return {code,seat}}));
+ socket.on('r21:start',({code}={},ack)=>safe(ack,()=>{const r=rooms.get(code);if(!r||r.seats.get(socket.id)!==0||r.game||r.members.length<2)throw Error('Cannot start');r.game=newGame(r.members.map(m=>m.king));checkInvariants(r.game);publish(r);return {started:true}}));
+ socket.on('r21:command',({code,command}={},ack)=>safe(ack,()=>{const r=rooms.get(code),seat=r?.seats.get(socket.id);if(!r?.game||seat===undefined)throw Error('Not in active game');const next=applyCommand(r.game,seat,command);checkInvariants(next);r.game=next;publish(r);return {turn:r.game.turn,phase:r.game.phase}}));
+ socket.on('disconnect',()=>{for(const r of rooms.values())r.seats.delete(socket.id)});
+ });return {namespace:'/v2-r21',rooms};}
