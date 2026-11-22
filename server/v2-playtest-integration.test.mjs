@@ -8,7 +8,7 @@ function harness(count){
   on(event,fn){if(event==='connection')this.connect=fn},
   to(id){return {emit(event,data){if(event==='v2:state')states.set(id,data)}}}
  };
- registerV2Playtest({of(){return nsp}},{deckOrder:cards=>cards.sort((a,b)=>({高級:0,中級:1,初級:2}[a.rank]-{高級:0,中級:1,初級:2}[b.rank]))});
+ registerV2Playtest({of(){return nsp}},{reconnectGraceMs:0,deckOrder:cards=>cards.sort((a,b)=>({高級:0,中級:1,初級:2}[a.rank]-{高級:0,中級:1,初級:2}[b.rank]))});
  for(let i=0;i<count;i++){
   const handlers={};
   const socket={id:'p'+i,on(e,fn){handlers[e]=fn},join(){}};
