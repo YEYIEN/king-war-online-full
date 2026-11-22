@@ -1346,3 +1346,32 @@
   }
   .kwCombatV3 .r21CastFlow {padding: 8px;}
 }
+
+
+/* R2.1 spell controls: only the entry stays in the battlefield footer. */
+.kwCombatV3 .r21CastEntry {display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;}
+.kwCombatV3 .r21CastEntry span {font-size:12px;opacity:.85;}
+.r21SpellBackdrop {position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.78);overflow:auto;}
+.r21SpellDialog {width:min(680px,100%);max-height:min(90dvh,900px);display:flex;flex-direction:column;overflow:hidden;border:1px solid #8d9cb5;border-radius:16px;background:#111d31;color:#f8fafc;box-shadow:0 20px 80px #000b;}
+.r21SpellHeader,.r21SpellFooter {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:#192a43;flex-shrink:0;}
+.r21SpellHeader h2 {margin:0;font-size:21px;}
+.r21SpellHeader small {color:#cbd5e1;}
+.r21SpellBody {overflow-y:auto;overscroll-behavior:contain;padding:14px 18px;display:grid;gap:10px;}
+.r21SpellBody h3 {margin:6px 0 2px;font-size:16px;}
+.r21SpellBody label {display:grid;gap:6px;font-weight:600;}
+.r21SpellBody select {width:100%;min-height:42px;background:#0f172a;color:#fff;border:1px solid #8394ac;border-radius:8px;padding:8px;}
+.r21MageGrid {display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;}
+.r21MageGrid button {display:grid;gap:5px;text-align:left;padding:12px;border:1px solid #708099;border-radius:9px;background:#24354e;color:#fff;}
+.r21MageGrid button span,.r21MageGrid button em {font-size:12px;}
+.r21MageGrid button:disabled {opacity:.5;cursor:not-allowed;}
+.r21MageGrid button[aria-pressed="true"],.r21SpellDialog .r21SpellChoices button[aria-pressed="true"] {outline:2px solid #f5c66a;outline-offset:1px;}
+.r21SpellDialog .r21SpellChoices {display:flex;flex-wrap:wrap;gap:8px;}
+.r21SpellDialog .r21SpellChoices button {padding:9px 12px;border:1px solid #8190a6;border-radius:8px;background:#263950;color:#fff;}
+.r21SpellDialog .r21SpellDescription {padding:12px;border-left:3px solid #f5c66a;background:#233550;border-radius:8px;line-height:1.6;}
+.r21SpellDialog .r21SpellDescription p {margin:5px 0;}
+.r21SpellPreview {padding:10px;border:1px solid #79b7a0;border-radius:8px;background:#173c37;}
+.r21SpellDialog .r21CastWarning {padding:9px;color:#ffd18b;background:#55341e;border-radius:8px;}
+.r21SpellFooter {justify-content:flex-end;}
+.r21SpellFooter button,.r21SpellHeader button {min-height:40px;padding:8px 14px;border:1px solid #8090a5;border-radius:8px;background:#263950;color:white;}
+.r21SpellFooter button:disabled {opacity:.5;cursor:not-allowed;}
+@media(max-width:600px){.r21SpellBackdrop {padding:6px;align-items:stretch;}.r21SpellDialog {max-height:calc(100dvh - 12px);margin:auto 0;}.r21SpellHeader,.r21SpellFooter {padding:10px;}.r21SpellBody {padding:10px;}}
