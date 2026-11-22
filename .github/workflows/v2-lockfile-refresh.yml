@@ -1,0 +1,18 @@
+name: V2 client lockfile refresh evidence
+on:
+  push:
+    branches: [rules-v2-tabletop-rebuild]
+    paths:
+      - .github/workflows/v2-lockfile-refresh.yml
+jobs:
+  regenerate-client-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm --prefix client install --package-lock-only --no-audit --no-fund
+      - name: Print regenerated lockfile to authorized logs for manual commit
+        run: |
+          node --input-type=module -e "import{readFileSync}from'node:fs';const s=readFileSync('client/package-lock.json','utf8');console.log('KW_LOCK_BEGIN');for(let i=0;i<s.length;i+=2500)console.log('KW_LOCK_CHUNK:'+Buffer.from(s.slice(i,i+2500)).toString('base64'));console.log('KW_LOCK_END')"
