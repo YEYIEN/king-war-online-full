@@ -25,6 +25,7 @@ test('disconnected seat resumes with same hidden hand and rotating token',()=>{
  b.disconnect();
  assert.equal(state(a).players[1].connected,false);
  assert.equal(state(a).players[1].hp,24,'temporary disconnect does not eliminate player');
+ assert.equal(b.send('v2:deploy',{code,index:0}).ok,false,'disconnected socket may not act during grace');
  assert.equal(a.send('v2:resume',{code,resumeToken:joined.resumeToken}).ok,false,'connected player cannot claim another seat');
  const intruder=connect('attacker');
  assert.equal(intruder.send('v2:resume',{code,resumeToken:'0'.repeat(64)}).ok,false);
