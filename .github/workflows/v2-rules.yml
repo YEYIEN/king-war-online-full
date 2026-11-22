@@ -34,6 +34,7 @@ jobs:
       - run: node --test tests/v2-multiplayer-browser.test.mjs
       - run: node --test tests/v2-native-full-browser.test.mjs
       - run: node --test tests/v2-full-browser.test.mjs
+      - run: node --test tests/v2-magic-native-browser.test.mjs
       - run: node --test tests/v2-magic-browser.test.mjs
       - run: node --test tests/v2-kings-browser.test.mjs
 
