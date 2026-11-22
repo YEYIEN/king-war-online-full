@@ -1,0 +1,33 @@
+name: V2 clean dependency install gate
+on:
+  push:
+    branches: [rules-v2-tabletop-rebuild]
+    paths:
+      - client/package-lock.json
+      - client/package.json
+      - .github/workflows/v2-client-clean-install.yml
+jobs:
+  clean-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Reproducible client npm ci
+        run: npm --prefix client ci --no-audit --no-fund
+      - name: Production client build
+        run: npm --prefix client run build
+  clean-root:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Reproducible root npm ci
+        run: npm ci --no-audit --no-fund
+      - name: V2 rules regression
+        run: npm run test:v2
