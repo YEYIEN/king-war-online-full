@@ -23,7 +23,7 @@ test('real Chromium: disconnected player reloads into the same seat with private
    if(dialog.type()==='confirm')return dialog.dismiss();
    return dialog.accept('1');
   });
-  const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
+  const url='http://127.0.0.1:'+http.address().port+'/v2-playtest?legacy=1';
   await Promise.all([a.goto(url),b.goto(url)]);
   await a.getByRole('button',{name:'建立房間'}).click();
   await a.waitForFunction(()=>document.querySelector('#code').value.length===8);
