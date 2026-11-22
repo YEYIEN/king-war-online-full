@@ -1474,6 +1474,7 @@ function App() {
     }
 
     setAttackerId(card.id);
+    setMessage("");
   }
 
   function enemyCardActionLabel(card) {
@@ -2112,7 +2113,7 @@ function App() {
         </section>
       </section>
       </div>
-      {isR21 && <section className="zoneCard" aria-label="R2.1 回合資訊">
+      {isR21 && <section className="zoneCard r21AuxControls" aria-label="R2.1 回合資訊">
         <h2>國王戰爭 · R2.1 規則</h2>
         <p>行動點 AP：{room.ap} / 2　｜　前排／中排／後排各限一名兵種　｜　國王生命：24</p><p>R2.1 魔法不使用手牌：場上法師依等級施法（初級可施 1 級、中級可施 1–2 級、高級可施 1–3 級），每回合最多施法一次。</p>
         {r21DeployCard && isMyTurn && <div className="r21ControlRow" role="group" aria-label="選擇部署位置"><strong>部署 {r21DeployCard.name}：</strong>{["front","center","rear"].map(pos=><button key={pos} disabled={me.field.some(u=>u.position===pos)} onClick={()=>{emit("game:deploy",{cardId:r21DeployCard.id,position:pos});setR21DeployCard(null);}}>放到{({front:"前排",center:"中排",rear:"後排"})[pos]}</button>)}<button onClick={()=>setR21DeployCard(null)}>取消</button></div>}
