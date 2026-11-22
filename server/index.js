@@ -235,7 +235,7 @@ const R21_COUNTER = {"步兵":"刺客","刺客":"魔法師","魔法師":"騎兵"
 const r21Card = (u,pos) => ({...u,kind:"unit",name:u.rank+u.type,damage:["初級","中級","高級"].indexOf(u.rank)+1,counterTarget:R21_COUNTER[u.type],tapped:!!(u.acted||u.justDeployed||u.locked||u.attackLocked),status:(u.effects||[]).map(e=>e.name),position:pos});
 function r21View(room,viewer){
   const state=room.r21;
-  return {roomCode:room.code,hostId:room.hostId,maxPlayers:room.maxPlayers,settings:room.settings,status:state.phase==="finished"?"ended":"playing",winnerId:state.phase==="finished"?(room.r21WinnerId ?? (state.winner!=null?room.players[state.winner]?.id:null)):null,roomType:"私人房間",isPublic:false,tutorial:false,openingTruceActive:false,currentPlayerId:room.players[state.current]?.id,turnStartedAt:room.turnStartedAt||null,log:room.log.slice(-50),rules:"R2.1",ap:state.ap,spellUsed:!!state.players[state.current]?.spellUsed,phase:state.phase,pending:state.pending?{defenderId:room.players[state.pending.defenderId].id,attackerName:(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).rank+(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).type,attackerPlayerName:room.players[state.pending.attackerId].name,damage:state.pending.damage}:null,players:room.players.map((p,i)=>{const rp=state.players[i];const me=p.id===viewer;return {id:p.id,name:p.name,isHost:p.isHost,connected:p.connected,ready:p.ready,isAI:!!p.isAI,king:{name:R21_KING_NAMES[rp.king],effectName:"R2.1 國王能力",effect:R21_KING_EFFECTS[rp.king]},hp:rp.hp,eliminated:rp.hp<=0,field:R21_POSITIONS.filter(pos=>rp.field[pos]).map(pos=>r21Card(rp.field[pos],pos)),hand:me?rp.hand.map(u=>r21Card(u,null)):[],magic:[],handCount:rp.hand.length,magicCount:0,lastStandUsed:true,comebackAvailable:false};})};
+  return {roomCode:room.code,hostId:room.hostId,maxPlayers:room.maxPlayers,settings:room.settings,status:state.phase==="finished"?"ended":"playing",winnerId:state.phase==="finished"?(room.r21WinnerId ?? (state.winner!=null?room.players[state.winner]?.id:null)):null,roomType:"私人房間",isPublic:false,tutorial:false,openingTruceActive:false,currentPlayerId:room.players[state.current]?.id,turnStartedAt:room.turnStartedAt||null,log:room.log.slice(-50),rules:"R2.1",ap:state.ap,spellUsed:!!state.players[state.current]?.spellUsed,phase:state.phase,qinChoice:state.phase==="qinChoice"&&room.players[state.current]?.id===viewer?(state.qinDrawn||[]).map(u=>r21Card(u,null)):[],,pending:state.pending?{defenderId:room.players[state.pending.defenderId].id,attackerName:(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).rank+(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).type,attackerPlayerName:room.players[state.pending.attackerId].name,damage:state.pending.damage}:null,players:room.players.map((p,i)=>{const rp=state.players[i];const me=p.id===viewer;return {id:p.id,name:p.name,isHost:p.isHost,connected:p.connected,ready:p.ready,isAI:!!p.isAI,king:{name:R21_KING_NAMES[rp.king],effectName:"R2.1 國王能力",effect:R21_KING_EFFECTS[rp.king]},hp:rp.hp,abilityUsed:!!rp.abilityUsed,eliminated:rp.hp<=0,field:R21_POSITIONS.filter(pos=>rp.field[pos]).map(pos=>r21Card(rp.field[pos],pos)),hand:me?rp.hand.map(u=>r21Card(u,null)):[],magic:[],handCount:rp.hand.length,magicCount:0,lastStandUsed:true,comebackAvailable:false};})};
 }
 function r21Action(room,player,cmd){
   try{
@@ -2099,6 +2099,7 @@ io.on("connection", socket => {
   guardedOn("game:r21Guard", ({cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"GUARD",cardId});});
   guardedOn("game:r21Move", ({from,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"MOVE",from,to});});
   guardedOn("game:r21Cast", ({from,spell,player,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});const targetIndex=rf.room.players.findIndex(p=>p.id===player);return r21Handle(rf.room,rf.player,reply,{type:"CAST",from,spell,player:targetIndex,to});});
+  guardedOn("game:r21QinChoose", ({cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"QIN_CHOOSE",cardId});});
   guardedOn("game:r21Ability", ({from,cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"ABILITY",from,cardId});});
   guardedOn("game:lastStand", ({ mode = "assault" } = {}, reply) => {
     const found = findBySocket(socket.id);
@@ -2161,8 +2162,8 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
-    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);const to=R21_POSITIONS.find(pos=>rf.room.r21.players[idx]?.field[pos]?.id===defenderId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to});}
+  guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId,alexander=false}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);const to=R21_POSITIONS.find(pos=>rf.room.r21.players[idx]?.field[pos]?.id===defenderId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to,alexander:!!alexander});}
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -2180,8 +2181,8 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  guardedOn("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
-    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to:"king"});}
+  guardedOn("game:attackKing", ({attackerId,targetPlayerId,alexander=false}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to:"king",alexander:!!alexander});}
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
