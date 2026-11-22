@@ -235,7 +235,7 @@ const R21_COUNTER = {"步兵":"刺客","刺客":"魔法師","魔法師":"騎兵"
 const r21Card = (u,pos) => ({...u,kind:"unit",name:u.rank+u.type,damage:["初級","中級","高級"].indexOf(u.rank)+1,counterTarget:R21_COUNTER[u.type],tapped:!!(u.acted||u.justDeployed||u.locked||u.attackLocked),status:(u.effects||[]).map(e=>e.name),position:pos});
 function r21View(room,viewer){
   const state=room.r21;
-  return {roomCode:room.code,hostId:room.hostId,maxPlayers:room.maxPlayers,settings:room.settings,status:state.phase==="finished"?"ended":"playing",roomType:"私人房間",isPublic:false,tutorial:false,openingTruceActive:false,currentPlayerId:room.players[state.current]?.id,turnStartedAt:room.turnStartedAt||null,log:room.log.slice(-50),rules:"R2.1",ap:state.ap,phase:state.phase,pending:state.pending?{defenderId:room.players[state.pending.defenderId].id,attackerName:(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).rank+(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).type,attackerPlayerName:room.players[state.pending.attackerId].name,damage:state.pending.damage}:null,players:room.players.map((p,i)=>{const rp=state.players[i];const me=p.id===viewer;return {id:p.id,name:p.name,isHost:p.isHost,connected:p.connected,ready:p.ready,isAI:!!p.isAI,king:{name:R21_KING_NAMES[rp.king],effectName:"R2.1 國王能力",effect:R21_KING_EFFECTS[rp.king]},hp:rp.hp,eliminated:rp.hp<=0,field:R21_POSITIONS.filter(pos=>rp.field[pos]).map(pos=>r21Card(rp.field[pos],pos)),hand:me?rp.hand.map(u=>r21Card(u,null)):[],magic:[],handCount:rp.hand.length,magicCount:0,lastStandUsed:true,comebackAvailable:false};})};
+  return {roomCode:room.code,hostId:room.hostId,maxPlayers:room.maxPlayers,settings:room.settings,status:state.phase==="finished"?"ended":"playing",winnerId:state.phase==="finished"&&state.winner!=null?room.players[state.winner]?.id:null,roomType:"私人房間",isPublic:false,tutorial:false,openingTruceActive:false,currentPlayerId:room.players[state.current]?.id,turnStartedAt:room.turnStartedAt||null,log:room.log.slice(-50),rules:"R2.1",ap:state.ap,phase:state.phase,pending:state.pending?{defenderId:room.players[state.pending.defenderId].id,attackerName:(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).rank+(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).type,attackerPlayerName:room.players[state.pending.attackerId].name,damage:state.pending.damage}:null,players:room.players.map((p,i)=>{const rp=state.players[i];const me=p.id===viewer;return {id:p.id,name:p.name,isHost:p.isHost,connected:p.connected,ready:p.ready,isAI:!!p.isAI,king:{name:R21_KING_NAMES[rp.king],effectName:"R2.1 國王能力",effect:R21_KING_EFFECTS[rp.king]},hp:rp.hp,eliminated:rp.hp<=0,field:R21_POSITIONS.filter(pos=>rp.field[pos]).map(pos=>r21Card(rp.field[pos],pos)),hand:me?rp.hand.map(u=>r21Card(u,null)):[],magic:[],handCount:rp.hand.length,magicCount:0,lastStandUsed:true,comebackAvailable:false};})};
 }
 function r21Action(room,player,cmd){
   try{
@@ -522,17 +522,81 @@ function advanceAfterElimination(room, player) {
 function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降。") {
   if (!room || !player || room.status !== "playing" || player.eliminated) return false;
 
-  if(room.r21){
-    const index=room.players.findIndex(p=>p.id===player.id);
-    const state=structuredClone(room.r21);
-    state.players[index].hp=0;state.players[index].eliminated=true;
-    if(state.pending?.defenderId===index||state.pending?.attackerId===index){state.pending=null;state.phase="play";}
-    const remaining=state.players.filter(p=>p.hp>0);
-    if(remaining.length===1){state.phase="finished";state.winner=remaining[0].id;state.pending=null;room.status="ended";}
-    else if(state.current===index){state.current=state.players.findIndex(p=>p.hp>0);state.ap=2;}
-    room.r21=state;room.currentPlayerId=room.players[state.current]?.id;
-    room.log.push(player.name+" 投降離開，依 R2.1 判定勝負。");
-    broadcast(room);return true;
+  if (room.r21) {
+    const index = room.players.findIndex(p => p.id === player.id);
+    if (index < 0 || room.r21.players[index]?.hp <= 0) return false;
+    const state = structuredClone(room.r21);
+    const defeated = state.players[index];
+    defeated.hp = 0;
+    defeated.eliminated = true;
+    // Every eliminated card returns to the shared discard pile; never leak
+    // cards or leave an eliminated player's units on the battlefield.
+    const recycle = card => ({
+      ...card, effects: [], acted: false, justDeployed: false,
+      locked: false, attackLocked: false, attackLockedUntilTurn: null,
+      lockUntilTurn: null, poisonTurn: null, presentAtTurnStart: false
+    });
+    state.discard.push(...defeated.hand.map(recycle));
+    defeated.hand = [];
+    for (const position of R21_POSITIONS) {
+      if (defeated.field[position]) {
+        state.discard.push(recycle(defeated.field[position]));
+        defeated.field[position] = null;
+      }
+    }
+    const interrupted = state.pending &&
+      (state.pending.defenderId === index || state.pending.attackerId === index);
+    if (interrupted) {
+      state.pending = null;
+      state.phase = "play";
+    }
+    const remaining = state.players.map((p, i) => p.hp > 0 ? i : -1).filter(i => i >= 0);
+    if (remaining.length === 1) {
+      state.phase = "finished";
+      state.winner = remaining[0];
+      state.pending = null;
+    } else if (state.current === index) {
+      // Start the next living player's turn, not a stale forfeited turn.
+      state.current = remaining.find(i => i > index) ?? remaining[0];
+      state.turn++;
+      state.ap = 2;
+      const next = state.players[state.current];
+      next.turnsTaken++;
+      next.spellUsed = false;
+      next.abilityUsed = false;
+      for (const unit of Object.values(next.field)) {
+        if (!unit) continue;
+        unit.acted = false;
+        unit.justDeployed = false;
+        unit.presentAtTurnStart = true;
+        unit.attackLocked = unit.attackLockedUntilTurn === next.turnsTaken;
+        unit.locked = unit.lockUntilTurn === next.turnsTaken;
+        if (unit.locked) {
+          unit.lockUntilTurn = null;
+          unit.effects = unit.effects.filter(e => e.name !== "冰凍術" && e.name !== "天殞術");
+        }
+      }
+    }
+    checkR21Invariants(state);
+    room.r21 = state;
+    room.currentPlayerId = room.players[state.current]?.id;
+    room.status = state.phase === "finished" ? "ended" : "playing";
+    room.turnStartedAt = Date.now();
+    player.eliminated = true;
+    player.hp = 0;
+    player.disconnectedAt = null;
+    clearDisconnectGrace(room, player);
+    clearOfflineTurnTimer(room);
+    if (room.status === "ended") {
+      clearTurnTimer(room);
+      scheduleRoomCleanup(room, 120);
+    }
+    room.log.push(`${player.name} ${reason}`);
+    if (state.phase === "finished") {
+      room.log.push(`對局結束，${room.players[state.winner].name} 獲勝。`);
+    }
+    broadcast(room);
+    return true;
   }
   player.hp = 0;
   player.eliminated = true;
