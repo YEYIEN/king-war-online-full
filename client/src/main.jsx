@@ -2171,7 +2171,7 @@ function App() {
       </div>
       {qinPending&&<div className="r21SpellBackdrop"><section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="秦始皇抽三放一"><header className="r21SpellHeader"><h2>秦始皇 · 抽三放一</h2></header><div className="r21SpellBody"><p>以下三張牌僅你可見。選擇一張放回牌庫底部；完成前不會切換回合。</p><div className="r21MageGrid">{(room.qinChoice||[]).map(c=><button key={c.id} onClick={()=>emit("game:r21QinChoose",{cardId:c.id})}><strong>{c.name}</strong><span>放回牌庫底部</span></button>)}</div></div></section></div>}
       {r21AbilityOpen&&isR21&&<div className="r21SpellBackdrop"><section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="國王能力"><header className="r21SpellHeader"><h2>{me.king.name} · 國王能力</h2><button onClick={()=>setR21AbilityOpen(false)}>✕</button></header><div className="r21SpellBody"><p>每回合一次 · 消耗 1 AP。{me.king.name==="路易十四"?"犧牲回合開始已在場兵種，恢復最多 3 HP。":"交換場上兵種與手牌；新兵種視為剛部署。"}</p><label>選擇場上兵種<select value={r21AbilityFrom} onChange={e=>setR21AbilityFrom(e.target.value)}><option value="">請選擇</option>{me.field.filter(u=>me.king.name!=="路易十四"||u.presentAtTurnStart).map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}</option>)}</select></label>{me.king.name==="成吉思汗"&&<label>選擇交換手牌<select value={r21AbilityCard} onChange={e=>setR21AbilityCard(e.target.value)}><option value="">請選擇</option>{me.hand.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}<p>預覽：{me.king.name==="路易十四"?`犧牲兵種，恢復 ${Math.min(3,24-me.hp)} HP`:"交換所選場上兵種與手牌"}，消耗 1 AP。</p></div><footer className="r21SpellFooter"><button onClick={()=>setR21AbilityOpen(false)}>取消</button><button disabled={!r21AbilityAvailable||!r21AbilityFrom||(me.king.name==="成吉思汗"&&!r21AbilityCard)} onClick={()=>{emit("game:r21Ability",{from:r21AbilityFrom,cardId:me.king.name==="成吉思汗"?Number(r21AbilityCard):undefined});setR21AbilityOpen(false);}}>確認發動</button></footer></section></div>}
-      {isR21 && <section className="zoneCard r21AuxControls" aria-label="R2.1 回合資訊">
+      {isR21 && <section className="zoneCard r21AuxControls" aria-label="R2.1 進階操作">
 
         {r21DeployCard && isMyTurn && <div className="r21ControlRow" role="group" aria-label="選擇部署位置"><strong>部署 {r21DeployCard.name}：</strong>{["front","center","rear"].map(pos=><button key={pos} disabled={me.field.some(u=>u.position===pos)} onClick={()=>{emit("game:deploy",{cardId:r21DeployCard.id,position:pos});setR21DeployCard(null);}}>放到{({front:"前排",center:"中排",rear:"後排"})[pos]}</button>)}<button onClick={()=>setR21DeployCard(null)}>取消</button></div>}
         {mustGuard && <div role="group" aria-label="保牌回應">
@@ -2179,7 +2179,7 @@ function App() {
           <button onClick={()=>emit("game:r21Guard",{})}>不保牌，承受傷害</button>
           {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
         </div>}
-        {isMyTurn && <div role="group" aria-label="R2.1 行動">
+        {isMyTurn && <details className="r21AdvancedActions"><summary>更多操作：魔法、移動與國王能力</summary><div role="group" aria-label="R2.1 行動">
 
           {me.king?.name==="亞歷山大大帝"&&<label className="r21KingToggle"><input type="checkbox" checked={r21Alexander&&!me.abilityUsed} disabled={!isMyTurn||me.abilityUsed||room.ap<1} onChange={e=>setR21Alexander(e.target.checked)}/>亞歷山大戰術 +1（{me.abilityUsed?"本回合已使用":"每回合一次；攻王不額外加傷害"}）</label>}
           <div className="r21CastEntry"><button type="button" onClick={()=>{setR21SpellModalOpen(true);setR21SpellError("");}}>施放魔法 · 1 AP</button><span>{room.spellUsed?"本回合已施法":`剩餘 ${room.ap} AP · 每回合一次`}</span></div>
@@ -2217,7 +2217,7 @@ function App() {
           </div>
           {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button disabled={!r21AbilityAvailable} onClick={()=>{setR21AbilityOpen(true);setR21AbilityFrom("");setR21AbilityCard("");}}>{me.king.name}能力（1 AP）{me.abilityUsed?" · 已使用":room.ap<1?" · AP 不足":""}</button>}
           {me.king?.name==="屋大維奧古斯都"&&<p>羅馬秩序：防守平手時保留兵種，該兵種下一次自己回合暫時不能攻擊；不消耗 AP。</p>}
-        </div>}
+        </div></details>}
       </section>}
 
     </main>
