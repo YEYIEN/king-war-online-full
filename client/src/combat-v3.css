@@ -1279,7 +1279,7 @@
   order: 2 !important;
   flex: 0 0 auto !important;
   height: auto !important;
-  max-height: min(170px, 24dvh) !important;
+  max-height: clamp(210px, 36dvh, 400px) !important;
   min-height: 0 !important;
   overflow-y: auto !important;
   overscroll-behavior: contain;
@@ -1296,7 +1296,21 @@
 @media (max-width: 800px) and (orientation: portrait) {
   .kwCombatV3 > .kwBattleFrame { min-height: 0 !important; }
   .kwCombatV3 > .r21AuxControls {
-    max-height: min(125px, 20dvh) !important;
+    max-height: clamp(170px, 34dvh, 300px) !important;
     padding: 5px 8px !important;
   }
 }
+
+/* R2.1 casting wizard: readable descriptions, usable controls, scrollable footer. */
+.kwCombatV3 .r21CastFlow {display:grid;gap:8px;padding:10px 0;border-bottom:1px solid rgba(148,163,184,.28);}
+.kwCombatV3 .r21CastFlow h3 {margin:0;font-size:16px;}
+.kwCombatV3 .r21CastFlow h3 small {font-size:12px;font-weight:normal;opacity:.8;}
+.kwCombatV3 .r21CastFlow label {display:grid;gap:5px;font-weight:600;}
+.kwCombatV3 .r21CastFlow select {width:100%;min-height:40px;padding:8px;border:1px solid #64748b;border-radius:7px;background:#0f172a;color:#f8fafc;}
+.kwCombatV3 .r21SpellChoices {display:flex;flex-wrap:wrap;gap:6px;}
+.kwCombatV3 .r21SpellChoices button {min-height:36px;padding:7px 10px;border:1px solid #64748b;border-radius:8px;background:#1e293b;color:#f8fafc;}
+.kwCombatV3 .r21SpellChoices button.r21SpellSelected {border-color:#f5c66a;background:#3c3220;color:#fff1c4;}
+.kwCombatV3 .r21SpellDescription {padding:10px !important;border-radius:8px;background:#203047;line-height:1.55;}
+.kwCombatV3 .r21CastWarning {color:#fbbf24;font-weight:600;}
+.kwCombatV3 .r21CastHint {font-weight:600;opacity:.9;}
+.kwCombatV3 .r21CastFlow .primaryBtn:disabled {opacity:.45;cursor:not-allowed;}
