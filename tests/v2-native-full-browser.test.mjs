@@ -54,8 +54,8 @@ test('real Chromium: two players complete full match using page-native attack an
   await end(b,0);
   for(let attack=1;attack<=5;attack++){
    await a.getByRole('button',{name:'可視化攻擊／選目標'}).click();
-   await a.locator('#tactic-choice button[onclick="chooseTactic(\\'attackerIndex\\',0)"]').click();
-   await a.locator('#tactic-choice button[onclick="chooseTactic(\\'defenderPlayerIndex\\',1)"]').click();
+   await a.locator('#tactic-choice .tactic-grid').nth(0).locator('button').first().click();
+   await a.locator('#tactic-choice .tactic-grid').nth(1).locator('button').first().click();
    await a.locator('#tactic-choice button[onclick="chooseTacticKing()"]').click();
    await a.getByRole('button',{name:'確認戰術操作'}).click();
    await b.getByRole('button',{name:'不保牌，承受傷害'}).click();
