@@ -1511,3 +1511,30 @@
     display:flex !important;overflow-x:auto !important;touch-action:pan-x !important;
   }
 }
+
+/* R2.1 contextual actions: only selected battlefield units expose action controls. */
+.kwCombatV3.kwR21PersistentHand .myZone .r21SelectedAction {
+  flex:0 0 auto;display:flex;flex-direction:column;gap:6px;
+  padding:9px;border:1px solid #c8a85e;border-radius:10px;
+  background:#1b354c;color:#fff;max-height:min(220px,34dvh);overflow-y:auto;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons {
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons button {
+  min-height:35px;padding:6px 11px;border:1px solid #7e9eb4;
+  border-radius:7px;background:#294c68;color:#fff;cursor:pointer;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons button.selected {
+  border-color:#ffd78a;background:#4a5e83;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons button:disabled {
+  opacity:.55;cursor:not-allowed;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedAction p {display:block !important;margin:2px 0;font-size:12px;line-height:1.5;}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .zoneHeader p {display:block !important;font-size:11px;}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .r21ControlRow {color:#fff;}
+@media(max-width:800px){
+ .kwCombatV3.kwR21PersistentHand .myZone .r21SelectedAction {max-height:190px;}
+ .kwCombatV3.kwR21PersistentHand .r21SelectedButtons button {min-height:38px;}
+}
