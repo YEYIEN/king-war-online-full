@@ -1,5 +1,6 @@
 
 import express from "express";
+import { newGame as newR21Game, applyCommand as applyR21Command, POSITIONS as R21_POSITIONS, checkInvariants as checkR21Invariants } from "./rules-r21-engine.mjs";
 import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
@@ -227,11 +228,38 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
+// R2.1 is hosted inside the original V1 room and Socket.IO connection.
+const R21_KING_NAMES = {"亞歷山大":"亞歷山大大帝","屋大維":"屋大維奧古斯都","成吉思汗":"成吉思汗","秦始皇":"秦始皇","路易十四":"路易十四"};
+const R21_COUNTER = {"步兵":"刺客","刺客":"魔法師","魔法師":"騎兵","騎兵":"步兵"};
+const r21Card = (u,pos) => ({...u,kind:"unit",name:u.rank+u.type,damage:["初級","中級","高級"].indexOf(u.rank)+1,counterTarget:R21_COUNTER[u.type],tapped:!!(u.acted||u.justDeployed||u.locked||u.attackLocked),status:(u.effects||[]).map(e=>e.name),position:pos});
+function r21View(room,viewer){
+  const state=room.r21;
+  return {roomCode:room.code,hostId:room.hostId,maxPlayers:room.maxPlayers,settings:room.settings,status:state.phase==="finished"?"ended":"playing",roomType:"私人房間",isPublic:false,tutorial:false,openingTruceActive:false,currentPlayerId:room.players[state.current]?.id,turnStartedAt:room.turnStartedAt||null,log:room.log.slice(-50),rules:"R2.1",ap:state.ap,phase:state.phase,pending:state.pending?{defenderId:room.players[state.pending.defenderId].id}:null,players:room.players.map((p,i)=>{const rp=state.players[i];const me=p.id===viewer;return {id:p.id,name:p.name,isHost:p.isHost,connected:p.connected,ready:p.ready,isAI:!!p.isAI,king:{name:R21_KING_NAMES[rp.king],effectName:"R2.1 國王能力"},hp:rp.hp,eliminated:rp.hp<=0,field:R21_POSITIONS.filter(pos=>rp.field[pos]).map(pos=>r21Card(rp.field[pos],pos)),hand:me?rp.hand.map(u=>r21Card(u,null)):[],magic:[],handCount:rp.hand.length,magicCount:0,lastStandUsed:true,comebackAvailable:false};})};
+}
+function r21Action(room,player,cmd){
+  try{
+    const actor=room.players.findIndex(p=>p.id===player.id);
+    if(actor<0)return {ok:false,error:"玩家不存在"};
+    const next=applyR21Command(room.r21,actor,cmd);
+    checkR21Invariants(next);
+    room.r21=next;
+    room.currentPlayerId=room.players[next.current]?.id;
+    room.status=next.phase==="finished"?"ended":"playing";
+    room.turnStartedAt=Date.now();
+    room.log.push(player.name+"："+cmd.type+(cmd.spell?" "+cmd.spell:""));
+    return {ok:true};
+  }catch(error){return {ok:false,error:error.message};}
+}
+function r21Handle(room,player,reply,cmd){
+  const result=r21Action(room,player,cmd);
+  reply?.(result);
+  if(result.ok)broadcast(room);
+}
 function publicPlayer(p, viewer, room) {
   const isMe = p.id === viewer;
   return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, lastStandShield: p.lastStandShield || 0, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
-function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
+function viewFor(room, viewer) { if(room.r21)return r21View(room,viewer); return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
 function persistRoomSnapshot(room) {
   void saveRoomSnapshot(room).catch(error=>console.error("Room recovery snapshot error:",error.message));
@@ -1961,9 +1989,19 @@ io.on("connection", socket => {
     if(f.room.players.length<2) return reply?.({ok:false,error:"至少需要2位玩家。"});
     if(f.room.players.some(p=>!p.isAI && !p.connected)) return reply?.({ok:false,error:"有玩家目前不在線上。"});
     if(!allGuestsReady(f.room)) return reply?.({ok:false,error:"還有房客尚未準備完成。"});
+    if(!f.room.players.some(p=>p.isAI) && !f.room.tutorial){
+      const kings=["亞歷山大","屋大維","成吉思汗","秦始皇","路易十四"].slice(0,f.room.players.length);
+      f.room.r21=newR21Game(kings,Date.now()>>>0);
+      f.room.status="playing"; f.room.currentPlayerId=f.room.players[0].id;f.room.turnStartedAt=Date.now();
+      f.room.log.push("R2.1 規則開始：每回合 2 AP，戰場分前中後排。");
+      reply?.({ok:true});broadcast(f.room);return;
+    }
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
 
+  guardedOn("game:r21Guard", ({cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"GUARD",cardId});});
+  guardedOn("game:r21Move", ({from,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"MOVE",from,to});});
+  guardedOn("game:r21Ability", ({from,cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"ABILITY",from,cardId});});
   guardedOn("game:lastStand", ({ mode = "assault" } = {}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
@@ -1978,7 +2016,8 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  guardedOn("game:deploy", ({cardId}, reply) => {
+  guardedOn("game:deploy", ({cardId,position}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return r21Handle(rf.room,rf.player,reply,{type:"DEPLOY",cardId,position});
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const i=p.hand.findIndex(c=>c.id===cardId); if(i<0) return reply?.({ok:false,error:"找不到手牌。"});
@@ -2016,6 +2055,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:recall", ({unitId}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return reply?.({ok:false,error:"請使用 R2.1 國王能力。"});
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const result = returnUnitToHand(room, p, unitId);
@@ -2024,6 +2064,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);const to=R21_POSITIONS.find(pos=>rf.room.r21.players[idx]?.field[pos]?.id===defenderId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to});}
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -2042,6 +2083,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to:"king"});}
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -2058,6 +2100,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:castMagic", (payload = {}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return reply?.({ok:false,error:"R2.1 魔法操作正在整合，尚未開放。"});
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
@@ -2077,6 +2120,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:endTurn", (_, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return r21Handle(rf.room,rf.player,reply,{type:"END"});
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     if (room.tutorial) {
