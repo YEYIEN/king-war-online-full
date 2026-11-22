@@ -475,6 +475,10 @@ function App() {
   const [r21Spell, setR21Spell] = useState("火球術");
   const [r21CastTo, setR21CastTo] = useState("front");
   const [r21CastPlayerId, setR21CastPlayerId] = useState("");
+  const [r21SpellModalOpen, setR21SpellModalOpen] = useState(false);
+  const [r21SpellError, setR21SpellError] = useState("");
+  const [r21SpellBusy, setR21SpellBusy] = useState(false);
+  const r21SpellRequestRef = useRef(false);
   const [showHelp, setShowHelp] = useState(false);
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -1111,27 +1115,29 @@ function App() {
     "天殞術":[3,"enemy","消滅敵方兵種；施法法師下一回合無法行動。"]
   };
   const r21Positions = {front:"前排",center:"中排",rear:"後排"};
-  const r21Caster = me?.field?.find(u=>u.position===r21CastFrom && u.type==="魔法師");
-  const r21CasterLevel = r21Caster ? ["初級","中級","高級"].indexOf(r21Caster.rank)+1 : 0;
-  const r21AvailableSpells = Object.entries(r21SpellDetails).filter(([,info])=>info[0]<=r21CasterLevel);
-  const r21ChosenSpell = r21AvailableSpells.some(([name])=>name===r21Spell) ? r21Spell : (r21AvailableSpells[0]?.[0] || "");
-  const r21SpellInfo = r21SpellDetails[r21ChosenSpell];
-  const r21SpellTargets = r21SpellInfo?.[1]==="self" ? (me?[me]:[]) : room.players.filter(p=>p.id!==playerId&&!p.eliminated);
-  const r21CastPlayer = r21SpellTargets.find(p=>p.id===r21CastPlayerId) || r21SpellTargets[0];
-  const r21ValidUnits = (r21CastPlayer?.field || []).filter(u=>
-    r21ChosenSpell==="流星雨" ? u.rank==="初級" :
-    r21ChosenSpell==="火球術" && u.rank==="初級" ? true :
-    !(u.status||[]).includes(r21ChosenSpell)
-  );
-  const r21CastPosition = r21ValidUnits.find(u=>u.position===r21CastTo)?.position || r21ValidUnits[0]?.position || "";
-  const r21CastBlocked = !r21Caster ? "請先選擇我方法師。" :
-    r21Caster.tapped ? "這名法師目前無法行動（已行動、剛部署或受限制）。" :
-    room.ap<=0 ? "行動點不足（需要 1 AP）。" :
-    room.spellUsed ? "本回合已施放過魔法。" :
-    !r21SpellInfo ? "沒有可施放的法術。" :
-    !r21CastPlayer ? "沒有合法目標玩家。" :
-    !r21ValidUnits.length ? "目前沒有符合條件的目標兵種。" :
-    r21ChosenSpell==="燃血術" && me.hp<=3 ? "國王生命須高於 3 才能施放燃血術。" : "";
+  const r21Mages=(me?.field||[]).filter(u=>u.type==="魔法師");
+  const r21Caster=r21Mages.find(u=>u.position===r21CastFrom);
+  const r21CasterLevel=r21Caster?["初級","中級","高級"].indexOf(r21Caster.rank)+1:0;
+  const r21AvailableSpells=Object.entries(r21SpellDetails).filter(([,v])=>v[0]<=r21CasterLevel);
+  const r21ChosenSpell=r21AvailableSpells.some(([n])=>n===r21Spell)?r21Spell:"";
+  const r21SpellInfo=r21SpellDetails[r21ChosenSpell];
+  const r21SpellTargets=r21SpellInfo?.[1]==="self"?(me?[me]:[]):room.players.filter(p=>p.id!==playerId&&!p.eliminated);
+  const r21CastPlayer=r21SpellTargets.find(p=>p.id===r21CastPlayerId);
+  const r21ValidUnits=(r21CastPlayer?.field||[]).filter(u=>r21ChosenSpell==="流星雨"?u.rank==="初級":r21ChosenSpell==="火球術"&&u.rank==="初級"?true:!(u.status||[]).includes(r21ChosenSpell));
+  const r21CastUnit=r21ValidUnits.find(u=>u.position===r21CastTo);
+  const r21MageReason=u=>u.acted?"已行動／已普攻或施法":u.locked?"受到禁制，無法施法":"";
+  const r21CastBlocked=!isMyTurn||room.phase!=="play"?"目前不是你的施法回合。":!socket.connected?"連線中斷，請重新確認戰場。":!r21Caster?"請先選擇法師。":r21MageReason(r21Caster)|| (room.ap<=0?`需要 1 AP，目前剩 ${room.ap} AP。`:room.spellUsed?"本回合施法次數已用完。":!r21SpellInfo?"請選擇法術。":r21ChosenSpell==="燃血術"&&me.hp<=3?"燃血術需要國王 HP 高於 3。":!r21CastPlayer?"請選擇目標玩家（原目標可能已離場）。":!r21ValidUnits.length?"目前沒有合法目標兵種。":r21ChosenSpell!=="流星雨"&&!r21CastUnit?"請選擇合法兵種（原目標可能已失效）。":"");
+  const resetR21Spell=()=>{setR21SpellModalOpen(false);setR21CastFrom("");setR21Spell("");setR21CastPlayerId("");setR21CastTo("");setR21SpellError("");};
+  const submitR21Spell=()=>{
+    if(r21CastBlocked||r21SpellRequestRef.current||!r21CastPlayer)return;
+    r21SpellRequestRef.current=true;setR21SpellBusy(true);setR21SpellError("");
+    const sent=requestNow("game:r21Cast",{from:r21CastFrom,spell:r21ChosenSpell,player:r21CastPlayer.id,to:r21ChosenSpell==="流星雨"?"front":r21CastTo},res=>{
+      r21SpellRequestRef.current=false;setR21SpellBusy(false);
+      if(res?.ok){resetR21Spell();setMessage("");}
+      else setR21SpellError(res?.error||"施法失敗，請重新確認戰場。");
+    });
+    if(!sent){r21SpellRequestRef.current=false;setR21SpellBusy(false);setR21SpellError("請求未送出。");}
+  };
 
   const mustGuard = isR21 && room.phase === "guard" && room.pending?.defenderId === playerId;
   const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
@@ -2161,37 +2167,30 @@ function App() {
         </div>}
         {isMyTurn && <div role="group" aria-label="R2.1 行動">
 
-          <div className="r21CastFlow" aria-label="R2.1 法師施法流程">
-            <h3>法師施法 <small>1 AP · 每回合一次</small></h3>
-            <label>① 選擇我方法師
-              <select value={r21CastFrom} onChange={e=>{setR21CastFrom(e.target.value);setR21CastTo("");}}>
-                <option value="">選擇我方法師</option>
-                {me.field.filter(u=>u.type==="魔法師").map(u=><option key={u.id} value={u.position} disabled={u.tapped}>{u.name} · {r21Positions[u.position]}{u.tapped?"（無法行動）":""}</option>)}
-              </select>
-            </label>
-            {r21Caster && <>
-              <p className="r21CastHint">② 可用法術（{r21Caster.rank}法師：1–{r21CasterLevel} 級）</p>
-              <div className="r21SpellChoices" role="group" aria-label="可用法術">
-                {r21AvailableSpells.map(([spell,info])=><button type="button" key={spell} className={r21ChosenSpell===spell?"r21SpellSelected":""} aria-pressed={r21ChosenSpell===spell} onClick={()=>{setR21Spell(spell);setR21CastTo("");}}>{spell} · {info[0]} 級</button>)}
+          <div className="r21CastEntry"><button type="button" onClick={()=>{setR21SpellModalOpen(true);setR21SpellError("");}}>施放魔法 · 1 AP</button><span>{room.spellUsed?"本回合已施法":`剩餘 ${room.ap} AP · 每回合一次`}</span></div>
+          {r21SpellModalOpen && <div className="r21SpellBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!r21SpellBusy)resetR21Spell();}}>
+            <section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="法師施法">
+              <header className="r21SpellHeader"><div><h2>法師施法</h2><small>R2.1 · 1 AP · 每回合一次 · 目前 {room.ap} AP</small></div><button type="button" disabled={r21SpellBusy} onClick={resetR21Spell} aria-label="關閉施法視窗">✕</button></header>
+              <div className="r21SpellBody">
+                <h3>① 選擇法師</h3>
+                {!r21Mages.length && <p>場上沒有法師，請先部署法師。</p>}
+                <div className="r21MageGrid">{r21Mages.map(u=><button type="button" key={u.id} disabled={!!r21MageReason(u)||r21SpellBusy} aria-pressed={r21CastFrom===u.position} onClick={()=>{setR21CastFrom(u.position);setR21Spell("");setR21CastPlayerId("");setR21CastTo("");setR21SpellError("");}}><strong>{u.name}</strong><span>{r21Positions[u.position]} · {u.rank} · 1–{["初級","中級","高級"].indexOf(u.rank)+1} 級</span>{r21MageReason(u)&&<em>{r21MageReason(u)}</em>}</button>)}</div>
+                {r21Caster && <><h3>② 選擇法術</h3>
+                  <div className="r21SpellChoices">{r21AvailableSpells.map(([name,info])=><button type="button" key={name} disabled={r21SpellBusy} aria-pressed={r21ChosenSpell===name} onClick={()=>{setR21Spell(name);setR21CastPlayerId(info[1]==="self"?playerId:"");setR21CastTo("");setR21SpellError("");}}>{name} · {info[0]} 級</button>)}</div>
+                  {r21SpellInfo && <><div className="r21SpellDescription"><h3>{r21ChosenSpell} · {r21SpellInfo[0]} 級</h3><p>{r21SpellInfo[2]}</p><p>消耗 1 AP · 每回合最多一次（{room.spellUsed?"已使用":"尚未使用"}） · 需要 {r21SpellInfo[0]} 級法師</p><p>目標：{r21SpellInfo[1]==="self"?"我方":"敵方"}{r21ChosenSpell==="流星雨"?"玩家全體初級兵種":"單一兵種"}{r21ChosenSpell==="燃血術"?" · 額外扣 3 HP":""}</p><p>施法後法師視為已行動，不能再普攻；移動消耗 AP，但不直接設定已行動。</p></div>
+                    <h3>③ 選擇合法目標</h3>
+                    <label>目標玩家<select value={r21CastPlayerId} disabled={r21SpellBusy||r21SpellInfo[1]==="self"} onChange={e=>{setR21CastPlayerId(e.target.value);setR21CastTo("");setR21SpellError("");}}><option value="">請選擇玩家</option>{r21SpellTargets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+                    {r21ChosenSpell==="流星雨"?<p>無需選單一站位；影響所選玩家的全部初級兵種（{r21ValidUnits.length} 名）。</p>:<label>目標兵種<select value={r21CastTo} disabled={!r21CastPlayer||r21SpellBusy} onChange={e=>{setR21CastTo(e.target.value);setR21SpellError("");}}><option value="">請選擇兵種</option>{r21ValidUnits.map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}</option>)}</select></label>}
+                    {r21CastPlayer&&!r21ValidUnits.length&&<p role="status">目前沒有合法目標，請改選法術或玩家。</p>}
+                    {!r21CastBlocked&&<p className="r21SpellPreview">④ 預覽：對「{r21CastPlayer.name}」{r21ChosenSpell==="流星雨"?`的 ${r21ValidUnits.length} 名初級兵種`:`的「${r21CastUnit?.name}」`}施放「{r21ChosenSpell}」，消耗 1 AP{r21ChosenSpell==="燃血術"?" 和 3 HP":""}。</p>}
+                  </>}
+                </>}
+                {r21CastBlocked&&<p className="r21CastWarning" role="status">{r21CastBlocked}</p>}
+                {r21SpellError&&<p className="r21CastWarning" role="alert">伺服器回應：{r21SpellError}</p>}
               </div>
-              {r21SpellInfo && <p className="r21SpellDescription" role="status"><strong>{r21ChosenSpell}（{r21SpellInfo[0]} 級）：</strong>{r21SpellInfo[2]}<span> · 消耗 1 AP · 本回合最多一次</span></p>}
-              <p className="r21CastHint">③ 選擇合法目標（{r21SpellInfo?.[1]==="self"?"我方":"敵方"}）</p>
-              {r21SpellInfo?.[1]==="enemy" && <label>目標玩家
-                <select value={r21CastPlayer?.id || ""} onChange={e=>{setR21CastPlayerId(e.target.value);setR21CastTo("");}}>
-                  {r21SpellTargets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </label>}
-              {r21ChosenSpell!=="流星雨" && <label>目標兵種
-                <select value={r21CastPosition} onChange={e=>setR21CastTo(e.target.value)} disabled={!r21ValidUnits.length}>
-                  {!r21ValidUnits.length && <option value="">沒有合法目標</option>}
-                  {r21ValidUnits.map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}</option>)}
-                </select>
-              </label>}
-              {r21ChosenSpell==="流星雨" && <p className="r21CastHint">目標：{r21CastPlayer?.name || "尚未選擇"}場上全部初級兵種（{r21ValidUnits.length} 名）</p>}
-              {r21CastBlocked && <p className="r21CastWarning" role="status">{r21CastBlocked}</p>}
-              <button type="button" className="primaryBtn" disabled={!!r21CastBlocked} onClick={()=>emit("game:r21Cast",{from:r21CastFrom,spell:r21ChosenSpell,player:r21CastPlayer.id,to:r21ChosenSpell==="流星雨"?"front":r21CastPosition})}>④ 確認施法（消耗 1 AP）</button>
-            </>}
-          </div>
+              <footer className="r21SpellFooter"><button type="button" disabled={r21SpellBusy} onClick={resetR21Spell}>取消／關閉</button><button type="button" className="primaryBtn" disabled={!!r21CastBlocked||r21SpellBusy} onClick={submitR21Spell}>{r21SpellBusy?"等待伺服器確認…":"確認施法 · 1 AP"}</button></footer>
+            </section>
+          </div>}
           <div className="r21ControlRow">
             <label>移動兵種
               <select value={r21MoveFrom} onChange={e=>setR21MoveFrom(e.target.value)}>
