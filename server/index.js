@@ -1,6 +1,5 @@
 
 import express from "express";
-import { registerV2Playtest } from "./v2-playtest-socket.mjs";
 import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
@@ -32,8 +31,6 @@ const io = new Server(server, {
   allowRequest:socketOriginPolicy.allowRequest,
   maxHttpBufferSize:32*1024
 });
-registerV2Playtest(io);
-app.get("/v2-playtest", (_req,res)=>res.sendFile(path.join(__dirname,"v2-playtest.html")));
 const rooms = new Map();
 const MAX_LIVE_ROOMS = Math.max(1,Math.min(10000,Number(process.env.KW_MAX_ROOMS)||200));
 function atRoomCapacity(){return process.env.KW_SIMULATION!=="1" && rooms.size>=MAX_LIVE_ROOMS;}
