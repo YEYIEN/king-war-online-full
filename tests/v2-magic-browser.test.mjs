@@ -23,7 +23,7 @@ test('real Chromium UI: two players cast all nine spells via visible controls', 
    a.setDefaultTimeout(8000);b.setDefaultTimeout(8000);
    console.log('BROWSER SPELL',spell.name);
    try{
-    const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
+    const url='http://127.0.0.1:'+http.address().port+'/v2-playtest?legacy=1';
     await Promise.all([a.goto(url),b.goto(url)]);
     console.log('loaded',spell.name);
     for(const page of [a,b])page.on('dialog',async dialog=>{if(dialog.type()==='confirm')await dialog.dismiss();else await dialog.accept('1')});
