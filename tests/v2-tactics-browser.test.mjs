@@ -46,6 +46,7 @@ async function nativeEnd(page,next){
  assert.equal(await page.locator('#error').textContent(),'');
 }
 test('real two-player Chromium: page-native attack chooses actor/opponent/king without dialogs',{timeout:60000},()=>game('亞歷山大大帝',async({a,b})=>{
+ assert.equal(await a.locator('button[onclick="deploy(0)"]').getAttribute('data-art-id'),'assassin-advanced','cards must carry stable visual asset IDs');
  await a.locator('button[onclick="deploy(0)"]').click();
  await a.waitForFunction(()=>state.players[0].field.length===1);
  await nativeEnd(a,1);await nativeEnd(b,0);
