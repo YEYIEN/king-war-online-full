@@ -1270,3 +1270,271 @@
     font-size:12px !important;line-height:1.2 !important;
   }
 }
+
+
+/* R2.1 controls are secondary to the actual battlefield.
+   The previous change moved them out of the grid but left their flex
+   size/order unconstrained, so the arena was still pushed offscreen. */
+.kwCombatV3 > .r21AuxControls {
+  order: 2 !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: clamp(210px, 36dvh, 400px) !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding: 8px 12px !important;
+}
+.kwCombatV3 > .kwBattleFrame {
+  order: 1 !important;
+  flex: 1 1 0 !important;
+  min-height: 260px !important;
+  max-height: none !important;
+}
+.kwCombatV3 > .r21AuxControls h2 { margin: 0 0 6px !important; font-size: 16px !important; }
+.kwCombatV3 > .r21AuxControls p { margin: 4px 0 !important; }
+@media (max-width: 800px) and (orientation: portrait) {
+  .kwCombatV3 > .kwBattleFrame { min-height: 0 !important; }
+  .kwCombatV3 > .r21AuxControls {
+    max-height: clamp(170px, 34dvh, 300px) !important;
+    padding: 5px 8px !important;
+  }
+}
+
+/* R2.1 casting wizard: readable descriptions, usable controls, scrollable footer. */
+.kwCombatV3 .r21CastFlow {display:grid;gap:8px;padding:10px 0;border-bottom:1px solid rgba(148,163,184,.28);}
+.kwCombatV3 .r21CastFlow h3 {margin:0;font-size:16px;}
+.kwCombatV3 .r21CastFlow h3 small {font-size:12px;font-weight:normal;opacity:.8;}
+.kwCombatV3 .r21CastFlow label {display:grid;gap:5px;font-weight:600;}
+.kwCombatV3 .r21CastFlow select {width:100%;min-height:40px;padding:8px;border:1px solid #64748b;border-radius:7px;background:#0f172a;color:#f8fafc;}
+.kwCombatV3 .r21SpellChoices {display:flex;flex-wrap:wrap;gap:6px;}
+.kwCombatV3 .r21SpellChoices button {min-height:36px;padding:7px 10px;border:1px solid #64748b;border-radius:8px;background:#1e293b;color:#f8fafc;}
+.kwCombatV3 .r21SpellChoices button.r21SpellSelected {border-color:#f5c66a;background:#3c3220;color:#fff1c4;}
+.kwCombatV3 .r21SpellDescription {padding:10px !important;border-radius:8px;background:#203047;line-height:1.55;}
+.kwCombatV3 .r21CastWarning {color:#fbbf24;font-weight:600;}
+.kwCombatV3 .r21CastHint {font-weight:600;opacity:.9;}
+.kwCombatV3 .r21CastFlow .primaryBtn:disabled {opacity:.45;cursor:not-allowed;}
+
+
+/* Spell flow: a readable, scrollable action panel without hiding the arena. */
+.kwCombatV3 > .r21AuxControls {
+  max-height: clamp(260px, 42dvh, 460px) !important;
+  scrollbar-gutter: stable;
+}
+.kwCombatV3 .r21CastFlow {
+  gap: 10px;
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid rgba(148,163,184,.4);
+  border-radius: 10px;
+  background: rgba(15,23,42,.55);
+}
+.kwCombatV3 .r21SpellChoices button[aria-pressed="true"] {
+  outline: 2px solid #f5c66a;
+  outline-offset: 1px;
+}
+.kwCombatV3 .r21SpellDescription {
+  padding: 10px 12px;
+  border-left: 3px solid #f5c66a;
+  background: rgba(245,198,106,.1);
+  line-height: 1.6;
+}
+.kwCombatV3 .r21CastHint {margin: 2px 0; font-weight: 600;}
+@media (max-width: 800px) and (orientation: portrait) {
+  .kwCombatV3 > .r21AuxControls {
+    max-height: clamp(210px, 38dvh, 360px) !important;
+  }
+  .kwCombatV3 .r21CastFlow {padding: 8px;}
+}
+
+
+/* R2.1 spell controls: only the entry stays in the battlefield footer. */
+.kwCombatV3 .r21CastEntry {display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;}
+.kwCombatV3 .r21CastEntry span {font-size:12px;opacity:.85;}
+.r21SpellBackdrop {position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.78);overflow:auto;}
+.r21SpellDialog {width:min(680px,100%);max-height:min(90dvh,900px);display:flex;flex-direction:column;overflow:hidden;border:1px solid #8d9cb5;border-radius:16px;background:#111d31;color:#f8fafc;box-shadow:0 20px 80px #000b;}
+.r21SpellHeader,.r21SpellFooter {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:#192a43;flex-shrink:0;}
+.r21SpellHeader h2 {margin:0;font-size:21px;}
+.r21SpellHeader small {color:#cbd5e1;}
+.r21SpellBody {overflow-y:auto;overscroll-behavior:contain;padding:14px 18px;display:grid;gap:10px;}
+.r21SpellBody h3 {margin:6px 0 2px;font-size:16px;}
+.r21SpellBody label {display:grid;gap:6px;font-weight:600;}
+.r21SpellBody select {width:100%;min-height:42px;background:#0f172a;color:#fff;border:1px solid #8394ac;border-radius:8px;padding:8px;}
+.r21MageGrid {display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;}
+.r21MageGrid button {display:grid;gap:5px;text-align:left;padding:12px;border:1px solid #708099;border-radius:9px;background:#24354e;color:#fff;}
+.r21MageGrid button span,.r21MageGrid button em {font-size:12px;}
+.r21MageGrid button:disabled {opacity:.5;cursor:not-allowed;}
+.r21MageGrid button[aria-pressed="true"],.r21SpellDialog .r21SpellChoices button[aria-pressed="true"] {outline:2px solid #f5c66a;outline-offset:1px;}
+.r21SpellDialog .r21SpellChoices {display:flex;flex-wrap:wrap;gap:8px;}
+.r21SpellDialog .r21SpellChoices button {padding:9px 12px;border:1px solid #8190a6;border-radius:8px;background:#263950;color:#fff;}
+.r21SpellDialog .r21SpellDescription {padding:12px;border-left:3px solid #f5c66a;background:#233550;border-radius:8px;line-height:1.6;}
+.r21SpellDialog .r21SpellDescription p {margin:5px 0;}
+.r21SpellPreview {padding:10px;border:1px solid #79b7a0;border-radius:8px;background:#173c37;}
+.r21SpellDialog .r21CastWarning {padding:9px;color:#ffd18b;background:#55341e;border-radius:8px;}
+.r21SpellFooter {justify-content:flex-end;}
+.r21SpellFooter button,.r21SpellHeader button {min-height:40px;padding:8px 14px;border:1px solid #8090a5;border-radius:8px;background:#263950;color:white;}
+.r21SpellFooter button:disabled {opacity:.5;cursor:not-allowed;}
+@media(max-width:600px){.r21SpellBackdrop {padding:6px;align-items:stretch;}.r21SpellDialog {max-height:calc(100dvh - 12px);margin:auto 0;}.r21SpellHeader,.r21SpellFooter {padding:10px;}.r21SpellBody {padding:10px;}}
+
+
+/* R2.1 condensed HUD and private hand/deployment overlay */
+.kwCombatV3 .r21HandEntry {display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid #64748b;border-radius:10px;background:#1a2a42;color:#fff;}
+.kwCombatV3 .r21HandEntry button {padding:10px 16px;border:1px solid #d2b36a;border-radius:8px;background:#30445f;color:#fff;font-weight:700;}
+.kwCombatV3 .r21HandModal {position:fixed;z-index:99990;inset:0;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;background:rgba(0,0,0,.83);}
+.kwCombatV3 .r21HandModal .battleHandPrimary {max-width:min(880px,100%);width:100%;background:#13223a;padding:16px;border:1px solid #8794a7;border-radius:14px;}
+.kwCombatV3 .r21HandModal .sideColumn,.kwCombatV3 .r21HandModal .mobileDeckControls {display:none;}
+.kwCombatV3 .r21KingToggle {display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #b79b59;border-radius:8px;background:#29344c;color:#fff;}
+.kwCombatV3 .r21KingToggle input {width:18px;height:18px;}
+@media(max-width:600px){.kwCombatV3 .r21HandModal {padding:2vh 5px;}.kwCombatV3 .r21HandModal .battleHandPrimary {padding:8px;}}
+
+/* R2.1 nested hand-card dialog: keep action/detail overlays above the hand layer.
+   Existing V1 overlay stacking remains unchanged. */
+.kwCombatV3 .mobileActionOverlay {z-index:100010 !important;pointer-events:auto;}
+.kwCombatV3 .mobileActionOverlay .mobileActionPanel {position:relative;z-index:1;pointer-events:auto;}
+.kwCombatV3 .cardDetailOverlay {z-index:100020 !important;}
+.kwCombatV3 .cardDetailOverlay .cardDetailPanel {position:relative;z-index:1;pointer-events:auto;}
+
+/* R2.1 stage 1: persistent, non-modal hand and compact turn status.
+   Scoped to R2.1 so the V1 battle layout is untouched. */
+.kwCombatV3.kwR21PersistentHand .kwBattleFrame {
+  grid-template-areas:"score" "arena" "hand" !important;
+  grid-template-rows:auto minmax(0,1fr) minmax(150px,25dvh) !important;
+}
+.kwCombatV3.kwR21PersistentHand .kwScoreStrip {
+  flex-wrap:wrap !important;
+  align-content:start !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21TurnStatus {
+  order:-1;flex:1 0 100%;display:flex;justify-content:space-between;align-items:center;
+  gap:10px;padding:5px 10px;border-radius:8px;
+  background:#243e55;color:#f7f5e9;font-size:13px;
+}
+.kwCombatV3.kwR21PersistentHand .r21TurnStatus span {font-weight:800;color:#ffda8b;white-space:nowrap;}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand {
+  position:relative !important;inset:auto !important;z-index:auto !important;
+  grid-area:hand !important;display:flex !important;flex-direction:column !important;
+  min-width:0 !important;min-height:0 !important;height:100% !important;
+  padding:0 !important;margin:0 !important;background:none !important;
+  overflow:hidden !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .battleHandPrimary {
+  display:flex !important;flex-direction:column !important;min-width:0 !important;
+  width:100% !important;height:100% !important;max-height:100% !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .battleHandPrimary > .zoneCard {
+  flex:1 1 auto !important;min-height:0 !important;max-height:100% !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .cardGrid {
+  display:flex !important;flex-wrap:nowrap !important;overflow-x:auto !important;
+  overflow-y:hidden !important;touch-action:pan-x !important;
+  overscroll-behavior-x:contain !important;-webkit-overflow-scrolling:touch;
+  min-height:0 !important;scrollbar-width:thin;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .handCard {
+  flex-shrink:0 !important;touch-action:pan-x !important;user-select:none;
+  -webkit-user-select:none;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .sideColumn,
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .mobileDeckControls {display:none !important;}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .r21ControlRow {
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:5px;background:#203951;border-radius:8px;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .r21ControlRow button {min-height:32px;}
+@media(max-width:800px) {
+  .kwCombatV3.kwR21PersistentHand .kwBattleFrame {
+    grid-template-areas:"score" "arena" "hand" !important;
+    grid-template-rows:auto minmax(260px,1fr) minmax(154px,25dvh) !important;
+    overflow:hidden !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand {
+    max-height:100% !important;overflow:hidden !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .battleHandPrimary,
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .zoneCard {
+    height:100% !important;min-height:0 !important;max-height:100% !important;
+    overflow:hidden !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .handCard {
+    flex:0 0 94px !important;width:94px !important;min-width:94px !important;
+    height:100% !important;max-height:100% !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .mobileHandHidden {display:flex !important;}
+  .kwCombatV3.kwR21PersistentHand .r21TurnStatus {font-size:12px;}
+}
+
+/* Stage 1 visibility correction: old mobile grid and footer rules occupied the viewport. */
+.kwCombatV3.kwR21PersistentHand {gap:4px !important;}
+.kwCombatV3.kwR21PersistentHand > .kwBattleFrame {
+  flex:1 1 0 !important;min-height:0 !important;max-height:none !important;
+  grid-template-areas:"score" "arena" "hand" !important;
+  grid-template-rows:minmax(66px,auto) minmax(0,1fr) minmax(152px,25dvh) !important;
+  overflow:hidden !important;
+}
+.kwCombatV3.kwR21PersistentHand .kwScoreStrip {
+  height:auto !important;min-height:66px !important;max-height:none !important;
+  overflow:visible !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21TurnStatus {
+  flex:1 0 100% !important;min-height:30px !important;
+  background:#365878 !important;border:1px solid #e6bd73 !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .cardGrid {
+  display:flex !important;grid-template-columns:none !important;grid-template-rows:none !important;
+  flex-wrap:nowrap !important;overflow-x:auto !important;overflow-y:hidden !important;
+  touch-action:pan-x !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .handCard {
+  flex:0 0 94px !important;width:94px !important;min-width:94px !important;
+  height:100% !important;
+}
+.kwCombatV3.kwR21PersistentHand > .r21AuxControls {
+  order:2 !important;flex:0 0 auto !important;
+  height:auto !important;min-height:0 !important;max-height:34dvh !important;
+  padding:4px 8px !important;overflow-y:auto !important;
+}
+.kwCombatV3.kwR21PersistentHand .r21AdvancedActions > summary {
+  cursor:pointer;padding:7px 10px;border:1px solid #6c8ba6;border-radius:8px;
+  background:#1e3953;color:#f6e5bd;font-weight:700;
+}
+.kwCombatV3.kwR21PersistentHand .r21AdvancedActions:not([open]) {min-height:0;}
+.kwCombatV3.kwR21PersistentHand .r21AdvancedActions[open] > div {padding:8px 0;}
+@media(max-width:800px) {
+  .kwCombatV3.kwR21PersistentHand > .kwBattleFrame {
+    min-height:0 !important;
+    grid-template-rows:minmax(66px,auto) minmax(0,1fr) minmax(148px,26dvh) !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .battleHandPrimary {
+    display:flex !important;
+  }
+  .kwCombatV3.kwR21PersistentHand .r21PersistentHand .cardGrid {
+    display:flex !important;overflow-x:auto !important;touch-action:pan-x !important;
+  }
+}
+
+/* R2.1 contextual actions: only selected battlefield units expose action controls. */
+.kwCombatV3.kwR21PersistentHand .myZone .r21SelectedAction {
+  flex:0 0 auto;display:flex;flex-direction:column;gap:6px;
+  padding:9px;border:1px solid #c8a85e;border-radius:10px;
+  background:#1b354c;color:#fff;max-height:min(220px,34dvh);overflow-y:auto;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons {
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons button {
+  min-height:35px;padding:6px 11px;border:1px solid #7e9eb4;
+  border-radius:7px;background:#294c68;color:#fff;cursor:pointer;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons button.selected {
+  border-color:#ffd78a;background:#4a5e83;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedButtons button:disabled {
+  opacity:.55;cursor:not-allowed;
+}
+.kwCombatV3.kwR21PersistentHand .r21SelectedAction p {display:block !important;margin:2px 0;font-size:12px;line-height:1.5;}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .zoneHeader p {display:block !important;font-size:11px;}
+.kwCombatV3.kwR21PersistentHand .r21PersistentHand .r21ControlRow {color:#fff;}
+@media(max-width:800px){
+ .kwCombatV3.kwR21PersistentHand .myZone .r21SelectedAction {max-height:190px;}
+ .kwCombatV3.kwR21PersistentHand .r21SelectedButtons button {min-height:38px;}
+}

@@ -469,6 +469,24 @@ function App() {
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [attackerId, setAttackerId] = useState(null);
   const [magicPlan, setMagicPlan] = useState(null);
+  const [r21DeployCard, setR21DeployCard] = useState(null);
+  const r21HandTouchRef = useRef({x:0,y:0,swiping:false,suppressUntil:0});
+  const [r21AbilityOpen,setR21AbilityOpen]=useState(false);
+  const [r21AbilityFrom,setR21AbilityFrom]=useState("");
+  const [r21AbilityCard,setR21AbilityCard]=useState("");
+  const [r21Alexander,setR21Alexander]=useState(false);
+  const [r21MoveFrom, setR21MoveFrom] = useState("");
+  const [r21UnitAction,setR21UnitAction]=useState("attack");
+  const [r21MoveTo,setR21MoveTo]=useState("");
+  const [r21AttackTarget,setR21AttackTarget]=useState(null);
+  const [r21CastFrom, setR21CastFrom] = useState("");
+  const [r21Spell, setR21Spell] = useState("火球術");
+  const [r21CastTo, setR21CastTo] = useState("front");
+  const [r21CastPlayerId, setR21CastPlayerId] = useState("");
+  const [r21SpellModalOpen, setR21SpellModalOpen] = useState(false);
+  const [r21SpellError, setR21SpellError] = useState("");
+  const [r21SpellBusy, setR21SpellBusy] = useState(false);
+  const r21SpellRequestRef = useRef(false);
   const [showHelp, setShowHelp] = useState(false);
   const [cardDetailModal, setCardDetailModal] = useState(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -931,7 +949,9 @@ function App() {
       if (!ok) return;
     }
 
-    requestNow("room:leave", {}, () => {});
+    requestNow("room:leave", {}, (res) => {
+      if (!res?.ok) setMessage(res?.error || "離開房間失敗");
+    });
 
     localStorage.removeItem("kw_session");
     setRoom(null);
@@ -1017,7 +1037,7 @@ function App() {
             {accountMessage && <p role="status">{accountMessage}</p>}
           </div>
           <div className="titleBadge">Online Multiplayer</div>
-          <h1>國王戰爭</h1>
+          <h1>國王戰爭 {room?.rules === "R2.1" ? "· R2.1" : ""}</h1>
           <p>和朋友對戰、挑戰電腦，或尋找線上對手。</p>
 
           <label>暱稱 / 遊戲 ID</label>
@@ -1089,7 +1109,47 @@ function App() {
   const allGuestsReady = room.players
     .filter((p) => p.id !== room.hostId && !p.isAI)
     .every((p) => p.ready);
-  const isMyTurn = room.currentPlayerId === playerId;
+  const isMyTurn = room.currentPlayerId === playerId && room.phase !== "guard" && room.phase !== "qinChoice";
+  const isR21 = room.rules === "R2.1";
+  const qinPending=isR21&&room.phase==="qinChoice"&&room.currentPlayerId===playerId;
+  const r21AbilityAvailable=isMyTurn&&room.ap>0&&!me?.abilityUsed;
+  const r21SpellDetails = {
+    "火球術":[1,"enemy","消滅初級兵種；其他兵種戰力 -1（不可重複）。"],
+    "冰凍術":[1,"enemy","凍結敵方兵種，使其下一回合無法行動。"],
+    "力量術":[1,"self","我方兵種下一次戰鬥戰力 +1。"],
+    "虛弱術":[2,"enemy","敵方兵種下一次戰鬥戰力 -1。"],
+    "增強術":[2,"self","我方兵種攻擊國王時傷害 +1。"],
+    "流星雨":[2,"enemy","消滅指定敵方玩家場上所有初級兵種，無須選站位。"],
+    "毒藥瓶":[3,"enemy","敵方兵種在其回合結束時被消滅。"],
+    "燃血術":[3,"self","消耗我方國王 3 HP，使我方兵種下一次戰鬥戰力 +2。"],
+    "天殞術":[3,"enemy","消滅敵方兵種；施法法師下一回合無法行動。"]
+  };
+  const r21Positions = {front:"前排",center:"中排",rear:"後排"};
+  const r21Mages=(me?.field||[]).filter(u=>u.type==="魔法師");
+  const r21Caster=r21Mages.find(u=>u.position===r21CastFrom);
+  const r21CasterLevel=r21Caster?["初級","中級","高級"].indexOf(r21Caster.rank)+1:0;
+  const r21AvailableSpells=Object.entries(r21SpellDetails).filter(([,v])=>v[0]<=r21CasterLevel);
+  const r21ChosenSpell=r21AvailableSpells.some(([n])=>n===r21Spell)?r21Spell:"";
+  const r21SpellInfo=r21SpellDetails[r21ChosenSpell];
+  const r21SpellTargets=r21SpellInfo?.[1]==="self"?(me?[me]:[]):room.players.filter(p=>p.id!==playerId&&!p.eliminated);
+  const r21CastPlayer=r21SpellTargets.find(p=>p.id===r21CastPlayerId);
+  const r21ValidUnits=(r21CastPlayer?.field||[]).filter(u=>r21ChosenSpell==="流星雨"?u.rank==="初級":r21ChosenSpell==="火球術"&&u.rank==="初級"?true:!(u.status||[]).includes(r21ChosenSpell));
+  const r21CastUnit=r21ValidUnits.find(u=>u.position===r21CastTo);
+  const r21MageReason=u=>u.acted?"已行動／已普攻或施法":u.locked?"受到禁制，無法施法":"";
+  const r21CastBlocked=!isMyTurn||room.phase!=="play"?"目前不是你的施法回合。":!socket.connected?"連線中斷，請重新確認戰場。":!r21Caster?"請先選擇法師。":r21MageReason(r21Caster)|| (room.ap<=0?`需要 1 AP，目前剩 ${room.ap} AP。`:room.spellUsed?"本回合施法次數已用完。":!r21SpellInfo?"請選擇法術。":r21ChosenSpell==="燃血術"&&me.hp<=3?"燃血術需要國王 HP 高於 3。":!r21CastPlayer?"請選擇目標玩家（原目標可能已離場）。":!r21ValidUnits.length?"目前沒有合法目標兵種。":r21ChosenSpell!=="流星雨"&&!r21CastUnit?"請選擇合法兵種（原目標可能已失效）。":"");
+  const resetR21Spell=()=>{setR21SpellModalOpen(false);setR21CastFrom("");setR21Spell("");setR21CastPlayerId("");setR21CastTo("");setR21SpellError("");};
+  const submitR21Spell=()=>{
+    if(r21CastBlocked||r21SpellRequestRef.current||!r21CastPlayer)return;
+    r21SpellRequestRef.current=true;setR21SpellBusy(true);setR21SpellError("");
+    const sent=requestNow("game:r21Cast",{from:r21CastFrom,spell:r21ChosenSpell,player:r21CastPlayer.id,to:r21ChosenSpell==="流星雨"?"front":r21CastTo},res=>{
+      r21SpellRequestRef.current=false;setR21SpellBusy(false);
+      if(res?.ok){resetR21Spell();setMessage("");}
+      else setR21SpellError(res?.error||"施法失敗，請重新確認戰場。");
+    });
+    if(!sent){r21SpellRequestRef.current=false;setR21SpellBusy(false);setR21SpellError("請求未送出。");}
+  };
+
+  const mustGuard = isR21 && room.phase === "guard" && room.pending?.defenderId === playerId;
   const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
   const targetPlayer = enemies.find((p) => p.id === targetPlayerId) || enemies[0];
   const attacker = me?.field.find((u) => u.id === attackerId);
@@ -1114,8 +1174,10 @@ function App() {
       : null;
 
   const gameEnded = room.status === "ended";
-  const winner = gameEnded ? room.players.find((p) => !p.eliminated && p.hp > 0) : null;
-  const didWin = gameEnded && winner?.id === playerId;
+  const winner = gameEnded ? (isR21 ? room.players.find((p) => p.id === room.winnerId) : room.players.find((p) => !p.eliminated && p.hp > 0)) : null;
+  // R2.1 settlement is authoritative: compare stable server winnerId directly.
+  // Another participant leaving the result screen must never change this result.
+  const didWin = gameEnded && (isR21 ? room.winnerId != null && room.winnerId === playerId : winner?.id === playerId);
   const isSingleplayerRoom = room.players.some((p) => p.isAI);
 
   if (room.status === "lobby") {
@@ -1124,6 +1186,12 @@ function App() {
         <section className="card hero lobbyCard">
           <div className="titleBadge">{room.roomType || "房間"} Code</div>
           <h1>{room.roomCode}</h1>
+          <p><strong>測試規則 R2.1：</strong>此房間以原版介面進行新規則對戰，24 HP、每回合 2 AP、三個站位。請使用兩位真人玩家加入並開始遊戲。</p>
+          <label htmlFor="r21-king-select">選擇本局國王</label>
+          <select id="r21-king-select" value={me?.r21King||""} onChange={e=>emit("room:r21SelectKing",{king:e.target.value})}>
+            <option value="">尚未選擇（開始時自動分配）</option>
+            {["亞歷山大","屋大維","成吉思汗","秦始皇","路易十四"].map(k=><option key={k} value={k} disabled={room.players.some(p=>p.id!==playerId&&p.r21King===k)}>{k}</option>)}
+          </select>
           <p>{room.isPublic ? "這是公開房間。其他玩家可以透過隨機匹配或輸入房間代碼加入。" : "這是私人房間。只有知道房間代碼的玩家可以加入。"}</p>
 
           <div className="playerList">
@@ -1288,18 +1356,23 @@ function App() {
   function attackUnit(defenderId) {
     closeCardDetailForAction();
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
-    emit("game:attackUnit", { attackerId, targetPlayerId: targetPlayer.id, defenderId });
+    if(isR21){setR21AttackTarget({type:"unit",defenderId,name:targetPlayer.field.find(u=>u.id===defenderId)?.name||"敵方兵種"});return;}
+    emit("game:attackUnit", { attackerId, targetPlayerId: targetPlayer.id, defenderId,alexander:room.rules==="R2.1"&&r21Alexander });
+    setR21Alexander(false);
     setAttackerId(null);
   }
 
   function attackKing() {
     closeCardDetailForAction();
     if (!attackerId || !targetPlayer) return setMessage("請先選擇攻擊者和目標玩家。");
-    emit("game:attackKing", { attackerId, targetPlayerId: targetPlayer.id });
+    if(isR21){setR21AttackTarget({type:"king",name:targetPlayer.king?.name||"敵方國王"});return;}
+    emit("game:attackKing", { attackerId, targetPlayerId: targetPlayer.id,alexander:room.rules==="R2.1"&&r21Alexander });
+    setR21Alexander(false);
     setAttackerId(null);
   }
 
   function handleEndTurn() {
+    if(room.rules==="R2.1"){emit("game:endTurn");return;}
     closeCardDetailForAction();
     if (!isMyTurn) return;
 
@@ -1458,6 +1531,8 @@ function App() {
     }
 
     setAttackerId(card.id);
+    if(isR21){setR21UnitAction("attack");setR21MoveFrom(card.position||"");setR21MoveTo("");setR21AttackTarget(null);}
+    setMessage("");
   }
 
   function enemyCardActionLabel(card) {
@@ -1497,7 +1572,7 @@ function App() {
   const targetHasInfantry = targetPlayer?.field?.some((u) => u.type === "步兵");
 
   return (
-    <main className={`page guidedPage kwCombatV3 ${mobileDeckTab === "magic" ? "mobileDeckMagic" : "mobileDeckUnits"}`}>
+    <main className={`page guidedPage kwCombatV3 ${isR21?"kwR21PersistentHand":""} ${mobileDeckTab === "magic" ? "mobileDeckMagic" : "mobileDeckUnits"}`}>
       <header className="topbar guidedTopbar" id="kw-top-actions">
         <div>
           <div className="titleBadge">Room {room.roomCode}</div>
@@ -1780,6 +1855,7 @@ function App() {
 
       <div className="kwBattleFrame" aria-label="集中戰鬥介面">
         <div className="kwScoreStrip" aria-label="國王血量與目標玩家">
+          {isR21&&<div className="r21TurnStatus" role="status" aria-live="polite"><strong>{mustGuard?"你正受到攻擊，請選擇保牌或承受傷害":qinPending?"秦始皇：請選一張牌放回牌庫底部":isMyTurn?"你的回合 · 可以行動":"對手回合 · 等待行動"}</strong><span>AP {room.ap ?? 0} / 2</span></div>}
           <button type="button" className="kwKingChip own" onClick={()=>me?.king && openCardDetail({...me.king,kind:"king"},"國王")}>
             <span className="kwKingChipLabel">我方 · {me?.name || "玩家"}</span>
             <strong>{me?.king?.name || "國王"} <span className="kwHp">HP {me?.hp ?? "—"}</span></strong>
@@ -1803,7 +1879,7 @@ function App() {
             {enemies.length > 1 && <button type="button" className="mobileTargetCycle" onClick={() => setTargetPlayerId(enemies[(enemies.findIndex(e=>e.id===targetPlayer?.id)+1)%enemies.length].id)}>換目標 ↻</button>}
           </div>
         </div>
-      <section className="battleActionHub" aria-label="本回合操作導覽">
+      {!isR21&&<section className="battleActionHub" aria-label="本回合操作導覽">
         <div className="battleActionHeader">
           <div>
             <span className="battleEyebrow">操作提示</span>
@@ -1828,9 +1904,9 @@ function App() {
             <span aria-hidden="true">× </span>取消選擇：{attacker.name}
           </button>
         )}
-      </section>
+      </section>}
 
-      <section className="handAndLog" id="kw-hand">
+      <section className={`handAndLog ${isR21?"r21PersistentHand":""}`} id="kw-hand">
         <div className="mobileDeckControls" role="group" aria-label="選擇手牌種類">
           <button type="button" className={mobileDeckTab === "units" ? "selected" : ""} onClick={() => {setMobileDeckTab("units");setMobileHandPage(0);}}>兵種 {me?.hand?.length || 0}</button>
           <button type="button" className={mobileDeckTab === "magic" ? "selected" : ""} onClick={() => {setMobileDeckTab("magic");setMobileHandPage(0);}}>魔法 {me?.magic?.length || 0}</button>
@@ -1845,18 +1921,20 @@ function App() {
           <div className="zoneHeader">
             <div>
               <h2>兵種手牌 <small>({me?.hand?.length || 0})</small></h2>
-              <p>點選卡牌部署（場上最多 5 名）。</p>
+              <p>{isR21 ? "點選卡牌部署至前／中／後排（最多 3 名）。" : "點選卡牌部署（場上最多 5 名）。"}</p>
             </div>
           </div>
 
+          {isR21&&r21DeployCard&&<div className="r21ControlRow"><strong>部署 {r21DeployCard.name} · 選擇站位（1 AP）</strong>{["front","center","rear"].map(pos=><button key={pos} disabled={!isMyTurn||room.ap<1||me.field.some(u=>u.position===pos)} title={!isMyTurn?"不是你的回合":room.ap<1?"AP 不足，需要 1 AP":me.field.some(u=>u.position===pos)?"這個位置已有兵種":""} onClick={()=>{emit("game:deploy",{cardId:r21DeployCard.id,position:pos});setR21DeployCard(null);}}>{r21Positions[pos]}</button>)}<button onClick={()=>setR21DeployCard(null)}>取消選卡（不扣 AP）</button></div>}
           <div className="cardGrid">
             {me?.hand?.length ? (
               me.hand.map((card) => (
                 <button
                   key={card.id}
                   className={`gameCard unit handCard ${me.hand.indexOf(card) < Math.min(mobileHandPage, Math.max(0, Math.ceil(me.hand.length/4)-1))*4 || me.hand.indexOf(card) >= (Math.min(mobileHandPage, Math.max(0, Math.ceil(me.hand.length/4)-1))+1)*4 ? "mobileHandHidden" : ""}`}
-                  disabled={!isMyTurn || !!magicPlan}
-                  onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => emit("game:deploy", { cardId: card.id }))}
+                  disabled={!isMyTurn || !!magicPlan || (isR21&&room.ap<1)}
+                  title={isR21?(!isMyTurn?"現在不是你的回合":room.ap<1?"AP 不足，部署需要 1 AP":magicPlan?"請先完成或取消目前的魔法操作":"點擊查看部署資訊；滑動手牌不會部署"):undefined}
+                  onClick={() => {if(isR21&&Date.now()<r21HandTouchRef.current.suppressUntil)return;openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => { if(isR21){setR21DeployCard(card);}else emit("game:deploy",{cardId:card.id}); });}}
                   onDoubleClick={(e) => {
                     e.preventDefault();
                     openCardDetail(card, "兵種手牌");
@@ -1868,8 +1946,9 @@ function App() {
                   onMouseDown={() => startCardDetailPress(card, "兵種手牌")}
                   onMouseUp={cancelCardDetailPress}
                   onMouseLeave={cancelCardDetailPress}
-                  onTouchStart={() => startCardDetailPress(card, "兵種手牌")}
-                  onTouchEnd={cancelCardDetailPress}
+                  onTouchStart={(e) => {if(isR21){r21HandTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,swiping:false,suppressUntil:0};}startCardDetailPress(card, "兵種手牌");}}
+                  onTouchMove={(e) => {if(isR21&&e.touches.length){const t=r21HandTouchRef.current;if(Math.abs(e.touches[0].clientX-t.x)>9||Math.abs(e.touches[0].clientY-t.y)>9){t.swiping=true;cancelCardDetailPress();}}}}
+                  onTouchEnd={() => {if(isR21&&r21HandTouchRef.current.swiping)r21HandTouchRef.current.suppressUntil=Date.now()+500;cancelCardDetailPress();}}
                 >
                   <CardArt card={card} />
                   <strong>{card.name}</strong>
@@ -2044,7 +2123,7 @@ function App() {
             </div>
             <div className="kwKingAttackAction" aria-label="攻擊敵方國王操作">
               <span className="kwKingAttackStatus">{targetHasInfantry ? "敵方步兵仍在守衛國王" : !isMyTurn ? "目前不是你的回合" : !attackerId ? "請先點選我方可行動兵種" : "已選攻擊者，可以攻擊國王"}</span>
-              <button className="dangerBtn kwKingAttackBtn" disabled={!isMyTurn || !attackerId || targetHasInfantry || !!magicPlan} onClick={attackKing}><span className="desktopAttackKingLabel">{targetHasInfantry ? "步兵守衛中" : "⚔ 攻擊敵方國王"}</span><span className="mobileAttackKingLabel">{targetHasInfantry ? "守衛中" : "攻王"}</span></button>
+              <button className="dangerBtn kwKingAttackBtn" disabled={!isMyTurn || !attackerId || (isR21&&r21UnitAction!=="attack") || targetHasInfantry || !!magicPlan} onClick={attackKing}><span className="desktopAttackKingLabel">{targetHasInfantry ? "步兵守衛中" : "⚔ 攻擊敵方國王"}</span><span className="mobileAttackKingLabel">{targetHasInfantry ? "守衛中" : "攻王"}</span></button>
             </div>
           </div>
 
@@ -2055,7 +2134,7 @@ function App() {
                   key={card.id}
                   card={card}
                   selected={magicPlan?.targetUnitIds.includes(card.id)}
-                  disabled={!isMyTurn || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
+                  disabled={!isMyTurn || (isR21&&(!attackerId||r21UnitAction!=="attack")) || (magicPlan && (magicPlan.magic.target === "我方" || magicPlan.magic.name === "天殞術"))}
                   onClick={() => (magicPlan ? chooseMagicTarget(card.id) : attackUnit(card.id))}
                   actionLabel={enemyCardActionLabel(card)}
                   highlight={attackerId && !magicPlan ? "attackable" : ""}
@@ -2075,6 +2154,7 @@ function App() {
             </div>
           </div>
 
+          {isR21&&isMyTurn&&attacker&&<div className="r21SelectedAction" role="group" aria-label="所選兵種行動"><strong>{attacker.name} · {r21Positions[attacker.position]} · 選擇行動</strong><div className="r21SelectedButtons"><button className={r21UnitAction==="attack"?"selected":""} onClick={()=>{setR21UnitAction("attack");setR21AttackTarget(null);}}>攻擊</button><button className={r21UnitAction==="move"?"selected":""} onClick={()=>{setR21UnitAction("move");setR21AttackTarget(null);}}>移動</button>{attacker.type==="魔法師"&&<button onClick={()=>{setR21CastFrom(attacker.position);setR21Spell("");setR21SpellError("");setR21SpellModalOpen(true);}}>使用魔法</button>}<button onClick={()=>{setAttackerId(null);setR21AttackTarget(null);setR21MoveTo("");}}>取消選擇（不扣 AP）</button></div>{room.ap<1?<p>AP 不足：需要 1 AP，目前剩 {room.ap} AP。</p>:attacker.tapped?<p>這名兵種本回合已行動或剛部署，不能攻擊或施法；移動仍依規則判定。</p>:null}{r21UnitAction==="attack"?<p>請點擊敵方兵種或「攻擊敵方國王」，確認後才送出攻擊。</p>:<div className="r21SelectedButtons"><p>選擇移動目的地（1 AP）：</p>{["front","center","rear"].map(pos=><button key={pos} disabled={pos===attacker.position||me.field.some(u=>u.position===pos)||room.ap<1} title={pos===attacker.position?"已在這個位置":me.field.some(u=>u.position===pos)?"這個位置已有兵種":room.ap<1?"AP 不足，需要 1 AP":""} onClick={()=>setR21MoveTo(pos)}>{r21Positions[pos]}</button>)}{r21MoveTo&&<><span>確認將 {attacker.name} 移至{r21Positions[r21MoveTo]}？</span><button onClick={()=>{emit("game:r21Move",{from:attacker.position,to:r21MoveTo});setAttackerId(null);setR21MoveTo("");}}>確認移動 · 1 AP</button><button onClick={()=>setR21MoveTo("")}>取消</button></>}</div>}</div>}
           <div className="cardGrid">
             {me?.field?.length ? (
               me.field.map((card) => (
@@ -2096,6 +2176,49 @@ function App() {
         </section>
       </section>
       </div>
+      {isR21&&r21AttackTarget&&attacker&&isMyTurn&&<div className="r21SpellBackdrop"><section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="確認攻擊"><header className="r21SpellHeader"><h2>確認攻擊</h2></header><div className="r21SpellBody"><p>{attacker.name} → {r21AttackTarget.name}</p><p>{room.ap<1?"AP 不足，需要 1 AP。":attacker.tapped?"這名兵種本回合已行動或剛部署，不能攻擊。":"將消耗 1 AP，確認後才會攻擊。"}</p></div><footer className="r21SpellFooter"><button onClick={()=>setR21AttackTarget(null)}>取消（不扣 AP）</button><button disabled={room.ap<1||attacker.tapped} onClick={()=>{emit(r21AttackTarget.type==="king"?"game:attackKing":"game:attackUnit",{attackerId,targetPlayerId:targetPlayer.id,...(r21AttackTarget.type==="unit"?{defenderId:r21AttackTarget.defenderId}:{}),alexander:r21Alexander});setR21AttackTarget(null);setAttackerId(null);setR21Alexander(false);}}>確認攻擊 · 1 AP</button></footer></section></div>}
+          {r21SpellModalOpen && <div className="r21SpellBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!r21SpellBusy)resetR21Spell();}}>
+            <section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="法師施法">
+              <header className="r21SpellHeader"><div><h2>法師施法</h2><small>R2.1 · 1 AP · 每回合一次 · 目前 {room.ap} AP</small></div><button type="button" disabled={r21SpellBusy} onClick={resetR21Spell} aria-label="關閉施法視窗">✕</button></header>
+              <div className="r21SpellBody">
+                <h3>① 選擇法師</h3>
+                {!r21Mages.length && <p>場上沒有法師，請先部署法師。</p>}
+                <div className="r21MageGrid">{r21Mages.map(u=><button type="button" key={u.id} disabled={!!r21MageReason(u)||r21SpellBusy} aria-pressed={r21CastFrom===u.position} onClick={()=>{setR21CastFrom(u.position);setR21Spell("");setR21CastPlayerId("");setR21CastTo("");setR21SpellError("");}}><strong>{u.name}</strong><span>{r21Positions[u.position]} · {u.rank} · 1–{["初級","中級","高級"].indexOf(u.rank)+1} 級</span>{r21MageReason(u)&&<em>{r21MageReason(u)}</em>}</button>)}</div>
+                {r21Caster && <><h3>② 選擇法術</h3>
+                  <div className="r21SpellChoices">{r21AvailableSpells.map(([name,info])=><button type="button" key={name} disabled={r21SpellBusy} aria-pressed={r21ChosenSpell===name} onClick={()=>{setR21Spell(name);setR21CastPlayerId(info[1]==="self"?playerId:"");setR21CastTo("");setR21SpellError("");}}>{name} · {info[0]} 級</button>)}</div>
+                  {r21SpellInfo && <><div className="r21SpellDescription"><h3>{r21ChosenSpell} · {r21SpellInfo[0]} 級</h3><p>{r21SpellInfo[2]}</p><p>消耗 1 AP · 每回合最多一次（{room.spellUsed?"已使用":"尚未使用"}） · 需要 {r21SpellInfo[0]} 級法師</p><p>目標：{r21SpellInfo[1]==="self"?"我方":"敵方"}{r21ChosenSpell==="流星雨"?"玩家全體初級兵種":"單一兵種"}{r21ChosenSpell==="燃血術"?" · 額外扣 3 HP":""}</p><p>施法後法師視為已行動，不能再普攻；移動消耗 AP，但不直接設定已行動。</p></div>
+                    <h3>③ 選擇合法目標</h3>
+                    <label>目標玩家<select value={r21CastPlayerId} disabled={r21SpellBusy||r21SpellInfo[1]==="self"} onChange={e=>{setR21CastPlayerId(e.target.value);setR21CastTo("");setR21SpellError("");}}><option value="">請選擇玩家</option>{r21SpellTargets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+                    {r21ChosenSpell==="流星雨"?<p>無需選單一站位；影響所選玩家的全部初級兵種（{r21ValidUnits.length} 名）。</p>:<label>目標兵種<select value={r21CastTo} disabled={!r21CastPlayer||r21SpellBusy} onChange={e=>{setR21CastTo(e.target.value);setR21SpellError("");}}><option value="">請選擇兵種</option>{r21ValidUnits.map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}</option>)}</select></label>}
+                    {r21CastPlayer&&!r21ValidUnits.length&&<p role="status">目前沒有合法目標，請改選法術或玩家。</p>}
+                    {!r21CastBlocked&&<p className="r21SpellPreview">④ 預覽：對「{r21CastPlayer.name}」{r21ChosenSpell==="流星雨"?`的 ${r21ValidUnits.length} 名初級兵種`:`的「${r21CastUnit?.name}」`}施放「{r21ChosenSpell}」，消耗 1 AP{r21ChosenSpell==="燃血術"?" 和 3 HP":""}。</p>}
+                  </>}
+                </>}
+                {r21CastBlocked&&<p className="r21CastWarning" role="status">{r21CastBlocked}</p>}
+                {r21SpellError&&<p className="r21CastWarning" role="alert">伺服器回應：{r21SpellError}</p>}
+              </div>
+              <footer className="r21SpellFooter"><button type="button" disabled={r21SpellBusy} onClick={resetR21Spell}>取消／關閉</button><button type="button" className="primaryBtn" disabled={!!r21CastBlocked||r21SpellBusy} onClick={submitR21Spell}>{r21SpellBusy?"等待伺服器確認…":"確認施法 · 1 AP"}</button></footer>
+            </section>
+          </div>}
+      {qinPending&&<div className="r21SpellBackdrop"><section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="秦始皇抽三放一"><header className="r21SpellHeader"><h2>秦始皇 · 抽三放一</h2></header><div className="r21SpellBody"><p>以下三張牌僅你可見。選擇一張放回牌庫底部；完成前不會切換回合。</p><div className="r21MageGrid">{(room.qinChoice||[]).map(c=><button key={c.id} onClick={()=>emit("game:r21QinChoose",{cardId:c.id})}><strong>{c.name}</strong><span>放回牌庫底部</span></button>)}</div></div></section></div>}
+      {r21AbilityOpen&&isR21&&<div className="r21SpellBackdrop"><section className="r21SpellDialog" role="dialog" aria-modal="true" aria-label="國王能力"><header className="r21SpellHeader"><h2>{me.king.name} · 國王能力</h2><button onClick={()=>setR21AbilityOpen(false)}>✕</button></header><div className="r21SpellBody"><p>每回合一次 · 消耗 1 AP。{me.king.name==="路易十四"?"犧牲回合開始已在場兵種，恢復最多 3 HP。":"交換場上兵種與手牌；新兵種視為剛部署。"}</p><label>選擇場上兵種<select value={r21AbilityFrom} onChange={e=>setR21AbilityFrom(e.target.value)}><option value="">請選擇</option>{me.field.filter(u=>me.king.name!=="路易十四"||u.presentAtTurnStart).map(u=><option key={u.id} value={u.position}>{u.name} · {r21Positions[u.position]}</option>)}</select></label>{me.king.name==="成吉思汗"&&<label>選擇交換手牌<select value={r21AbilityCard} onChange={e=>setR21AbilityCard(e.target.value)}><option value="">請選擇</option>{me.hand.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}<p>預覽：{me.king.name==="路易十四"?`犧牲兵種，恢復 ${Math.min(3,24-me.hp)} HP`:"交換所選場上兵種與手牌"}，消耗 1 AP。</p></div><footer className="r21SpellFooter"><button onClick={()=>setR21AbilityOpen(false)}>取消</button><button disabled={!r21AbilityAvailable||!r21AbilityFrom||(me.king.name==="成吉思汗"&&!r21AbilityCard)} onClick={()=>{emit("game:r21Ability",{from:r21AbilityFrom,cardId:me.king.name==="成吉思汗"?Number(r21AbilityCard):undefined});setR21AbilityOpen(false);}}>確認發動</button></footer></section></div>}
+      {isR21 && <section className="zoneCard r21AuxControls" aria-label="R2.1 進階操作">
+
+
+        {mustGuard && <div role="group" aria-label="保牌回應">
+          <strong>{room.pending?.attackerPlayerName} 使用「{room.pending?.attackerName}」攻擊你的國王，預計傷害 {room.pending?.damage}！請選擇保牌或承受傷害。</strong>
+          <button onClick={()=>emit("game:r21Guard",{})}>不保牌，承受傷害</button>
+          {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
+        </div>}
+        {isMyTurn && <details className="r21AdvancedActions"><summary>國王能力與特殊效果</summary><div role="group" aria-label="R2.1 行動">
+
+          {me.king?.name==="亞歷山大大帝"&&<label className="r21KingToggle"><input type="checkbox" checked={r21Alexander&&!me.abilityUsed} disabled={!isMyTurn||me.abilityUsed||room.ap<1} onChange={e=>setR21Alexander(e.target.checked)}/>亞歷山大戰術 +1（{me.abilityUsed?"本回合已使用":"每回合一次；攻王不額外加傷害"}）</label>}
+
+
+          {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button disabled={!r21AbilityAvailable} onClick={()=>{setR21AbilityOpen(true);setR21AbilityFrom("");setR21AbilityCard("");}}>{me.king.name}能力（1 AP）{me.abilityUsed?" · 已使用":room.ap<1?" · AP 不足":""}</button>}
+          {me.king?.name==="屋大維奧古斯都"&&<p>羅馬秩序：防守平手時保留兵種，該兵種下一次自己回合暫時不能攻擊；不消耗 AP。</p>}
+        </div></details>}
+      </section>}
 
     </main>
   );

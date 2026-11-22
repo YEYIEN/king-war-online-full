@@ -1,5 +1,6 @@
 
 import express from "express";
+import { newGame as newR21Game, applyCommand as applyR21Command, POSITIONS as R21_POSITIONS, checkInvariants as checkR21Invariants } from "./rules-r21-engine.mjs";
 import http from "http";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
@@ -227,11 +228,40 @@ function mageCanCast(m, magic) {
   if (magic.level === "高級魔法") return m.rank === "高級";
   return false;
 }
+// R2.1 is hosted inside the original V1 room and Socket.IO connection.
+const R21_KING_NAMES = {"亞歷山大":"亞歷山大大帝","屋大維":"屋大維奧古斯都","成吉思汗":"成吉思汗","秦始皇":"秦始皇","路易十四":"路易十四"};
+const R21_KING_EFFECTS={"亞歷山大":"進攻時可發動一次戰力 +1 的戰術加成。","屋大維":"己方兵種與敵方同歸於盡時，己方兵種可存活，並暫時無法攻擊。","成吉思汗":"每回合可消耗 1 AP，以一張手牌替換場上兵種。","秦始皇":"回合結束時抽 3 張兵種，選 1 張放回牌庫底部。","路易十四":"每回合可消耗 1 AP 犧牲回合開始時已在場的兵種，恢復國王 3 HP。"};
+const R21_COUNTER = {"步兵":"刺客","刺客":"魔法師","魔法師":"騎兵","騎兵":"步兵"};
+const r21Card = (u,pos) => ({...u,kind:"unit",name:u.rank+u.type,damage:["初級","中級","高級"].indexOf(u.rank)+1,counterTarget:R21_COUNTER[u.type],tapped:!!(u.acted||u.justDeployed||u.locked||u.attackLocked),status:(u.effects||[]).map(e=>e.name),position:pos});
+function r21View(room,viewer){
+  const state=room.r21;
+  return {roomCode:room.code,hostId:room.hostId,maxPlayers:room.maxPlayers,settings:room.settings,status:state.phase==="finished"?"ended":"playing",winnerId:state.phase==="finished"?(room.r21WinnerId ?? (state.winner!=null?room.players[state.winner]?.id:null)):null,roomType:"私人房間",isPublic:false,tutorial:false,openingTruceActive:false,currentPlayerId:room.players[state.current]?.id,turnStartedAt:room.turnStartedAt||null,log:room.log.slice(-50),rules:"R2.1",ap:state.ap,spellUsed:!!state.players[state.current]?.spellUsed,phase:state.phase,qinChoice:state.phase==="qinChoice"&&room.players[state.current]?.id===viewer?(state.qinDrawn||[]).map(u=>r21Card(u,null)):[],pending:state.pending?{defenderId:room.players[state.pending.defenderId].id,attackerName:(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).rank+(Object.values(state.players[state.pending.attackerId].field).find(u=>u?.id===state.pending.attackerUnitId)||{}).type,attackerPlayerName:room.players[state.pending.attackerId].name,damage:state.pending.damage}:null,players:room.players.map((p,i)=>{const rp=state.players[i];const me=p.id===viewer;return {id:p.id,name:p.name,isHost:p.isHost,connected:p.connected,ready:p.ready,isAI:!!p.isAI,king:{name:R21_KING_NAMES[rp.king],effectName:"R2.1 國王能力",effect:R21_KING_EFFECTS[rp.king]},hp:rp.hp,abilityUsed:!!rp.abilityUsed,eliminated:rp.hp<=0,field:R21_POSITIONS.filter(pos=>rp.field[pos]).map(pos=>r21Card(rp.field[pos],pos)),hand:me?rp.hand.map(u=>r21Card(u,null)):[],magic:[],handCount:rp.hand.length,magicCount:0,lastStandUsed:true,comebackAvailable:false};})};
+}
+function r21Action(room,player,cmd){
+  try{
+    const actor=room.players.findIndex(p=>p.id===player.id);
+    if(actor<0)return {ok:false,error:"玩家不存在"};
+    const next=applyR21Command(room.r21,actor,cmd);
+    checkR21Invariants(next);
+    room.r21=next;
+    room.currentPlayerId=room.players[next.current]?.id;
+    room.status=next.phase==="finished"?"ended":"playing";
+    if(next.phase==="finished")room.r21WinnerId=room.players[next.winner]?.id??null;
+    room.turnStartedAt=Date.now();
+    room.log.push(player.name+"："+cmd.type+(cmd.spell?" "+cmd.spell:""));
+    return {ok:true};
+  }catch(error){return {ok:false,error:error.message};}
+}
+function r21Handle(room,player,reply,cmd){
+  const result=r21Action(room,player,cmd);
+  reply?.(result);
+  if(result.ok)broadcast(room);
+}
 function publicPlayer(p, viewer, room) {
   const isMe = p.id === viewer;
-  return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, lastStandShield: p.lastStandShield || 0, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
+  return { id:p.id, name:p.name, lastStandUsed: !!p.lastStandUsed, lastStandShield: p.lastStandShield || 0, comebackAvailable: isMe ? canUseLastStand(room,p) : false, isHost:p.isHost, connected:p.connected, hp:p.hp, king:p.king, field:p.field, hand:isMe?p.hand:[], magic:isMe?p.magic:[], handCount:p.hand.length, magicCount:p.magic.length, eliminated:p.eliminated, isAI: !!p.isAI, ready: !!p.ready, r21King:p.r21King||null, reinforcementAvailable: !!p.reinforcementAvailable, reinforcementUsed: !!p.reinforcementUsed };
 }
-function viewFor(room, viewer) { return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
+function viewFor(room, viewer) { if(room.r21)return r21View(room,viewer); return { roomCode:room.code, hostId:room.hostId, maxPlayers:room.maxPlayers, settings: room.settings || { turnTimeLimit: 0, aiDifficulty: "normal", comebackEnabled: true }, status:room.status, isPublic: !!room.isPublic, roomType: room.tutorial ? "操作教學" : room.isPublic ? "公開房間" : "私人房間",
     tutorial: !!room.tutorial, openingTruceActive: openingTruce(room), tutorialProgress: room.tutorial ? room.tutorialProgress || 0 : null, currentPlayerId:room.currentPlayerId, turnStartedAt: room.turnStartedAt || null, log:room.log.slice(-50), players:room.players.map(p=>publicPlayer(p, viewer, room)) }; }
 function persistRoomSnapshot(room) {
   void saveRoomSnapshot(room).catch(error=>console.error("Room recovery snapshot error:",error.message));
@@ -493,6 +523,83 @@ function advanceAfterElimination(room, player) {
 function forcePlayerDefeat(room, player, reason = "離開遊戲，視同投降。") {
   if (!room || !player || room.status !== "playing" || player.eliminated) return false;
 
+  if (room.r21) {
+    const index = room.players.findIndex(p => p.id === player.id);
+    if (index < 0 || room.r21.players[index]?.hp <= 0) return false;
+    const state = structuredClone(room.r21);
+    const defeated = state.players[index];
+    defeated.hp = 0;
+    defeated.eliminated = true;
+    // Every eliminated card returns to the shared discard pile; never leak
+    // cards or leave an eliminated player's units on the battlefield.
+    const recycle = card => ({
+      ...card, effects: [], acted: false, justDeployed: false,
+      locked: false, attackLocked: false, attackLockedUntilTurn: null,
+      lockUntilTurn: null, poisonTurn: null, presentAtTurnStart: false
+    });
+    state.discard.push(...defeated.hand.map(recycle));
+    defeated.hand = [];
+    for (const position of R21_POSITIONS) {
+      if (defeated.field[position]) {
+        state.discard.push(recycle(defeated.field[position]));
+        defeated.field[position] = null;
+      }
+    }
+    const interrupted = state.pending &&
+      (state.pending.defenderId === index || state.pending.attackerId === index);
+    if (interrupted) {
+      state.pending = null;
+      state.phase = "play";
+    }
+    const remaining = state.players.map((p, i) => p.hp > 0 ? i : -1).filter(i => i >= 0);
+    if (remaining.length === 1) {
+      state.phase = "finished";
+      state.winner = remaining[0];
+      state.pending = null;
+    } else if (state.current === index) {
+      // Start the next living player's turn, not a stale forfeited turn.
+      state.current = remaining.find(i => i > index) ?? remaining[0];
+      state.turn++;
+      state.ap = 2;
+      const next = state.players[state.current];
+      next.turnsTaken++;
+      next.spellUsed = false;
+      next.abilityUsed = false;
+      for (const unit of Object.values(next.field)) {
+        if (!unit) continue;
+        unit.acted = false;
+        unit.justDeployed = false;
+        unit.presentAtTurnStart = true;
+        unit.attackLocked = unit.attackLockedUntilTurn === next.turnsTaken;
+        unit.locked = unit.lockUntilTurn === next.turnsTaken;
+        if (unit.locked) {
+          unit.lockUntilTurn = null;
+          unit.effects = unit.effects.filter(e => e.name !== "冰凍術" && e.name !== "天殞術");
+        }
+      }
+    }
+    checkR21Invariants(state);
+    room.r21 = state;
+    room.currentPlayerId = room.players[state.current]?.id;
+    room.status = state.phase === "finished" ? "ended" : "playing";
+    if (state.phase === "finished") room.r21WinnerId = room.players[state.winner]?.id ?? null;
+    room.turnStartedAt = Date.now();
+    player.eliminated = true;
+    player.hp = 0;
+    player.disconnectedAt = null;
+    clearDisconnectGrace(room, player);
+    clearOfflineTurnTimer(room);
+    if (room.status === "ended") {
+      clearTurnTimer(room);
+      scheduleRoomCleanup(room, 120);
+    }
+    room.log.push(`${player.name} ${reason}`);
+    if (state.phase === "finished") {
+      room.log.push(`對局結束，${room.players[state.winner].name} 獲勝。`);
+    }
+    broadcast(room);
+    return true;
+  }
   player.hp = 0;
   player.eliminated = true;
   if (room.matchMetrics) room.matchMetrics.finishReason = "forfeit-involved";
@@ -1442,6 +1549,14 @@ io.on("connection", socket => {
 
     if (room.status === "playing") {
       forcePlayerDefeat(room, player, "回到主選單，視同投降.");
+    } else if (room.r21 && room.status === "ended") {
+      // Preserve the immutable R2.1 player order after settlement: the engine
+      // winner index and each player state still refer to these slots.
+      player.connected = false;
+      player.socketId = null;
+      player.disconnectedAt = null;
+      if (kwDeleteRoomIfNoHumans(room, "所有玩家已離開，對局已清理。")) return reply?.({ ok: true });
+      broadcast(room);
     } else {
       player.connected = false;
       player.socketId = null;
@@ -1954,6 +2069,13 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
+  guardedOn("room:r21SelectKing", ({king}={},reply)=>{
+    const f=findBySocket(socket.id);if(!f)return reply?.({ok:false,error:"不在房間"});
+    if(f.room.status!=="lobby"||f.room.players.some(p=>p.isAI))return reply?.({ok:false,error:"僅真人房間準備階段可選國王"});
+    if(!Object.keys(R21_KING_NAMES).includes(king))return reply?.({ok:false,error:"無效國王"});
+    if(f.room.players.some(p=>p.id!==f.player.id&&p.r21King===king))return reply?.({ok:false,error:"此國王已被其他玩家選擇"});
+    f.player.r21King=king;reply?.({ok:true});broadcast(f.room);
+  });
   guardedOn("game:start", (_, reply) => {
     const f=findBySocket(socket.id); if(!f) return reply?.({ok:false,error:"你不在房間中。"});
     if(!f.player.isHost) return reply?.({ok:false,error:"只有房主可開始。"});
@@ -1961,9 +2083,24 @@ io.on("connection", socket => {
     if(f.room.players.length<2) return reply?.({ok:false,error:"至少需要2位玩家。"});
     if(f.room.players.some(p=>!p.isAI && !p.connected)) return reply?.({ok:false,error:"有玩家目前不在線上。"});
     if(!allGuestsReady(f.room)) return reply?.({ok:false,error:"還有房客尚未準備完成。"});
+    if(!f.room.players.some(p=>p.isAI) && !f.room.tutorial){
+      const available=["亞歷山大","屋大維","成吉思汗","秦始皇","路易十四"];
+      const selected=f.room.players.map(p=>p.r21King||null);
+      const used=new Set(selected.filter(Boolean));
+      const kings=selected.map(k=>k||available.find(x=>!used.has(x)&&used.add(x)));
+      f.room.r21=newR21Game(kings,Date.now()>>>0);
+      f.room.status="playing"; f.room.currentPlayerId=f.room.players[0].id;f.room.turnStartedAt=Date.now();
+      f.room.log.push("R2.1 規則開始：每回合 2 AP，戰場分前中後排。");
+      reply?.({ok:true});broadcast(f.room);return;
+    }
     startGame(f.room); reply?.({ok:true}); broadcast(f.room); scheduleAITurn(f.room);
   });
 
+  guardedOn("game:r21Guard", ({cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"GUARD",cardId});});
+  guardedOn("game:r21Move", ({from,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"MOVE",from,to});});
+  guardedOn("game:r21Cast", ({from,spell,player,to}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});const targetIndex=rf.room.players.findIndex(p=>p.id===player);return r21Handle(rf.room,rf.player,reply,{type:"CAST",from,spell,player:targetIndex,to});});
+  guardedOn("game:r21QinChoose", ({cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"QIN_CHOOSE",cardId});});
+  guardedOn("game:r21Ability", ({from,cardId}={},reply)=>{const rf=findBySocket(socket.id);if(!rf?.room.r21)return reply?.({ok:false,error:"非 R2.1 對局"});return r21Handle(rf.room,rf.player,reply,{type:"ABILITY",from,cardId});});
   guardedOn("game:lastStand", ({ mode = "assault" } = {}, reply) => {
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
@@ -1978,7 +2115,8 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  guardedOn("game:deploy", ({cardId}, reply) => {
+  guardedOn("game:deploy", ({cardId,position}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return r21Handle(rf.room,rf.player,reply,{type:"DEPLOY",cardId,position});
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const i=p.hand.findIndex(c=>c.id===cardId); if(i<0) return reply?.({ok:false,error:"找不到手牌。"});
@@ -2016,6 +2154,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:recall", ({unitId}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return reply?.({ok:false,error:"請使用 R2.1 國王能力。"});
     const f=findBySocket(socket.id); if(!f) return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     const result = returnUnitToHand(room, p, unitId);
@@ -2023,7 +2162,8 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId}, reply) => {
+  guardedOn("game:attackUnit", ({attackerId,targetPlayerId,defenderId,alexander=false}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);const to=R21_POSITIONS.find(pos=>rf.room.r21.players[idx]?.field[pos]?.id===defenderId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to,alexander:!!alexander});}
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -2041,7 +2181,8 @@ io.on("connection", socket => {
     if (result.ok) broadcast(room);
   });
 
-  guardedOn("game:attackKing", ({attackerId,targetPlayerId}, reply) => {
+  guardedOn("game:attackKing", ({attackerId,targetPlayerId,alexander=false}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21){const a=rf.room.r21.players[rf.room.players.indexOf(rf.player)];const from=R21_POSITIONS.find(pos=>a.field[pos]?.id===attackerId);const idx=rf.room.players.findIndex(p=>p.id===targetPlayerId);return r21Handle(rf.room,rf.player,reply,{type:"ATTACK",from,player:idx,to:"king",alexander:!!alexander});}
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const {room,player} = found;
@@ -2058,6 +2199,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:castMagic", (payload = {}, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return reply?.({ok:false,error:"R2.1 魔法操作正在整合，尚未開放。"});
     const found = findBySocket(socket.id);
     if (!found) return reply?.({ ok: false, error: "你不在房間中。" });
     const { room, player } = found;
@@ -2077,6 +2219,7 @@ io.on("connection", socket => {
   });
 
   guardedOn("game:endTurn", (_, reply) => {
+    const rf=findBySocket(socket.id);if(rf?.room.r21)return r21Handle(rf.room,rf.player,reply,{type:"END"});
     const f=findBySocket(socket.id); if(!f)return; const {room,player:p}=f;
     if(!requireTurn(room,p)) return reply?.({ok:false,error:"還沒輪到你。"});
     if (room.tutorial) {

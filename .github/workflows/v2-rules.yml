@@ -1,0 +1,83 @@
+name: V2 rule validation
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [rules-v2-tabletop-rebuild]
+jobs:
+  v2-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm run test:v2
+      - run: node --check server/index.js
+      - run: node --check server/v2-playtest-socket.mjs
+
+  v2-network:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm --prefix client install --no-audit --no-fund
+      - run: node --test tests/v2-network.test.mjs tests/v2-magic-network.test.mjs
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright-core
+      - run: node --test tests/v2-end-choice-browser.test.mjs
+      - run: node --test tests/v2-mobile-class-hud-browser.test.mjs
+      - run: node --test tests/v2-reconnect-browser.test.mjs
+      - run: node --test tests/v2-full-browser.test.mjs
+      - run: node --test tests/v2-magic-browser.test.mjs
+      - run: node --test tests/v2-kings-browser.test.mjs
+
+
+  v2-full-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm --prefix client install --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright-core
+      - run: node --test tests/v2-tactics-browser.test.mjs tests/v2-native-full-browser.test.mjs
+
+  v2-multiplayer-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm --prefix client install --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright-core
+      - run: node --test tests/v2-multiplayer-browser.test.mjs
+
+  v2-magic-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm --prefix client install --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright-core
+      - run: node --test tests/v2-magic-native-browser.test.mjs
+
+  v2-live-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright-core
+      - run: node --test tests/v2-live-browser.test.mjs
