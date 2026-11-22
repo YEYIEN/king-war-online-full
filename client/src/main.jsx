@@ -1089,7 +1089,9 @@ function App() {
   const allGuestsReady = room.players
     .filter((p) => p.id !== room.hostId && !p.isAI)
     .every((p) => p.ready);
-  const isMyTurn = room.currentPlayerId === playerId;
+  const isMyTurn = room.currentPlayerId === playerId && room.phase !== "guard";
+  const isR21 = room.rules === "R2.1";
+  const mustGuard = isR21 && room.phase === "guard" && room.pending?.defenderId === playerId;
   const enemies = room.players.filter((p) => p.id !== playerId && !p.eliminated);
   const targetPlayer = enemies.find((p) => p.id === targetPlayerId) || enemies[0];
   const attacker = me?.field.find((u) => u.id === attackerId);
@@ -1300,6 +1302,7 @@ function App() {
   }
 
   function handleEndTurn() {
+    if(room.rules==="R2.1"){emit("game:endTurn");return;}
     closeCardDetailForAction();
     if (!isMyTurn) return;
 
@@ -1830,6 +1833,19 @@ function App() {
         )}
       </section>
 
+      {isR21 && <section className="zoneCard" aria-label="R2.1 回合資訊">
+        <h2>國王戰爭 · R2.1 規則</h2>
+        <p>行動點 AP：{room.ap} / 2　｜　前排／中排／後排各限一名兵種　｜　國王生命：24</p>
+        {mustGuard && <div role="group" aria-label="保牌回應">
+          <strong>敵方正在攻擊你的國王！請選擇保牌或承受傷害。</strong>
+          <button onClick={()=>emit("game:r21Guard",{})}>不保牌，承受傷害</button>
+          {me.hand.map(card=><button key={card.id} onClick={()=>emit("game:r21Guard",{cardId:card.id})}>保牌：{card.name}</button>)}
+        </div>}
+        {isMyTurn && <div role="group" aria-label="R2.1 行動">
+          <button onClick={()=>{const from=window.prompt("移動哪個站位？front / center / rear");const to=window.prompt("移動至哪個站位？front / center / rear");if(from&&to)emit("game:r21Move",{from,to});}}>移動兵種（1 AP）</button>
+          {(me.king?.name==="成吉思汗"||me.king?.name==="路易十四")&&<button onClick={()=>{const from=window.prompt("能力發動站位：front / center / rear");const cardId=me.king.name==="成吉思汗"?window.prompt("交換的手牌 ID（點選卡牌資訊查看）"):undefined;if(from)emit("game:r21Ability",{from,cardId});}}>國王能力（1 AP）</button>}
+        </div>}
+      </section>}
       <section className="handAndLog" id="kw-hand">
         <div className="mobileDeckControls" role="group" aria-label="選擇手牌種類">
           <button type="button" className={mobileDeckTab === "units" ? "selected" : ""} onClick={() => {setMobileDeckTab("units");setMobileHandPage(0);}}>兵種 {me?.hand?.length || 0}</button>
@@ -1845,7 +1861,7 @@ function App() {
           <div className="zoneHeader">
             <div>
               <h2>兵種手牌 <small>({me?.hand?.length || 0})</small></h2>
-              <p>點選卡牌部署（場上最多 5 名）。</p>
+              <p>{isR21 ? "點選卡牌部署至前／中／後排（最多 3 名）。" : "點選卡牌部署（場上最多 5 名）。"}</p>
             </div>
           </div>
 
@@ -1856,7 +1872,7 @@ function App() {
                   key={card.id}
                   className={`gameCard unit handCard ${me.hand.indexOf(card) < Math.min(mobileHandPage, Math.max(0, Math.ceil(me.hand.length/4)-1))*4 || me.hand.indexOf(card) >= (Math.min(mobileHandPage, Math.max(0, Math.ceil(me.hand.length/4)-1))+1)*4 ? "mobileHandHidden" : ""}`}
                   disabled={!isMyTurn || !!magicPlan}
-                  onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => emit("game:deploy", { cardId: card.id }))}
+                  onClick={() => openMobileActionModal(card, "兵種手牌", "部署這張兵種", () => { if(isR21){const available=["front","center","rear"].filter(pos=>!me.field.some(u=>u.position===pos));const choice=window.prompt("部署位置："+available.join(" / "),available[0]||"");if(!available.includes(choice))return;emit("game:deploy",{cardId:card.id,position:choice});}else emit("game:deploy",{cardId:card.id}); })}
                   onDoubleClick={(e) => {
                     e.preventDefault();
                     openCardDetail(card, "兵種手牌");
