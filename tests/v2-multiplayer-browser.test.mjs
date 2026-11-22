@@ -14,24 +14,18 @@ const order=cards=>{
 };
 const waitForTurn=async(page,player)=>page.waitForFunction(i=>state?.status==='playing'&&state.current===i,player);
 for(const size of [3,4,5]){
- test('real Chromium: '+size+' players complete an independent multiplayer match with private hands',{timeout:240000},async()=>{
+ test('real Chromium: '+size+' players complete full match via native tactic/end-turn UI with private hands',{timeout:240000},async()=>{
   const http=createServer((req,res)=>{if(req.url?.startsWith('/v2-playtest')){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}else{res.writeHead(404);res.end('not found')}});
   const io=new Server(http);registerV2Playtest(io,{deckOrder:order});
   await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',args:['--no-sandbox']});
-  const ctx=await browser.newContext(),pages=[];
+  const ctx=await browser.newContext(),pages=[],dialogErrors=[];
   try{
    const url='http://127.0.0.1:'+http.address().port+'/v2-playtest';
    for(let i=0;i<size;i++){
     const p=await ctx.newPage();pages.push(p);p.setDefaultTimeout(12000);
-    p.on('dialog',async d=>{
-     if(d.type()==='confirm')return d.dismiss();
-     if(d.type()==='prompt'){
-      const n=d.message().match(/請選擇 ([0-9]+) 張棄置/);
-      return d.accept(n?Array.from({length:Number(n[1])},(_,j)=>j+1).join(','):'1');
-     }
-     return d.accept();
-    });
+    p.on('dialog',async d=>{dialogErrors.push('Unexpected native dialog: '+d.message());await d.dismiss()});
+    p.on('pageerror',err=>dialogErrors.push('Page error: '+err.message));
     await p.goto(url);await p.locator('#name').fill('P'+i);
    }
    await pages[0].getByRole('button',{name:'建立房間'}).click();
@@ -52,7 +46,12 @@ for(const size of [3,4,5]){
     const p=pages[index];
     await waitForTurn(p,index);
     const expected=await p.evaluate(index=>{for(let step=1;step<=state.players.length;step++){const j=(index+step)%state.players.length;if(state.players[j].hp>0)return j}return -1},index);
-    await p.getByRole('button',{name:'結束回合'}).click();
+    await p.getByRole('button',{name:'可視化抽牌／棄牌'}).click();
+    await p.locator('#end-choice').waitFor();
+    if(await p.evaluate(()=>endDraft?.preview?.qin))await p.locator('#end-choice button[onclick="selectQinCard(2)"]').click();
+    const count=await p.evaluate(()=>Math.max(0,endDraftCards().length-5));
+    for(let i=0;i<count;i++)await p.locator('#end-choice button[onclick="toggleEndDiscard('+i+')"]').click();
+    await p.getByRole('button',{name:'確認結束回合'}).click();
     await p.waitForFunction(next=>state?.current===next,expected);
     assert.equal(await p.locator('#error').textContent(),'','end turn must be legal');
    };
@@ -69,8 +68,11 @@ for(const size of [3,4,5]){
    for(let victim=1;victim<size;victim++){
     for(let n=1;n<=5;n++){
      await waitForTurn(pages[0],0);
-     await pages[0].locator('button[onclick="select(0)"]').click();
-     await pages[0].locator('button[onclick="kingHit('+victim+')"]').click();
+     await pages[0].getByRole('button',{name:'可視化攻擊／選目標'}).click();
+     await pages[0].locator('#tactic-choice .tactic-grid').nth(0).locator('button').first().click();
+     await pages[0].locator('#tactic-choice .tactic-grid').nth(1).locator('button').filter({hasText:'P'+victim}).click();
+     await pages[0].locator('#tactic-choice button[onclick="chooseTacticKing()"]').click();
+     await pages[0].getByRole('button',{name:'確認戰術操作'}).click();
      await pages[victim].getByRole('button',{name:'不保牌，承受傷害'}).click();
      hits++;
      const hp=Math.max(0,24-n*5);
@@ -91,6 +93,7 @@ for(const size of [3,4,5]){
     assert.match(await pages[i].locator('#game').innerText(),/勝者 P0/);
    }
    assert.equal(hits,5*(size-1));
+   assert.deepEqual(dialogErrors,[],'full match must use no native browser dialogs or throw page errors');
    console.log('MULTIPLAYER BROWSER PASS',size,'players',hits,'king hits');
   }finally{await ctx.close();await browser.close();await new Promise(resolve=>io.close(resolve))}
  });
